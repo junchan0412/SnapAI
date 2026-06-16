@@ -1,0 +1,7 @@
+.DS_Store
+Sources/.DS_Store
+SnapAI.app/
+dist/
+.build/
+*.xcuserstate
+bug*.png
