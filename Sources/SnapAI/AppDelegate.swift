@@ -1,35 +1,56 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = AppSettings.shared
     private var statusItem: NSStatusItem!
     private var resultVM: ResultViewModel!
     private var panelController: FloatingPanelController!
+    private var quickInput: QuickInputController!
+    private var quickInputModel: QuickInputModel!
     private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
     private var appearanceObserver: NSObjectProtocol?
+    /// 触发前的前台 App,用于「替换原文」时把焦点交还
+    private var previousApp: NSRunningApplication?
+
+    /// nonisolated 以便在 main.swift 顶层(非 main-actor 上下文)构造
+    nonisolated override init() {
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 按设置决定是否显示 Dock 图标
         applyActivationPolicy()
         applyAppIcon()
         installAppearanceObserver()
 
-        // 菜单栏图标(始终常驻)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = statusBarImage()
         }
         buildMenu()
-        installMainMenu()   // 提供完整主菜单(含 Edit 菜单,使文本框 ⌘C/V/X/A/Z 生效)
+        installMainMenu()
 
         resultVM = ResultViewModel(settings: settings)
+        resultVM.onReplace = { [weak self] text in self?.replaceSelection(with: text) }
         panelController = FloatingPanelController(vm: resultVM)
+
+        quickInputModel = QuickInputModel(settings: settings)
+        quickInputModel.actionID = settings.enabledActions.first?.id ?? ""
+        quickInputModel.onSubmit = { [weak self] text, action in
+            self?.runQuickInput(text: text, action: action)
+        }
+        quickInput = QuickInputController(model: quickInputModel)
 
         registerHotKeys()
 
-        // 首次启动若无权限,提示授权
-        if !TextCapture.hasAccessibilityPermission() {
+        // 首次启动:显示引导;否则按需提示权限
+        if !settings.onboardingDone {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.showOnboarding()
+            }
+        } else if !TextCapture.hasAccessibilityPermission() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 _ = TextCapture.hasAccessibilityPermission(prompt: true)
             }
@@ -40,13 +61,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "AI 提问 (\(settings.askHotKey.displayString))",
-                     action: #selector(triggerAsk), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "翻译 (\(settings.translateHotKey.displayString))",
-                     action: #selector(triggerTranslate), keyEquivalent: "").target = self
+
+        // 动作(带快捷键的列在前)
+        for action in settings.enabledActions {
+            let suffix = action.hotKey.map { " (\($0.displayString))" } ?? ""
+            let item = NSMenuItem(title: "\(action.name)\(suffix)",
+                                  action: #selector(triggerActionFromMenu(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = action.id
+            menu.addItem(item)
+        }
         menu.addItem(.separator())
 
-        // 当前模型 + 快速切换子菜单
+        // 快捷提问面板
+        let quickItem = menu.addItem(withTitle: "快捷提问 (\(settings.quickPanelHotKey.displayString))",
+                                     action: #selector(toggleQuickInput), keyEquivalent: "")
+        quickItem.target = self
+        menu.addItem(.separator())
+
+        // 当前模型 + 快速切换
         let currentTitle: String
         if let p = settings.activeProvider, !settings.activeModel.isEmpty {
             currentTitle = "当前:\(p.name) / \(settings.activeModel)"
@@ -61,6 +95,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switchItem.submenu = buildModelSwitchMenu()
         menu.addItem(switchItem)
 
+        // 历史
+        let historyItem = NSMenuItem(title: "历史记录", action: nil, keyEquivalent: "")
+        historyItem.submenu = buildHistoryMenu()
+        menu.addItem(historyItem)
+
         menu.addItem(.separator())
         menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
@@ -69,7 +108,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    /// 构建「切换模型」子菜单:按启用供应商分组,列出其启用的模型,勾选当前激活项
     private func buildModelSwitchMenu() -> NSMenu {
         let sub = NSMenu()
         let enabledProviders = settings.providers.filter { $0.isEnabled }
@@ -82,7 +120,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for provider in enabledProviders {
             let names = provider.enabledModelNames
             if names.isEmpty { continue }
-            // 供应商名作为分组标题(禁用项)
             let header = NSMenuItem(title: provider.name, action: nil, keyEquivalent: "")
             header.isEnabled = false
             sub.addItem(header)
@@ -102,20 +139,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return sub
     }
 
+    private func buildHistoryMenu() -> NSMenu {
+        let sub = NSMenu()
+        if settings.history.isEmpty {
+            let item = NSMenuItem(title: "(暂无记录)", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            sub.addItem(item)
+            return sub
+        }
+        for entry in settings.history.prefix(15) {
+            let item = NSMenuItem(title: "[\(entry.actionName)] \(entry.preview)",
+                                  action: #selector(reopenHistory(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = entry.id
+            sub.addItem(item)
+        }
+        sub.addItem(.separator())
+        let clear = sub.addItem(withTitle: "清空历史", action: #selector(clearHistory), keyEquivalent: "")
+        clear.target = self
+        return sub
+    }
+
     @objc private func switchModel(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? [String: String],
               let pid = info["provider"], let model = info["model"] else { return }
         settings.activate(providerID: pid, model: model)
-        buildMenu()   // 刷新勾选与「当前」标题
+        buildMenu()
     }
 
-    /// 安装完整主菜单(App / 编辑 / 窗口 / 帮助)。
-    /// 含 Edit 菜单使文本框响应 ⌘C/V/X/A/Z;含 App 菜单使 Dock 图标右键、
-    /// 顶部菜单栏拥有「设置/隐藏/退出」等标准项。
+    @objc private func reopenHistory(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String,
+              let entry = settings.history.first(where: { $0.id == id }) else { return }
+        // 用历史里的原文 + 同名动作重新发起
+        let action = settings.enabledActions.first(where: { $0.name == entry.actionName })
+            ?? settings.enabledActions.first ?? AIAction.defaults()[0]
+        previousApp = NSWorkspace.shared.frontmostApplication
+        resultVM.start(text: entry.source, action: action)
+        panelController.show()
+    }
+
+    @objc private func clearHistory() {
+        settings.clearHistory()
+        buildMenu()
+    }
+
     private func installMainMenu() {
         let mainMenu = NSMenu()
 
-        // ── App 菜单 ──
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
@@ -148,7 +218,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         keyEquivalent: "q")
         appMenuItem.submenu = appMenu
 
-        // ── 编辑菜单 ──
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
         let editMenu = NSMenu(title: "编辑")
@@ -163,7 +232,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenuItem.submenu = editMenu
 
-        // ── 窗口菜单 ──
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)
         let windowMenu = NSMenu(title: "窗口")
@@ -181,7 +249,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Dock / 激活策略
 
-    /// 按设置应用激活策略:显示 Dock 图标用 .regular,否则 .accessory(仅菜单栏)
     func applyActivationPolicy() {
         NSApp.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
     }
@@ -197,7 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.applyAppIcon()
+            Task { @MainActor [weak self] in
+                self?.applyAppIcon()
+            }
         }
     }
 
@@ -211,7 +280,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return image
     }
 
-    /// 点击 Dock 图标(无窗口时)→ 打开设置窗
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
             openSettings()
@@ -223,41 +291,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerHotKeys() {
         HotKeyManager.shared.unregisterAll()
-        HotKeyManager.shared.register(settings.askHotKey) { [weak self] in
-            self?.trigger(mode: .ask)
+        // 各动作的快捷键
+        for action in settings.enabledActions {
+            guard let hk = action.hotKey else { continue }
+            let actionID = action.id
+            HotKeyManager.shared.register(hk) { [weak self] in
+                self?.triggerAction(id: actionID)
+            }
         }
-        HotKeyManager.shared.register(settings.translateHotKey) { [weak self] in
-            self?.trigger(mode: .translate)
+        // 快捷提问面板
+        HotKeyManager.shared.register(settings.quickPanelHotKey) { [weak self] in
+            self?.toggleQuickInput()
         }
     }
 
     private func reloadAfterSettingsChange() {
         registerHotKeys()
+        quickInputModel.actionID = settings.enabledActions.first(where: { $0.id == quickInputModel.actionID })?.id
+            ?? settings.enabledActions.first?.id ?? ""
         buildMenu()
         applyActivationPolicy()
     }
 
     // MARK: - 触发流程
 
-    @objc private func triggerAsk() { trigger(mode: .ask) }
-    @objc private func triggerTranslate() { trigger(mode: .translate) }
+    @objc private func triggerActionFromMenu(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        triggerAction(id: id)
+    }
 
-    private func trigger(mode: ResultViewModel.Mode) {
+    private func triggerAction(id: String) {
+        guard let action = settings.actions.first(where: { $0.id == id }) else { return }
+        previousApp = NSWorkspace.shared.frontmostApplication
         TextCapture.capture(preferAX: settings.useAXFirst) { [weak self] text in
             guard let self = self else { return }
             guard let text = text, !text.isEmpty else {
                 self.notifyNoSelection()
                 return
             }
-            self.resultVM.start(text: text, mode: mode)
+            self.resultVM.start(text: text, action: action)
             self.panelController.show()
+        }
+    }
+
+    @objc private func toggleQuickInput() {
+        previousApp = NSWorkspace.shared.frontmostApplication
+        quickInput.toggle()
+    }
+
+    private func runQuickInput(text: String, action: AIAction) {
+        quickInput.hide()
+        resultVM.start(text: text, action: action)
+        panelController.show()
+    }
+
+    /// 把结果替换回原文位置(#3):交还焦点给原 App 后模拟 ⌘V
+    private func replaceSelection(with text: String) {
+        panelController.hide()
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        previousApp?.activate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            TextCapture.sendCmdV()
         }
     }
 
     private func notifyNoSelection() {
         let alert = NSAlert()
         alert.messageText = "未检测到选中的文字"
-        alert.informativeText = "请先在任意应用中选中一段文字,再触发 SnapAI。\n若反复失败,请到「设置 → 权限」确认已授予辅助功能权限。"
+        alert.informativeText = "请先在任意应用中选中一段文字,再触发 SnapAI。\n或用「快捷提问」直接输入问题。\n若反复失败,请到「设置 → 权限」确认已授予辅助功能权限。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "好")
         NSApp.activate(ignoringOtherApps: true)
@@ -287,6 +390,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func checkForUpdates() {
-        UpdateChecker.check(presenting: settingsWindow)
+        UpdateChecker.check()
+    }
+
+    // MARK: - 引导页(#14)
+
+    private func showOnboarding() {
+        if let w = onboardingWindow {
+            w.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let view = OnboardingView(settings: settings) { [weak self] in
+            self?.settings.onboardingDone = true
+            self?.settings.save()
+            self?.onboardingWindow?.close()
+            self?.onboardingWindow = nil
+            self?.reloadAfterSettingsChange()
+        } openSettings: { [weak self] in
+            self?.openSettings()
+        }
+        let hosting = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "欢迎使用 SnapAI"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        onboardingWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

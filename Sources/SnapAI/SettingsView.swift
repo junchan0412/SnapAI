@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// 追踪设置界面里的运行时状态(辅助功能权限、开机自启)。
 /// 这里用 ObservableObject 而非 @State,以兼容仅装了 Command Line Tools
@@ -63,7 +65,39 @@ final class ModelLoader: ObservableObject {
 @MainActor
 final class AISettingsUI: ObservableObject {
     @Published var expandedProviderID: String?
+    @Published var expandedActionID: String?
     @Published var newModelName: String = ""
+}
+
+/// 供应商连接测试状态(#2)
+@MainActor
+final class ConnectionTester: ObservableObject {
+    @Published var testingProviderID: String?
+    @Published var results: [String: Result<Void, Error>] = [:]
+
+    func isTesting(_ id: String) -> Bool { testingProviderID == id }
+
+    func test(providerID: String, settings: AppSettings) {
+        guard testingProviderID == nil,
+              let idx = settings.providers.firstIndex(where: { $0.id == providerID }) else { return }
+        testingProviderID = providerID
+        results[providerID] = nil
+        let probe = AppSettings()
+        probe.providers = [settings.providers[idx]]
+        probe.activeProviderID = settings.providers[idx].id
+        probe.activeModel = settings.providers[idx].enabledModelNames.first
+            ?? settings.providers[idx].models.first?.name ?? ""
+        let client = AIClient(settings: probe)
+        Task {
+            do {
+                try await client.testConnection()
+                self.results[providerID] = .success(())
+            } catch {
+                self.results[providerID] = .failure(error)
+            }
+            self.testingProviderID = nil
+        }
+    }
 }
 
 struct SettingsView: View {
@@ -73,17 +107,18 @@ struct SettingsView: View {
     @StateObject private var perm = PermissionState()
     @StateObject private var modelLoader = ModelLoader()
     @StateObject private var ui = AISettingsUI()
+    @StateObject private var tester = ConnectionTester()
     private let aiLabelWidth: CGFloat = 76
 
     var body: some View {
         TabView {
             aiTab.tabItem { Label("AI 模型", systemImage: "brain") }
-            hotkeyTab.tabItem { Label("快捷键", systemImage: "keyboard") }
-            promptTab.tabItem { Label("Prompt", systemImage: "text.bubble") }
+            actionsTab.tabItem { Label("动作", systemImage: "wand.and.stars") }
+            historyTab.tabItem { Label("历史", systemImage: "clock.arrow.circlepath") }
             generalTab.tabItem { Label("通用", systemImage: "gearshape") }
             permissionTab.tabItem { Label("权限", systemImage: "lock.shield") }
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 560, height: 460)
         .padding()
     }
 
@@ -235,6 +270,19 @@ struct SettingsView: View {
                 Spacer()
                 Text("\(provider.enabledModelNames.count)/\(provider.models.count) 模型")
                     .font(.caption).foregroundStyle(.secondary)
+                // 排序(#11)
+                Button {
+                    moveProvider(provider.id, up: true)
+                } label: { Image(systemName: "chevron.up.circle") }
+                    .buttonStyle(.plain)
+                    .disabled(settings.providers.first?.id == provider.id)
+                    .help("上移")
+                Button {
+                    moveProvider(provider.id, up: false)
+                } label: { Image(systemName: "chevron.down.circle") }
+                    .buttonStyle(.plain)
+                    .disabled(settings.providers.last?.id == provider.id)
+                    .help("下移")
                 Button {
                     ui.expandedProviderID = isExpanded ? nil : provider.id
                 } label: {
@@ -329,7 +377,24 @@ struct SettingsView: View {
                 }
             }
 
+            DisclosureGroup("高级参数") {
+                providerParams(provider)
+            }
+            .font(.caption)
+
             HStack {
+                // 连接测试(#2)
+                Button {
+                    tester.test(providerID: provider.id, settings: settings)
+                } label: {
+                    if tester.isTesting(provider.id) {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("测试连接", systemImage: "bolt.horizontal")
+                    }
+                }
+                .disabled(tester.isTesting(provider.id) || provider.apiKey.isEmpty)
+                testResultLabel(provider.id)
                 Spacer()
                 Button(role: .destructive) {
                     deleteProvider(provider.id)
@@ -337,6 +402,67 @@ struct SettingsView: View {
                     Label("删除此供应商", systemImage: "trash")
                 }
                 .disabled(settings.providers.count <= 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func testResultLabel(_ id: String) -> some View {
+        if let result = tester.results[id] {
+            switch result {
+            case .success:
+                Label("连接成功", systemImage: "checkmark.circle.fill")
+                    .font(.caption).foregroundStyle(.green)
+            case .failure(let err):
+                Label(err.localizedDescription, systemImage: "xmark.circle.fill")
+                    .font(.caption).foregroundStyle(.red)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+        }
+    }
+
+    /// 每供应商可选的 temperature / max_tokens 覆盖(#12)
+    @ViewBuilder
+    private func providerParams(_ provider: AIProvider) -> some View {
+        let tempBinding = Binding<Double>(
+            get: { settings.providers.first(where: { $0.id == provider.id })?.temperature ?? -1 },
+            set: { newVal in
+                guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
+                settings.providers[idx].temperature = newVal < 0 ? nil : newVal
+                commit()
+            }
+        )
+        let hasTemp = provider.temperature != nil
+        let maxTokBinding = Binding<String>(
+            get: { provider.maxTokens.map(String.init) ?? "" },
+            set: { str in
+                guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
+                settings.providers[idx].maxTokens = Int(str.trimmingCharacters(in: .whitespaces))
+                commit()
+            }
+        )
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("覆盖 Temperature", isOn: Binding(
+                get: { hasTemp },
+                set: { on in
+                    guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
+                    settings.providers[idx].temperature = on ? settings.temperature : nil
+                    commit()
+                }
+            ))
+            .font(.caption)
+            if hasTemp {
+                HStack {
+                    Slider(value: tempBinding, in: 0...1, step: 0.05)
+                    Text(String(format: "%.2f", provider.temperature ?? 0)).font(.caption).monospacedDigit()
+                }
+            }
+            HStack {
+                Text("Max tokens").font(.caption).foregroundStyle(.secondary)
+                TextField("默认 2048", text: maxTokBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 90)
+                Text("(Anthropic 必填,留空用默认)").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -476,133 +602,250 @@ struct SettingsView: View {
     private func deleteProvider(_ id: String) {
         settings.providers.removeAll { $0.id == id }
         if ui.expandedProviderID == id { ui.expandedProviderID = nil }
+        Keychain.delete(providerID: id)   // 清除该供应商在 Keychain 的 Key
         settings.normalizeActive()
         commit()
     }
 
-    // MARK: - 快捷键
-
-    private var hotkeyTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("快捷键")
-                        .font(.title3.weight(.semibold))
-                    Text("为常用操作设置全局触发方式。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("恢复默认") {
-                    settings.askHotKey = .askDefault
-                    settings.translateHotKey = .translateDefault
-                    commit()
-                }
-                .controlSize(.small)
-            }
-
-            VStack(spacing: 10) {
-                hotkeyCard(
-                    title: "AI 提问",
-                    subtitle: "对选中文字提问或解释",
-                    icon: "sparkles",
-                    tint: .blue,
-                    combo: $settings.askHotKey
-                )
-                hotkeyCard(
-                    title: "翻译",
-                    subtitle: "在中文与英文之间快速转换",
-                    icon: "character.bubble",
-                    tint: .teal,
-                    combo: $settings.translateHotKey
-                )
-            }
-
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "info.circle")
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 1)
-                Text("点击右侧快捷键后按下新的组合键。至少包含一个修饰键,修改后立即生效。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, 2)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 18)
-        .padding(.horizontal, 22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    /// 上移/下移供应商(#11)
+    private func moveProvider(_ id: String, up: Bool) {
+        guard let idx = settings.providers.firstIndex(where: { $0.id == id }) else { return }
+        let target = up ? idx - 1 : idx + 1
+        guard target >= 0, target < settings.providers.count else { return }
+        settings.providers.swapAt(idx, target)
+        commit()
     }
 
-    private func hotkeyCard(
-        title: String,
-        subtitle: String,
-        icon: String,
-        tint: Color,
-        combo: Binding<HotKeyCombo>
-    ) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(tint.opacity(0.16))
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(tint)
+    // MARK: - 动作(#4 / #7)
+
+    private var actionsTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("System Prompt(对所有动作生效)").font(.subheadline.weight(.semibold))
+                promptEditor(text: $settings.systemPrompt, height: 56)
+                    .onChange(of: settings.systemPrompt) { commit() }
+
+                HStack {
+                    Text("动作").font(.headline)
+                    Spacer()
+                    Button {
+                        let a = AIAction(name: "新动作", icon: "wand.and.stars",
+                                         prompt: "请处理下面的文字:\n\n{{text}}")
+                        settings.actions.append(a)
+                        ui.expandedActionID = a.id
+                        commit()
+                    } label: { Label("添加", systemImage: "plus") }
+                    .menuStyle(.borderlessButton)
+                }
+                Text("{{text}} = 选中文字;{{lang}} = 目标语言指令(翻译类)。带快捷键的动作可全局触发。")
+                    .font(.caption2).foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("快捷提问面板")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 12) {
+                        Text("全局快捷键")
+                            .foregroundStyle(.secondary)
+                        HotKeyRecorder(combo: $settings.quickPanelHotKey)
+                            .frame(width: 138, height: 34)
+                            .onChange(of: settings.quickPanelHotKey) { commit() }
+                        Spacer()
+                    }
+                    Text("这个快捷键会直接弹出输入面板,不依赖你先选中文字。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(Color.primary.opacity(0.035))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                ForEach(settings.actions) { action in
+                    actionCard(action)
+                }
             }
-            .frame(width: 38, height: 38)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            HotKeyRecorder(combo: combo)
-                .frame(width: 138, height: 34)
-                .onChange(of: combo.wrappedValue) { commit() }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.045))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+    }
+
+    @ViewBuilder
+    private func actionCard(_ action: AIAction) -> some View {
+        let isExpanded = ui.expandedActionID == action.id
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Toggle("", isOn: bindingForAction(action.id, \.isEnabled))
+                    .labelsHidden().toggleStyle(.switch).controlSize(.mini)
+                Image(systemName: action.icon.isEmpty ? "wand.and.stars" : action.icon)
+                    .foregroundStyle(.tint).frame(width: 18)
+                Text(action.name).fontWeight(.medium)
+                    .foregroundStyle(action.isEnabled ? .primary : .secondary)
+                if let hk = action.hotKey {
+                    Text(hk.displayString).font(.caption2)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.primary.opacity(0.08)).clipShape(Capsule())
+                }
+                Spacer()
+                Button { moveAction(action.id, up: true) } label: { Image(systemName: "chevron.up.circle") }
+                    .buttonStyle(.plain).disabled(settings.actions.first?.id == action.id)
+                Button { moveAction(action.id, up: false) } label: { Image(systemName: "chevron.down.circle") }
+                    .buttonStyle(.plain).disabled(settings.actions.last?.id == action.id)
+                Button {
+                    ui.expandedActionID = isExpanded ? nil : action.id
+                } label: { Image(systemName: isExpanded ? "chevron.up" : "chevron.down") }
+                    .buttonStyle(.plain)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture { ui.expandedActionID = isExpanded ? nil : action.id }
+
+            if isExpanded {
+                Divider().padding(.vertical, 6)
+                actionEditor(action)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private func actionEditor(_ action: AIAction) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            editorRow("名称") {
+                TextField("动作名称", text: bindingForAction(action.id, \.name), onCommit: commit)
+                    .textFieldStyle(.roundedBorder)
+            }
+            editorRow("图标") {
+                TextField("SF Symbol 名,如 wand.and.stars", text: bindingForAction(action.id, \.icon), onCommit: commit)
+                    .textFieldStyle(.roundedBorder)
+            }
+            editorRow("快捷键") {
+                HStack {
+                    HotKeyRecorder(combo: Binding(
+                        get: { action.hotKey ?? HotKeyCombo(keyCode: 0, modifiers: 0) },
+                        set: { newVal in
+                            guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                            settings.actions[idx].hotKey = newVal.modifiers == 0 ? nil : newVal
+                            commit()
+                        }
+                    ))
+                    .frame(width: 138, height: 32)
+                    if action.hotKey != nil {
+                        Button("清除") {
+                            guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                            settings.actions[idx].hotKey = nil
+                            commit()
+                        }.controlSize(.small)
+                    }
+                }
+            }
+            editorRow("Prompt") {
+                promptEditor(text: bindingForAction(action.id, \.prompt), height: 70)
+            }
+            Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
+                .onChange(of: action.isTranslation) { commit() }
+            if action.isTranslation {
+                editorRow("目标语言") {
+                    Picker("", selection: bindingForAction(action.id, \.targetLanguage)) {
+                        ForEach(TargetLanguage.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .labelsHidden().frame(width: 200, alignment: .leading)
+                    .onChange(of: action.targetLanguage) { commit() }
+                }
+            }
+            Toggle("完成后默认替换原文", isOn: bindingForAction(action.id, \.replaceByDefault))
+                .onChange(of: action.replaceByDefault) { commit() }
+
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    settings.actions.removeAll { $0.id == action.id }
+                    if ui.expandedActionID == action.id { ui.expandedActionID = nil }
+                    commit()
+                } label: { Label("删除动作", systemImage: "trash") }
+                .disabled(settings.actions.count <= 1)
+            }
+        }
+    }
+
+    private func bindingForAction<V>(_ id: String, _ keyPath: WritableKeyPath<AIAction, V>) -> Binding<V> {
+        Binding(
+            get: { (settings.actions.first(where: { $0.id == id }) ?? AIAction())[keyPath: keyPath] },
+            set: { newValue in
+                guard let idx = settings.actions.firstIndex(where: { $0.id == id }) else { return }
+                settings.actions[idx][keyPath: keyPath] = newValue
+                commit()
+            }
         )
     }
 
-    // MARK: - Prompt
+    private func moveAction(_ id: String, up: Bool) {
+        guard let idx = settings.actions.firstIndex(where: { $0.id == id }) else { return }
+        let target = up ? idx - 1 : idx + 1
+        guard target >= 0, target < settings.actions.count else { return }
+        settings.actions.swapAt(idx, target)
+        commit()
+    }
 
-    private var promptTab: some View {
+    // MARK: - 历史(#10)
+
+    private var historyTab: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("使用 {{text}} 代表选中的文字。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("System Prompt").font(.subheadline.weight(.semibold))
-            promptEditor(text: $settings.systemPrompt, height: 74)
-
-            Text("提问模板").font(.subheadline.weight(.semibold))
-            promptEditor(text: $settings.askPrompt, height: 86)
-
-            Text("翻译模板").font(.subheadline.weight(.semibold))
-            promptEditor(text: $settings.translatePrompt, height: 86)
-
-            Button("保存") { commit() }
-                .controlSize(.large)
-
-            Spacer(minLength: 0)
+            HStack {
+                Text("历史记录").font(.headline)
+                Spacer()
+                Stepper("保留 \(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
+                    .onChange(of: settings.historyLimit) { commit() }
+                Button("清空") { settings.clearHistory() }
+                    .disabled(settings.history.isEmpty)
+            }
+            if settings.history.isEmpty {
+                Spacer()
+                Text("暂无历史记录").foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        ForEach(settings.history) { entry in
+                            historyRow(entry)
+                        }
+                    }
+                }
+            }
         }
-        .padding(.top, 18)
-        .padding(.horizontal, 22)
+        .padding(.top, 14)
+        .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func historyRow(_ entry: HistoryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(entry.actionName).font(.caption.weight(.semibold))
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Color.accentColor.opacity(0.15)).clipShape(Capsule())
+                Text("\(entry.provider) / \(entry.model)").font(.caption2).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+                Spacer()
+                Text(entry.dateString).font(.caption2).foregroundStyle(.secondary)
+                Button {
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(entry.output, forType: .string)
+                } label: { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.plain).help("复制结果")
+            }
+            Text(entry.source).font(.caption).foregroundStyle(.secondary)
+                .lineLimit(2)
+            Text(entry.output).font(.callout)
+                .lineLimit(3)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func promptEditor(text: Binding<String>, height: CGFloat) -> some View {
@@ -655,10 +898,71 @@ struct SettingsView: View {
             .onChange(of: settings.typewriterSpeed) { commit() }
             Text("控制 AI 结果逐字显示的速度。选「关闭」则整段一次性显示。")
                 .font(.caption).foregroundStyle(.secondary)
+
+            Divider().padding(.vertical, 4)
+
+            // 配置导入/导出(#13)
+            Text("配置迁移").font(.subheadline.weight(.semibold))
+            HStack {
+                Button("导出配置…") { exportConfig() }
+                Button("导入配置…") { importConfig() }
+            }
+            Text("导出为 JSON(含供应商、动作、快捷键等)。出于安全,API Key 不包含在内,需在新机器重新填写。")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             Spacer()
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: 导入/导出(#13)
+
+    private func exportConfig() {
+        guard let data = try? JSONEncoder().encode(settings),
+              let exportSettings = try? JSONDecoder().decode(AppSettings.self, from: data) else { return }
+        exportSettings.history = []
+        exportSettings.onboardingDone = true
+        guard let exportData = try? JSONEncoder().encode(exportSettings) else { return }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "SnapAI-config.json"
+        panel.allowedContentTypes = [.json]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? exportData.write(to: url)
+        }
+    }
+
+    private func importConfig() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let imported = try? JSONDecoder().decode(AppSettings.self, from: data) else { return }
+        // 把导入的值拷贝到当前 settings(逐字段)。导入不含明文 Key:
+        // 同机重导入时,按 provider id 从 Keychain 回填已存的 Key,避免被清空。
+        var imp = imported.providers
+        for i in imp.indices where imp[i].apiKey.isEmpty {
+            imp[i].apiKey = Keychain.apiKey(for: imp[i].id)
+        }
+        settings.providers = imp
+        settings.activeProviderID = imported.activeProviderID
+        settings.activeModel = imported.activeModel
+        settings.temperature = imported.temperature
+        settings.actions = imported.actions
+        settings.askHotKey = imported.askHotKey
+        settings.translateHotKey = imported.translateHotKey
+        settings.quickPanelHotKey = imported.quickPanelHotKey
+        settings.askPrompt = imported.askPrompt
+        settings.translatePrompt = imported.translatePrompt
+        settings.systemPrompt = imported.systemPrompt
+        settings.useAXFirst = imported.useAXFirst
+        settings.showDockIcon = imported.showDockIcon
+        settings.typewriterSpeed = imported.typewriterSpeed
+        settings.historyLimit = imported.historyLimit
+        settings.normalizeActive()
+        commit()
     }
 
     // MARK: - 权限

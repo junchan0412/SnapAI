@@ -48,6 +48,7 @@ struct HotKeyCombo: Codable, Equatable {
 
     /// 人类可读描述,如 "⌥A"
     var displayString: String {
+        if modifiers == 0 { return "未设置" }
         var s = ""
         if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
         if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
@@ -72,11 +73,16 @@ final class AppSettings: ObservableObject, Codable {
     @Published var activeModel: String = ""        // 当前激活的模型名
     @Published var temperature: Double = 0.3
 
-    // 快捷键
+    // 快捷键(旧:仅保留用于迁移与「快捷输入面板」)
     @Published var askHotKey: HotKeyCombo = .askDefault
     @Published var translateHotKey: HotKeyCombo = .translateDefault
+    /// 快捷输入面板(不依赖选中文字)的全局快捷键
+    @Published var quickPanelHotKey: HotKeyCombo = HotKeyCombo(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
 
-    // Prompt 模板,{{text}} 会被替换为选中文字
+    // 自定义动作(提问/翻译/润色/总结/解释代码…)
+    @Published var actions: [AIAction] = AIAction.defaults()
+
+    // Prompt 模板,{{text}} 会被替换为选中文字(systemPrompt 仍全局生效)
     @Published var askPrompt: String = AppSettings.defaultAskPrompt
     @Published var translatePrompt: String = AppSettings.defaultTranslatePrompt
     @Published var systemPrompt: String = AppSettings.defaultSystemPrompt
@@ -85,6 +91,13 @@ final class AppSettings: ObservableObject, Codable {
     @Published var useAXFirst: Bool = true   // 优先用辅助功能取词
     @Published var showDockIcon: Bool = true // 在 Dock 显示图标(可点击打开设置)
     @Published var typewriterSpeed: TypewriterSpeed = .normal // 打字机动画速度
+
+    // 历史 / 引导 / 窗口尺寸
+    @Published var history: [HistoryEntry] = []
+    @Published var historyLimit: Int = 50
+    @Published var onboardingDone: Bool = false
+    @Published var panelWidth: Double = 420
+    @Published var panelHeight: Double = 360
 
     // MARK: - 当前激活配置(兼容旧的扁平访问方式,供 AIClient / ModelLoader 使用)
 
@@ -135,13 +148,38 @@ final class AppSettings: ObservableObject, Codable {
         return result
     }
 
+    /// 启用的动作(用于菜单/快捷键注册)
+    var enabledActions: [AIAction] { actions.filter { $0.isEnabled } }
+
+    // MARK: - 历史记录
+
+    /// 追加一条历史并裁剪到上限
+    func addHistory(action: String, source: String, output: String,
+                    provider: String, model: String) {
+        guard historyLimit > 0 else { return }
+        let entry = HistoryEntry(actionName: action, source: source, output: output,
+                                 provider: provider, model: model)
+        history.insert(entry, at: 0)
+        if history.count > historyLimit {
+            history = Array(history.prefix(historyLimit))
+        }
+        save()
+    }
+
+    func clearHistory() {
+        history.removeAll()
+        save()
+    }
+
     enum CodingKeys: String, CodingKey {
         // 新:多供应商
         case providers, activeProviderID, activeModel
         case temperature
-        case askHotKey, translateHotKey
+        case askHotKey, translateHotKey, quickPanelHotKey
+        case actions
         case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon
         case typewriterSpeed
+        case history, historyLimit, onboardingDone, panelWidth, panelHeight
         // 旧:单配置(仅用于迁移,不再写出)
         case apiProtocol, baseURL, apiKey, model
     }
@@ -168,6 +206,34 @@ final class AppSettings: ObservableObject, Codable {
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
+
+        quickPanelHotKey = (try? c.decode(HotKeyCombo.self, forKey: .quickPanelHotKey))
+            ?? HotKeyCombo(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+
+        // 动作:有则用,无则用默认 5 个;并把旧的 ask/translate 快捷键迁移到对应动作
+        if let acts = try? c.decode([AIAction].self, forKey: .actions), !acts.isEmpty {
+            actions = acts
+        } else {
+            var defs = AIAction.defaults()
+            if let ah = try? c.decode(HotKeyCombo.self, forKey: .askHotKey), defs.indices.contains(0) {
+                defs[0].hotKey = ah
+            }
+            if let th = try? c.decode(HotKeyCombo.self, forKey: .translateHotKey), defs.indices.contains(1) {
+                defs[1].hotKey = th
+            }
+            // 旧的自定义提问/翻译模板若被改过,沿用到对应动作
+            if let ap = try? c.decode(String.self, forKey: .askPrompt), ap != Self.defaultAskPrompt, defs.indices.contains(0) {
+                defs[0].prompt = ap
+            }
+            actions = defs
+        }
+
+        history = (try? c.decode([HistoryEntry].self, forKey: .history)) ?? []
+        historyLimit = (try? c.decode(Int.self, forKey: .historyLimit)) ?? 50
+        // 已有存档的老用户视为已完成引导(缺该键时默认 true);全新安装走 init() 默认 false
+        onboardingDone = (try? c.decode(Bool.self, forKey: .onboardingDone)) ?? true
+        panelWidth = (try? c.decode(Double.self, forKey: .panelWidth)) ?? 420
+        panelHeight = (try? c.decode(Double.self, forKey: .panelHeight)) ?? 360
 
         if let list = try? c.decode([AIProvider].self, forKey: .providers), !list.isEmpty {
             // 新格式
@@ -197,12 +263,19 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(temperature, forKey: .temperature)
         try c.encode(askHotKey, forKey: .askHotKey)
         try c.encode(translateHotKey, forKey: .translateHotKey)
+        try c.encode(quickPanelHotKey, forKey: .quickPanelHotKey)
+        try c.encode(actions, forKey: .actions)
         try c.encode(askPrompt, forKey: .askPrompt)
         try c.encode(translatePrompt, forKey: .translatePrompt)
         try c.encode(systemPrompt, forKey: .systemPrompt)
         try c.encode(useAXFirst, forKey: .useAXFirst)
         try c.encode(showDockIcon, forKey: .showDockIcon)
         try c.encode(typewriterSpeed, forKey: .typewriterSpeed)
+        try c.encode(history, forKey: .history)
+        try c.encode(historyLimit, forKey: .historyLimit)
+        try c.encode(onboardingDone, forKey: .onboardingDone)
+        try c.encode(panelWidth, forKey: .panelWidth)
+        try c.encode(panelHeight, forKey: .panelHeight)
     }
 
     private static let storeKey = "SnapAI.settings.v1"
@@ -210,12 +283,37 @@ final class AppSettings: ObservableObject, Codable {
     static func load() -> AppSettings {
         if let data = UserDefaults.standard.data(forKey: Self.storeKey),
            let s = try? JSONDecoder().decode(AppSettings.self, from: data) {
+            let hadPlaintext = String(data: data, encoding: .utf8)?.contains("\"apiKey\"") ?? false
+            s.loadKeysFromKeychain()
+            // 旧版本可能把明文 Key 存在 JSON 里;迁移后立即重写一次以彻底清除明文
+            if hadPlaintext { s.save() }
             return s
         }
         return AppSettings()
     }
 
+    /// 已写入 Keychain 的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
+    private var keychainCache: [String: String] = [:]
+
+    /// 从 Keychain 回填各供应商的 apiKey(decode 后它们都是空字符串)
+    private func loadKeysFromKeychain() {
+        for i in providers.indices {
+            // 迁移分支可能已在内存里带了明文 key(来自旧 JSON),优先保留并落 Keychain
+            if providers[i].apiKey.isEmpty {
+                providers[i].apiKey = Keychain.apiKey(for: providers[i].id)
+            } else {
+                Keychain.setAPIKey(providers[i].apiKey, for: providers[i].id)
+            }
+            keychainCache[providers[i].id] = providers[i].apiKey
+        }
+    }
+
     func save() {
+        // 仅当 Key 发生变化时才写 Keychain(避免打字时频繁写入)
+        for p in providers where keychainCache[p.id] != p.apiKey {
+            Keychain.setAPIKey(p.apiKey, for: p.id)
+            keychainCache[p.id] = p.apiKey
+        }
         if let data = try? JSONEncoder().encode(self) {
             UserDefaults.standard.set(data, forKey: Self.storeKey)
         }

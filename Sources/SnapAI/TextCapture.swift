@@ -89,6 +89,18 @@ enum TextCapture {
         up?.post(tap: .cghidEventTap)
     }
 
+    /// 模拟 ⌘V 粘贴(用于把结果替换回原文位置)
+    static func sendCmdV() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let vKey = CGKeyCode(kVK_ANSI_V)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
+        down?.flags = .maskCommand
+        let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+        up?.flags = .maskCommand
+        down?.post(tap: .cghidEventTap)
+        up?.post(tap: .cghidEventTap)
+    }
+
     private static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {
         var snapshot: [[String: Data]] = []
         for item in pb.pasteboardItems ?? [] {

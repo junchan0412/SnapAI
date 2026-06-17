@@ -16,16 +16,16 @@ enum UpdateChecker {
         }
     }
 
-    static func check(presenting window: NSWindow? = nil) {
+    static func check() {
         Task {
             do {
                 let release = try await latestRelease()
                 await MainActor.run {
-                    presentResult(release, window: window)
+                    presentResult(release)
                 }
             } catch {
                 await MainActor.run {
-                    presentError(error, window: window)
+                    presentError(error)
                 }
             }
         }
@@ -50,7 +50,7 @@ enum UpdateChecker {
         return try JSONDecoder().decode(Release.self, from: data)
     }
 
-    private static func presentResult(_ release: Release, window: NSWindow?) {
+    private static func presentResult(_ release: Release) {
         let current = currentVersion
         let latest = normalizedVersion(release.tagName)
         let hasUpdate = compareVersions(latest, current) == .orderedDescending
@@ -68,21 +68,21 @@ enum UpdateChecker {
             alert.addButton(withTitle: "好")
         }
 
-        let response = run(alert, window: window)
+        let response = run(alert)
         if hasUpdate && response == .alertFirstButtonReturn {
             NSWorkspace.shared.open(release.htmlURL)
         }
     }
 
-    private static func presentError(_ error: Error, window: NSWindow?) {
+    private static func presentError(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.messageText = "检查更新失败"
         alert.informativeText = error.localizedDescription
-        run(alert, window: window)
+        run(alert)
     }
 
     @discardableResult
-    private static func run(_ alert: NSAlert, window: NSWindow?) -> NSApplication.ModalResponse {
+    private static func run(_ alert: NSAlert) -> NSApplication.ModalResponse {
         NSApp.activate(ignoringOtherApps: true)
         return alert.runModal()
     }

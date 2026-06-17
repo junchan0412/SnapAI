@@ -37,6 +37,16 @@ final class AIClient {
         task = nil
     }
 
+    /// 实际使用的 temperature:激活供应商覆盖优先,否则全局
+    private var effectiveTemperature: Double {
+        settings.activeProvider?.temperature ?? settings.temperature
+    }
+
+    /// 实际使用的 max_tokens(仅 Anthropic 必填):激活供应商覆盖优先,否则默认 2048
+    private var effectiveMaxTokens: Int {
+        settings.activeProvider?.maxTokens ?? 2048
+    }
+
     // MARK: - URL 规范化
 
     /// 把用户填写的端点地址规范化为 API 根地址(含版本段)。
@@ -80,6 +90,52 @@ final class AIClient {
         let base = Self.normalizedBase(settings.baseURL, proto: settings.apiProtocol)
         guard let url = URL(string: base + path) else { throw AIError.invalidURL }
         return url
+    }
+
+    // MARK: - 连接测试
+
+    /// 测试当前激活供应商的连通性:发一条极小的非流式请求,成功返回 true。
+    /// 失败时抛出可读错误。
+    func testConnection() async throws {
+        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+        let proto = settings.apiProtocol
+        let url: URL
+        var req: URLRequest
+        switch proto {
+        case .openAI:
+            url = try endpoint("/chat/completions")
+            req = URLRequest(url: url)
+            req.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
+            let body: [String: Any] = [
+                "model": settings.model,
+                "max_tokens": 1,
+                "messages": [["role": "user", "content": "hi"]]
+            ]
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        case .anthropic:
+            url = try endpoint("/messages")
+            req = URLRequest(url: url)
+            req.setValue(settings.apiKey, forHTTPHeaderField: "x-api-key")
+            req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            let body: [String: Any] = [
+                "model": settings.model,
+                "max_tokens": 1,
+                "messages": [["role": "user", "content": "hi"]]
+            ]
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = 20
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else {
+            throw AIError.badResponse(0, "无响应")
+        }
+        if !(200...299).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw AIError.badResponse(http.statusCode, String(body.prefix(300)))
+        }
     }
 
     // MARK: - 模型列表
@@ -158,7 +214,7 @@ final class AIClient {
 
         let body: [String: Any] = [
             "model": settings.model,
-            "temperature": settings.temperature,
+            "temperature": effectiveTemperature,
             "stream": true,
             "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] }
         ]
@@ -200,8 +256,8 @@ final class AIClient {
 
         var body: [String: Any] = [
             "model": settings.model,
-            "max_tokens": 2048,
-            "temperature": settings.temperature,
+            "max_tokens": effectiveMaxTokens,
+            "temperature": effectiveTemperature,
             "stream": true,
             "messages": convo
         ]

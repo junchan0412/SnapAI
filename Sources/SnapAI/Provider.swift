@@ -13,13 +13,22 @@ struct AIProvider: Codable, Identifiable, Equatable {
     var name: String = "新供应商"
     var apiProtocol: APIProtocol = .openAI
     var baseURL: String = ""
+    /// API Key。注意:不写入 JSON(由 Keychain 持久化),仅运行时驻留。
     var apiKey: String = ""
     var models: [AIModelEntry] = []
     var isEnabled: Bool = true
+    /// 每供应商可选覆盖参数。nil 表示沿用全局设置。
+    var temperature: Double? = nil
+    var maxTokens: Int? = nil
 
     /// 已启用的模型名(用于菜单栏快速切换)
     var enabledModelNames: [String] {
         models.filter { $0.enabled }.map { $0.name }
+    }
+
+    // apiKey 不参与编解码,改由 Keychain 管理
+    enum CodingKeys: String, CodingKey {
+        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens
     }
 
     /// 合并新拉取的模型名:保留已存在条目的启用状态,新模型默认启用

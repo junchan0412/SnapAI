@@ -4,12 +4,8 @@ import Combine
 /// 浮动结果窗口的状态机
 @MainActor
 final class ResultViewModel: ObservableObject {
-    enum Mode {
-        case ask, translate
-        var title: String { self == .ask ? "AI 提问" : "翻译" }
-    }
 
-    @Published var sourceText: String = ""
+    @Published var sourceText: String = ""        // 可编辑的原文(#5)
     /// 打字机已揭示的文本(UI 绑定这个)
     @Published var output: String = ""
     @Published var isStreaming: Bool = false
@@ -17,17 +13,26 @@ final class ResultViewModel: ObservableObject {
     @Published var followUp: String = ""
     /// 是否固定/置顶窗口(固定后点击外部不自动关闭)
     @Published var isPinned: Bool = false
+    /// 当前动作
+    @Published var action: AIAction = AIAction()
+    /// 翻译类动作的目标语言(可在面板里切换重译)(#7)
+    @Published var targetLanguage: TargetLanguage = .auto
+    /// 本轮耗时与字数(#9)
+    @Published var elapsed: TimeInterval = 0
+    @Published var charCount: Int = 0
+    /// 替换原文的回调由 AppDelegate 注入(#3)
+    var onReplace: ((String) -> Void)?
 
-    private let settings: AppSettings
+    let settings: AppSettings
     private let client: AIClient
-    private var mode: Mode = .ask
     private var history: [ChatMessage] = []
+    private var startTime: Date?
+    private var savedToHistory = false
 
     // 打字机:fullText 为已接收的完整文本,output 逐步追上它
     private var fullText: String = ""
-    private var streamDone: Bool = false   // 网络流是否已结束(打字机可能仍在追赶)
+    private var streamDone: Bool = false
     private var typewriterTimer: Timer?
-    // 速度参数从 settings.typewriterSpeed 实时读取
     private var charsPerTick: Int { settings.typewriterSpeed.charsPerTick }
     private var tickInterval: TimeInterval { settings.typewriterSpeed.tickInterval }
 
@@ -36,18 +41,45 @@ final class ResultViewModel: ObservableObject {
         self.client = AIClient(settings: settings)
     }
 
-    /// 完整文本(供复制用,不受打字机进度影响)
+    /// 完整文本(供复制/替换用,不受打字机进度影响)
     var completeText: String { fullText }
 
+    /// 是否为翻译类动作(决定是否显示语言切换)
+    var isTranslation: Bool { action.isTranslation }
+
+    // MARK: - 启动
+
     /// 用选中文字开始一轮新对话
-    func start(text: String, mode: Mode) {
-        self.mode = mode
+    func start(text: String, action: AIAction) {
+        self.action = action
+        self.targetLanguage = action.targetLanguage
         self.sourceText = text
         resetOutput()
         self.history = []
+        sendInitial()
+    }
 
-        let template = mode == .ask ? settings.askPrompt : settings.translatePrompt
-        let userContent = template.replacingOccurrences(of: "{{text}}", with: text)
+    /// 用编辑后的原文重新发起(#5)
+    func resendEdited() {
+        guard !isStreaming, !sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        history = []
+        resetOutput()
+        sendInitial()
+    }
+
+    /// 切换翻译目标语言并重译(#7)
+    func changeLanguage(_ lang: TargetLanguage) {
+        targetLanguage = lang
+        action.targetLanguage = lang
+        history = []
+        resetOutput()
+        sendInitial()
+    }
+
+    private func sendInitial() {
+        var act = action
+        act.targetLanguage = targetLanguage
+        let userContent = act.render(text: sourceText)
 
         var messages: [ChatMessage] = []
         if !settings.systemPrompt.isEmpty {
@@ -62,7 +94,6 @@ final class ResultViewModel: ObservableObject {
     func sendFollowUp() {
         let q = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isStreaming else { return }
-        // 把上一轮回答存入历史
         if !fullText.isEmpty {
             history.append(ChatMessage(role: .assistant, content: fullText))
         }
@@ -72,7 +103,7 @@ final class ResultViewModel: ObservableObject {
         runStream()
     }
 
-    /// 重新生成
+    /// 重新生成(可能已通过菜单切换了模型)(#9)
     func regenerate() {
         guard !isStreaming else { return }
         resetOutput()
@@ -82,15 +113,21 @@ final class ResultViewModel: ObservableObject {
     func cancel() {
         client.cancel()
         stopTypewriter()
-        // 取消时把剩余文本立即补全显示
         output = fullText
         isStreaming = false
+        finishMetrics()
     }
 
     func copyOutput() {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(fullText, forType: .string)
+    }
+
+    /// 把结果替换回原文位置(#3)
+    func replaceOriginal() {
+        guard !fullText.isEmpty else { return }
+        onReplace?(fullText)
     }
 
     // MARK: - 内部
@@ -101,17 +138,21 @@ final class ResultViewModel: ObservableObject {
         output = ""
         streamDone = false
         errorMessage = nil
+        elapsed = 0
+        charCount = 0
+        savedToHistory = false
+        startTime = Date()
     }
 
     private func runStream() {
         isStreaming = true
         streamDone = false
+        startTime = Date()
         let typewriterOn = settings.typewriterSpeed != .off
         if typewriterOn { startTypewriter() }
         client.stream(messages: history) { [weak self] token in
             guard let self = self else { return }
             self.fullText += token
-            // 关闭打字机时直接同步显示
             if !typewriterOn { self.output = self.fullText }
         } onComplete: { [weak self] error in
             guard let self = self else { return }
@@ -121,13 +162,29 @@ final class ResultViewModel: ObservableObject {
                 self.stopTypewriter()
                 self.output = self.fullText
                 self.isStreaming = false
+                self.finishMetrics()
             } else if !typewriterOn {
-                // 关闭打字机时直接收尾
                 self.output = self.fullText
                 self.isStreaming = false
+                self.finishMetrics()
             }
-            // 开启打字机时:让其把剩余文本吐完后,在 tick 里收尾
         }
+    }
+
+    private func finishMetrics() {
+        if let start = startTime { elapsed = Date().timeIntervalSince(start) }
+        charCount = fullText.count
+        saveToHistoryIfNeeded()
+    }
+
+    private func saveToHistoryIfNeeded() {
+        guard !savedToHistory, !fullText.isEmpty, errorMessage == nil else { return }
+        savedToHistory = true
+        settings.addHistory(action: action.name,
+                            source: sourceText,
+                            output: fullText,
+                            provider: settings.activeProvider?.name ?? "",
+                            model: settings.activeModel)
     }
 
     private func startTypewriter() {
@@ -140,16 +197,15 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func tick() {
-        // 还有未揭示的字符 -> 逐步揭示
         if output.count < fullText.count {
             let target = min(output.count + charsPerTick, fullText.count)
             let endIdx = fullText.index(fullText.startIndex, offsetBy: target)
             output = String(fullText[fullText.startIndex..<endIdx])
         } else if streamDone {
-            // 流已结束且全部揭示完 -> 收尾
             isStreaming = false
             typewriterTimer?.invalidate()
             typewriterTimer = nil
+            finishMetrics()
         }
     }
 

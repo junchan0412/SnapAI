@@ -26,20 +26,41 @@ struct ResultView: View {
             Divider()
             footer
         }
-        .frame(width: 420)
-        .frame(minHeight: 220, maxHeight: 520)
+        .frame(minWidth: 320, maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
         .background(.ultraThinMaterial)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(systemName: "sparkles")
+            Image(systemName: vm.action.icon.isEmpty ? "sparkles" : vm.action.icon)
                 .foregroundStyle(.tint)
-            Text("SnapAI")
+            Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name)
                 .font(.headline)
             if vm.isStreaming {
                 ProgressView().controlSize(.small).padding(.leading, 2)
             }
+
+            // 翻译类:语言切换(#7)
+            if vm.isTranslation {
+                Menu {
+                    ForEach(TargetLanguage.allCases) { lang in
+                        Button {
+                            vm.changeLanguage(lang)
+                        } label: {
+                            if lang == vm.targetLanguage {
+                                Label(lang.rawValue, systemImage: "checkmark")
+                            } else { Text(lang.rawValue) }
+                        }
+                    }
+                } label: {
+                    Label(vm.targetLanguage.rawValue, systemImage: "globe")
+                        .font(.caption)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(vm.isStreaming)
+            }
+
             Spacer()
             Button {
                 vm.isPinned.toggle()
@@ -68,14 +89,9 @@ struct ResultView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    if !vm.sourceText.isEmpty {
-                        Text(vm.sourceText)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.primary.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    // 可编辑原文(#5)
+                    if !vm.sourceText.isEmpty || vm.action.name.isEmpty == false {
+                        sourceEditor
                     }
 
                     if let err = vm.errorMessage {
@@ -112,35 +128,85 @@ struct ResultView: View {
         }
     }
 
-    private var footer: some View {
-        HStack(spacing: 8) {
-            TextField("追问…", text: $vm.followUp, onCommit: vm.sendFollowUp)
-                .textFieldStyle(.roundedBorder)
+    private var sourceEditor: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            TextEditor(text: $vm.sourceText)
+                .font(.callout)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 32, maxHeight: 90)
+                .padding(6)
+                .background(Color.primary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .disabled(vm.isStreaming)
-
             Button {
-                vm.copyOutput()
+                vm.resendEdited()
             } label: {
-                Image(systemName: "doc.on.doc")
+                Label("用此文本重新发送", systemImage: "arrow.up.circle")
+                    .font(.caption)
             }
-            .help("复制结果")
-            .disabled(vm.output.isEmpty)
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .disabled(vm.isStreaming)
+        }
+    }
 
-            if vm.isStreaming {
-                Button {
-                    vm.cancel()
-                } label: {
-                    Image(systemName: "stop.fill")
+    private var footer: some View {
+        VStack(spacing: 6) {
+            // 指标行(#9)
+            if vm.charCount > 0 || vm.elapsed > 0 {
+                HStack(spacing: 10) {
+                    if vm.elapsed > 0 {
+                        Label(String(format: "%.1fs", vm.elapsed), systemImage: "clock")
+                    }
+                    if vm.charCount > 0 {
+                        Label("\(vm.charCount) 字", systemImage: "textformat")
+                    }
+                    Spacer()
+                    if !vm.settings.activeModel.isEmpty {
+                        Text(vm.settings.activeModel).truncationMode(.middle).lineLimit(1)
+                    }
                 }
-                .help("停止")
-            } else {
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                TextField("追问…", text: $vm.followUp, onCommit: vm.sendFollowUp)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(vm.isStreaming)
+
                 Button {
-                    vm.regenerate()
+                    vm.copyOutput()
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Image(systemName: "doc.on.doc")
                 }
-                .help("重新生成")
-                .disabled(vm.sourceText.isEmpty)
+                .help("复制结果")
+                .disabled(vm.output.isEmpty)
+
+                Button {
+                    vm.replaceOriginal()
+                } label: {
+                    Image(systemName: "arrow.uturn.left.square")
+                }
+                .help("用结果替换原文位置")
+                .disabled(vm.output.isEmpty || vm.isStreaming)
+
+                if vm.isStreaming {
+                    Button {
+                        vm.cancel()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .help("停止")
+                } else {
+                    Button {
+                        vm.regenerate()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .help("重新生成")
+                    .disabled(vm.sourceText.isEmpty)
+                }
             }
         }
         .padding(.horizontal, 14)
