@@ -5,6 +5,34 @@ struct ChatMessage {
     enum Role: String { case system, user, assistant }
     var role: Role
     var content: String
+    var imageData: Data? = nil        // #3 图片内容(base64 后发给 API)
+    var imageMimeType: String = "image/png"
+}
+
+/// 把 ChatMessage 转成 OpenAI 格式的字典(自动处理图片)
+private func openAIMessageDict(_ msg: ChatMessage) -> [String: Any] {
+    if let img = msg.imageData {
+        let b64 = img.base64EncodedString()
+        let content: [[String: Any]] = [
+            ["type": "text", "text": msg.content],
+            ["type": "image_url", "image_url": ["url": "data:\(msg.imageMimeType);base64,\(b64)"]]
+        ]
+        return ["role": msg.role.rawValue, "content": content]
+    }
+    return ["role": msg.role.rawValue, "content": msg.content]
+}
+
+/// 把 ChatMessage 转成 Anthropic 格式的字典(自动处理图片)
+private func anthropicMessageDict(_ msg: ChatMessage) -> [String: Any] {
+    if let img = msg.imageData {
+        let b64 = img.base64EncodedString()
+        let content: [[String: Any]] = [
+            ["type": "image", "source": ["type": "base64", "media_type": msg.imageMimeType, "data": b64]],
+            ["type": "text", "text": msg.content]
+        ]
+        return ["role": msg.role.rawValue, "content": content]
+    }
+    return ["role": msg.role.rawValue, "content": msg.content]
 }
 
 /// 统一的 AI 流式客户端,支持 OpenAI 兼容协议与 Anthropic 原生协议。
@@ -13,12 +41,18 @@ final class AIClient {
 
     enum AIError: LocalizedError {
         case missingAPIKey
+        case missingProvider
+        case missingModel
         case badResponse(Int, String)
+        case insecureHTTPHost(String)
         case invalidURL
         var errorDescription: String? {
             switch self {
             case .missingAPIKey: return "未配置 API Key,请在设置中填写。"
+            case .missingProvider: return "没有可用的 AI 供应商,请在设置中启用至少一个供应商。"
+            case .missingModel: return "未选择可用模型,请在设置中启用或添加模型。"
             case .badResponse(let code, let body): return "请求失败 (HTTP \(code)): \(body)"
+            case .insecureHTTPHost(let host): return "HTTP 明文端点仅允许用于本机地址。当前主机 \(host) 不安全,请改用 HTTPS。"
             case .invalidURL: return "Base URL 无效。"
             }
         }
@@ -37,14 +71,19 @@ final class AIClient {
         task = nil
     }
 
-    /// 实际使用的 temperature:激活供应商覆盖优先,否则全局
+    /// 实际使用的 temperature
     private var effectiveTemperature: Double {
         settings.activeProvider?.temperature ?? settings.temperature
     }
 
-    /// 实际使用的 max_tokens(仅 Anthropic 必填):激活供应商覆盖优先,否则默认 2048
+    /// 实际使用的 max_tokens
     private var effectiveMaxTokens: Int {
         settings.activeProvider?.maxTokens ?? 2048
+    }
+
+    /// 实际超时(秒),优先用供应商配置(#13)
+    private var effectiveTimeout: Double {
+        settings.activeProvider?.requestTimeout ?? 60
     }
 
     // MARK: - URL 规范化
@@ -62,7 +101,8 @@ final class AIClient {
         guard !s.isEmpty else { return s }
 
         // 补协议头
-        if !s.hasPrefix("http://") && !s.hasPrefix("https://") {
+        let lower = s.lowercased()
+        if !lower.hasPrefix("http://") && !lower.hasPrefix("https://") {
             s = "https://" + s
         }
         // 去尾部斜杠
@@ -88,8 +128,29 @@ final class AIClient {
     /// 拼接具体方法路径
     private func endpoint(_ path: String) throws -> URL {
         let base = Self.normalizedBase(settings.baseURL, proto: settings.apiProtocol)
-        guard let url = URL(string: base + path) else { throw AIError.invalidURL }
+        guard let url = URL(string: base + path),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host, !host.isEmpty else {
+            throw AIError.invalidURL
+        }
+        if scheme == "http" && !Self.isLocalHTTPHost(host) {
+            throw AIError.insecureHTTPHost(host)
+        }
+        guard scheme == "http" || scheme == "https" else { throw AIError.invalidURL }
         return url
+    }
+
+    private static func isLocalHTTPHost(_ host: String) -> Bool {
+        let h = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        return h == "localhost" || h == "127.0.0.1" || h == "::1"
+    }
+
+    private func validateReady(requireModel: Bool) throws {
+        guard settings.activeProvider != nil else { throw AIError.missingProvider }
+        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+        if requireModel && settings.model.isEmpty {
+            throw AIError.missingModel
+        }
     }
 
     // MARK: - 连接测试
@@ -97,7 +158,7 @@ final class AIClient {
     /// 测试当前激活供应商的连通性:发一条极小的非流式请求,成功返回 true。
     /// 失败时抛出可读错误。
     func testConnection() async throws {
-        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+        try validateReady(requireModel: true)
         let proto = settings.apiProtocol
         let url: URL
         var req: URLRequest
@@ -143,7 +204,7 @@ final class AIClient {
     /// 拉取可用模型列表(GET /models)。两种协议都兼容该端点。
     /// 返回模型 id 数组(已排序去重)。失败时抛错。
     func listModels() async throws -> [String] {
-        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+        try validateReady(requireModel: false)
         let url = try endpoint("/models")
 
         var req = URLRequest(url: url)
@@ -175,10 +236,14 @@ final class AIClient {
     }
 
     /// 发起流式对话。
-    /// - onToken: 每收到一段增量文本回调(主线程)
-    /// - onComplete: 结束回调,error 非空表示失败(主线程)
+    /// - action: 当前动作(用于 thinking 模式、per-action provider)
+    /// - onToken: 主文本增量回调(主线程)
+    /// - onThinking: 推理/thinking 文本回调(主线程,Anthropic 专用)
+    /// - onComplete: 结束回调(主线程)
     func stream(messages: [ChatMessage],
+                action: AIAction? = nil,
                 onToken: @escaping (String) -> Void,
+                onThinking: ((String) -> Void)? = nil,
                 onComplete: @escaping (Error?) -> Void) {
         cancel()
         let proto = settings.apiProtocol
@@ -186,9 +251,10 @@ final class AIClient {
             do {
                 switch proto {
                 case .openAI:
-                    try await streamOpenAI(messages: messages, onToken: onToken)
+                    try await streamOpenAI(messages: messages, action: action, onToken: onToken)
                 case .anthropic:
-                    try await streamAnthropic(messages: messages, onToken: onToken)
+                    try await streamAnthropic(messages: messages, action: action,
+                                              onToken: onToken, onThinking: onThinking)
                 }
                 if !Task.isCancelled {
                     await MainActor.run { onComplete(nil) }
@@ -203,12 +269,14 @@ final class AIClient {
 
     // MARK: - OpenAI 兼容
 
-    private func streamOpenAI(messages: [ChatMessage], onToken: @escaping (String) -> Void) async throws {
-        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+    private func streamOpenAI(messages: [ChatMessage], action: AIAction?,
+                               onToken: @escaping (String) -> Void) async throws {
+        try validateReady(requireModel: true)
         let url = try endpoint("/chat/completions")
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.timeoutInterval = effectiveTimeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
 
@@ -216,7 +284,7 @@ final class AIClient {
             "model": settings.model,
             "temperature": effectiveTemperature,
             "stream": true,
-            "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] }
+            "messages": messages.map { openAIMessageDict($0) }
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -239,20 +307,24 @@ final class AIClient {
 
     // MARK: - Anthropic 原生
 
-    private func streamAnthropic(messages: [ChatMessage], onToken: @escaping (String) -> Void) async throws {
-        guard !settings.apiKey.isEmpty else { throw AIError.missingAPIKey }
+    private func streamAnthropic(messages: [ChatMessage], action: AIAction?,
+                                  onToken: @escaping (String) -> Void,
+                                  onThinking: ((String) -> Void)?) async throws {
+        try validateReady(requireModel: true)
         let url = try endpoint("/messages")
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.timeoutInterval = effectiveTimeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(settings.apiKey, forHTTPHeaderField: "x-api-key")
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        if action?.thinkingMode == true {
+            req.setValue("interleaved-thinking-2025-05-14", forHTTPHeaderField: "anthropic-beta")
+        }
 
-        // Anthropic 把 system 单列,user/assistant 放 messages
         let systemText = messages.filter { $0.role == .system }.map { $0.content }.joined(separator: "\n")
-        let convo = messages.filter { $0.role != .system }
-            .map { ["role": $0.role.rawValue, "content": $0.content] }
+        let convo = messages.filter { $0.role != .system }.map { anthropicMessageDict($0) }
 
         var body: [String: Any] = [
             "model": settings.model,
@@ -262,6 +334,11 @@ final class AIClient {
             "messages": convo
         ]
         if !systemText.isEmpty { body["system"] = systemText }
+        // #2 Anthropic extended thinking
+        if let act = action, act.thinkingMode {
+            body["thinking"] = ["type": "enabled", "budget_tokens": act.thinkingBudget]
+            body.removeValue(forKey: "temperature")   // thinking 模式不支持 temperature
+        }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (bytes, response) = try await URLSession.shared.bytes(for: req)
@@ -273,12 +350,16 @@ final class AIClient {
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             guard let data = payload.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-            let type = json["type"] as? String
-            if type == "content_block_delta",
-               let delta = json["delta"] as? [String: Any],
-               let text = delta["text"] as? String {
-                await MainActor.run { onToken(text) }
-            } else if type == "message_stop" {
+            let evtType = json["type"] as? String
+            if evtType == "content_block_delta",
+               let delta = json["delta"] as? [String: Any] {
+                let deltaType = delta["type"] as? String
+                if deltaType == "thinking_delta", let t = delta["thinking"] as? String {
+                    await MainActor.run { onThinking?(t) }
+                } else if let text = delta["text"] as? String {
+                    await MainActor.run { onToken(text) }
+                }
+            } else if evtType == "message_stop" {
                 break
             }
         }

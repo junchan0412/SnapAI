@@ -20,6 +20,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
     /// 每供应商可选覆盖参数。nil 表示沿用全局设置。
     var temperature: Double? = nil
     var maxTokens: Int? = nil
+    var requestTimeout: Double? = nil   // #13 nil = 默认 60s
 
     /// 已启用的模型名(用于菜单栏快速切换)
     var enabledModelNames: [String] {
@@ -28,7 +29,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
 
     // apiKey 不参与编解码,改由 Keychain 管理
     enum CodingKeys: String, CodingKey {
-        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens
+        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, requestTimeout
     }
 
     /// 合并新拉取的模型名:保留已存在条目的启用状态,新模型默认启用

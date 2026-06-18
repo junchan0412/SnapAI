@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var appearanceObserver: NSObjectProtocol?
+    private var hotKeyRegistrationFailures: [String] = []
     /// 触发前的前台 App,用于「替换原文」时把焦点交还
     private var previousApp: NSRunningApplication?
 
@@ -24,26 +25,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyActivationPolicy()
         applyAppIcon()
         installAppearanceObserver()
+        iCloudSync.shared.pullIfNeeded(into: settings)
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = statusBarImage()
         }
-        buildMenu()
-        installMainMenu()
 
         resultVM = ResultViewModel(settings: settings)
         resultVM.onReplace = { [weak self] text in self?.replaceSelection(with: text) }
+        resultVM.onAppend = { [weak self] text in self?.appendSelection(with: text) }   // #8
         panelController = FloatingPanelController(vm: resultVM)
 
         quickInputModel = QuickInputModel(settings: settings)
         quickInputModel.actionID = settings.enabledActions.first?.id ?? ""
-        quickInputModel.onSubmit = { [weak self] text, action in
-            self?.runQuickInput(text: text, action: action)
+        quickInputModel.onSubmit = { [weak self] text, action, imageData in   // #3 imageData
+            self?.runQuickInput(text: text, action: action, imageData: imageData)
         }
         quickInput = QuickInputController(model: quickInputModel)
 
         registerHotKeys()
+        buildMenu()
+        installMainMenu()
+
+        // iCloud 同步监听(#9)。远端配置变化后刷新菜单与快捷键。
+        iCloudSync.shared.startListening(into: settings) { [weak self] in
+            self?.reloadAfterSettingsChange()
+        }
 
         // 首次启动:显示引导;否则按需提示权限
         if !settings.onboardingDone {
@@ -62,8 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() {
         let menu = NSMenu()
 
-        // 动作(带快捷键的列在前)
-        for action in settings.enabledActions {
+        // 动作 — 按 group 分组(#10)
+        let allActions = settings.enabledActions
+        let grouped = Dictionary(grouping: allActions) { $0.group }
+        func addActionItem(_ action: AIAction) {
             let suffix = action.hotKey.map { " (\($0.displayString))" } ?? ""
             let item = NSMenuItem(title: "\(action.name)\(suffix)",
                                   action: #selector(triggerActionFromMenu(_:)),
@@ -72,6 +82,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.representedObject = action.id
             menu.addItem(item)
         }
+        // 无分组的动作先列
+        (grouped[""] ?? []).forEach { addActionItem($0) }
+        // 按分组名排序
+        for key in grouped.keys.sorted() where !key.isEmpty {
+            menu.addItem(.separator())
+            let header = NSMenuItem(title: key, action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+            (grouped[key] ?? []).forEach { addActionItem($0) }
+        }
         menu.addItem(.separator())
 
         // 快捷提问面板
@@ -79,6 +99,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                      action: #selector(toggleQuickInput), keyEquivalent: "")
         quickItem.target = self
         menu.addItem(.separator())
+
+        if !hotKeyRegistrationFailures.isEmpty {
+            let warning = NSMenuItem(title: "快捷键注册异常", action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            for message in hotKeyRegistrationFailures.prefix(8) {
+                let item = NSMenuItem(title: message, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                sub.addItem(item)
+            }
+            warning.submenu = sub
+            menu.addItem(warning)
+            menu.addItem(.separator())
+        }
 
         // 当前模型 + 快速切换
         let currentTitle: String
@@ -172,7 +205,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let entry = settings.history.first(where: { $0.id == id }) else { return }
         // 用历史里的原文 + 同名动作重新发起
         let action = settings.enabledActions.first(where: { $0.name == entry.actionName })
-            ?? settings.enabledActions.first ?? AIAction.defaults()[0]
+            ?? settings.enabledActions.first
+        guard let action = action else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         resultVM.start(text: entry.source, action: action)
         panelController.show()
@@ -291,17 +325,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerHotKeys() {
         HotKeyManager.shared.unregisterAll()
+        hotKeyRegistrationFailures = []
+        var used: [HotKeyCombo: String] = [:]
+
+        func register(_ combo: HotKeyCombo, label: String, handler: @escaping () -> Void) {
+            guard combo.modifiers != 0 else { return }
+            if let existing = used[combo] {
+                hotKeyRegistrationFailures.append("\(label) 与 \(existing) 冲突: \(combo.displayString)")
+                return
+            }
+            used[combo] = label
+            if HotKeyManager.shared.register(combo, handler: handler) == nil {
+                hotKeyRegistrationFailures.append("\(label) 注册失败: \(combo.displayString)")
+            }
+        }
+
         // 各动作的快捷键
         for action in settings.enabledActions {
             guard let hk = action.hotKey else { continue }
             let actionID = action.id
-            HotKeyManager.shared.register(hk) { [weak self] in
+            register(hk, label: "动作「\(action.name)」") { [weak self] in
                 self?.triggerAction(id: actionID)
             }
         }
         // 快捷提问面板
-        HotKeyManager.shared.register(settings.quickPanelHotKey) { [weak self] in
+        register(settings.quickPanelHotKey, label: "快捷提问面板") { [weak self] in
             self?.toggleQuickInput()
+        }
+        if !hotKeyRegistrationFailures.isEmpty {
+            NSLog("SnapAI: 快捷键注册异常 - \(hotKeyRegistrationFailures.joined(separator: "; "))")
         }
     }
 
@@ -321,7 +373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func triggerAction(id: String) {
-        guard let action = settings.actions.first(where: { $0.id == id }) else { return }
+        guard let action = settings.enabledActions.first(where: { $0.id == id }) else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         TextCapture.capture(preferAX: settings.useAXFirst) { [weak self] text in
             guard let self = self else { return }
@@ -339,13 +391,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quickInput.toggle()
     }
 
-    private func runQuickInput(text: String, action: AIAction) {
+    private func runQuickInput(text: String, action: AIAction, imageData: Data? = nil) {
         quickInput.hide()
-        resultVM.start(text: text, action: action)
+        resultVM.start(text: text, action: action, imageData: imageData)
         panelController.show()
     }
 
-    /// 把结果替换回原文位置(#3):交还焦点给原 App 后模拟 ⌘V
+    /// 把结果替换回原文位置(#3)
     private func replaceSelection(with text: String) {
         panelController.hide()
         let pb = NSPasteboard.general
@@ -354,6 +406,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         previousApp?.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             TextCapture.sendCmdV()
+        }
+    }
+
+    /// 把结果追加到光标后(#8):先发 → 键移到选区末尾,再粘贴 "\n" + result
+    private func appendSelection(with text: String) {
+        let appended = "\n" + text
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(appended, forType: .string)
+        previousApp?.activate()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            // 先右箭头取消选中(光标移到选区末尾)
+            if let src = CGEventSource(stateID: .combinedSessionState) {
+                let right = CGEvent(keyboardEventSource: src, virtualKey: 124, keyDown: true)
+                right?.post(tap: .cghidEventTap)
+                CGEvent(keyboardEventSource: src, virtualKey: 124, keyDown: false)?.post(tap: .cghidEventTap)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                TextCapture.sendCmdV()
+            }
         }
     }
 

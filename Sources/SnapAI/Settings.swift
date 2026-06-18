@@ -39,7 +39,7 @@ enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
 }
 
 /// 一个可配置的快捷键(键码 + 修饰键)
-struct HotKeyCombo: Codable, Equatable {
+struct HotKeyCombo: Codable, Equatable, Hashable {
     var keyCode: UInt32
     var modifiers: UInt32   // Carbon 修饰键掩码 (cmdKey/optionKey/...)
 
@@ -98,12 +98,17 @@ final class AppSettings: ObservableObject, Codable {
     @Published var onboardingDone: Bool = false
     @Published var panelWidth: Double = 420
     @Published var panelHeight: Double = 360
+    // 统计(#11) 动作使用次数,key = 动作名
+    @Published var actionUsageCounts: [String: Int] = [:]
+    // iCloud 同步开关(#9)
+    @Published var iCloudSyncEnabled: Bool = false
 
     // MARK: - 当前激活配置(兼容旧的扁平访问方式,供 AIClient / ModelLoader 使用)
 
-    /// 当前激活的供应商(找不到时回退到第一个)
+    /// 当前激活的供应商。只返回已启用供应商,避免禁用项继续参与请求。
     var activeProvider: AIProvider? {
-        providers.first(where: { $0.id == activeProviderID }) ?? providers.first
+        providers.first(where: { $0.id == activeProviderID && $0.isEnabled })
+            ?? providers.first(where: { $0.isEnabled })
     }
 
     var apiProtocol: APIProtocol { activeProvider?.apiProtocol ?? .openAI }
@@ -120,17 +125,20 @@ final class AppSettings: ObservableObject, Codable {
 
     /// 确保激活态有效:激活的供应商/模型若失效,自动落到第一个可用的启用项
     func normalizeActive() {
-        // 供应商:必须存在且启用
+        // 供应商:必须存在且启用。没有启用项时明确置空,让请求层给出可读错误。
+        guard let firstEnabled = providers.first(where: { $0.isEnabled }) else {
+            activeProviderID = ""
+            activeModel = ""
+            return
+        }
         if !providers.contains(where: { $0.id == activeProviderID && $0.isEnabled }) {
-            if let first = providers.first(where: { $0.isEnabled }) ?? providers.first {
-                activeProviderID = first.id
-            }
+            activeProviderID = firstEnabled.id
         }
         // 模型:必须在激活供应商的启用模型里
         if let p = activeProvider {
             let enabled = p.enabledModelNames
             if !enabled.contains(activeModel) {
-                activeModel = enabled.first ?? p.models.first?.name ?? ""
+                activeModel = enabled.first ?? ""
             }
         } else {
             activeModel = ""
@@ -180,6 +188,7 @@ final class AppSettings: ObservableObject, Codable {
         case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon
         case typewriterSpeed
         case history, historyLimit, onboardingDone, panelWidth, panelHeight
+        case actionUsageCounts, iCloudSyncEnabled
         // 旧:单配置(仅用于迁移,不再写出)
         case apiProtocol, baseURL, apiKey, model
     }
@@ -234,6 +243,8 @@ final class AppSettings: ObservableObject, Codable {
         onboardingDone = (try? c.decode(Bool.self, forKey: .onboardingDone)) ?? true
         panelWidth = (try? c.decode(Double.self, forKey: .panelWidth)) ?? 420
         panelHeight = (try? c.decode(Double.self, forKey: .panelHeight)) ?? 360
+        actionUsageCounts = (try? c.decode([String: Int].self, forKey: .actionUsageCounts)) ?? [:]
+        iCloudSyncEnabled = (try? c.decode(Bool.self, forKey: .iCloudSyncEnabled)) ?? false
 
         if let list = try? c.decode([AIProvider].self, forKey: .providers), !list.isEmpty {
             // 新格式
@@ -276,6 +287,8 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(onboardingDone, forKey: .onboardingDone)
         try c.encode(panelWidth, forKey: .panelWidth)
         try c.encode(panelHeight, forKey: .panelHeight)
+        try c.encode(actionUsageCounts, forKey: .actionUsageCounts)
+        try c.encode(iCloudSyncEnabled, forKey: .iCloudSyncEnabled)
     }
 
     private static let storeKey = "SnapAI.settings.v1"

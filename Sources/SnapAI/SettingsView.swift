@@ -67,6 +67,7 @@ final class AISettingsUI: ObservableObject {
     @Published var expandedProviderID: String?
     @Published var expandedActionID: String?
     @Published var newModelName: String = ""
+    @Published var hotKeyError: String?
 }
 
 /// 供应商连接测试状态(#2)
@@ -460,9 +461,22 @@ struct SettingsView: View {
             HStack {
                 Text("Max tokens").font(.caption).foregroundStyle(.secondary)
                 TextField("默认 2048", text: maxTokBinding)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 90)
+                    .textFieldStyle(.roundedBorder).frame(width: 90)
                 Text("(Anthropic 必填,留空用默认)").font(.caption2).foregroundStyle(.secondary)
+            }
+            // #13 超时配置
+            HStack {
+                Text("超时(秒)").font(.caption).foregroundStyle(.secondary)
+                TextField("默认 60", text: Binding(
+                    get: { provider.requestTimeout.map { "\($0)" } ?? "" },
+                    set: { str in
+                        guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
+                        settings.providers[idx].requestTimeout = Double(str.trimmingCharacters(in: .whitespaces))
+                        commit()
+                    }
+                ))
+                .textFieldStyle(.roundedBorder).frame(width: 70)
+                Text("秒").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -639,6 +653,11 @@ struct SettingsView: View {
                 }
                 Text("{{text}} = 选中文字;{{lang}} = 目标语言指令(翻译类)。带快捷键的动作可全局触发。")
                     .font(.caption2).foregroundStyle(.secondary)
+                if let hotKeyError = ui.hotKeyError {
+                    Label(hotKeyError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("快捷提问面板")
@@ -646,9 +665,19 @@ struct SettingsView: View {
                     HStack(spacing: 12) {
                         Text("全局快捷键")
                             .foregroundStyle(.secondary)
-                        HotKeyRecorder(combo: $settings.quickPanelHotKey)
+                        HotKeyRecorder(combo: Binding(
+                            get: { settings.quickPanelHotKey },
+                            set: { newVal in
+                                if let conflict = hotKeyConflict(for: newVal, excludingActionID: nil, includeQuickPanel: false) {
+                                    ui.hotKeyError = "快捷提问面板与「\(conflict)」冲突,未保存"
+                                    return
+                                }
+                                ui.hotKeyError = nil
+                                settings.quickPanelHotKey = newVal
+                                commit()
+                            }
+                        ))
                             .frame(width: 138, height: 34)
-                            .onChange(of: settings.quickPanelHotKey) { commit() }
                         Spacer()
                     }
                     Text("这个快捷键会直接弹出输入面板,不依赖你先选中文字。")
@@ -720,23 +749,90 @@ struct SettingsView: View {
                 TextField("SF Symbol 名,如 wand.and.stars", text: bindingForAction(action.id, \.icon), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
+            // #10 分组标签
+            editorRow("分组") {
+                TextField("分组名(留空=不分组)", text: bindingForAction(action.id, \.group), onCommit: commit)
+                    .textFieldStyle(.roundedBorder)
+            }
             editorRow("快捷键") {
-                HStack {
-                    HotKeyRecorder(combo: Binding(
-                        get: { action.hotKey ?? HotKeyCombo(keyCode: 0, modifiers: 0) },
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        HotKeyRecorder(combo: Binding(
+                            get: { action.hotKey ?? HotKeyCombo(keyCode: 0, modifiers: 0) },
+                            set: { newVal in
+                                guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                                if newVal.modifiers != 0,
+                                   let conflict = hotKeyConflict(for: newVal, excludingActionID: action.id, includeQuickPanel: true) {
+                                    ui.hotKeyError = "动作「\(action.name)」与「\(conflict)」冲突,未保存"
+                                    return
+                                }
+                                ui.hotKeyError = nil
+                                settings.actions[idx].hotKey = newVal.modifiers == 0 ? nil : newVal
+                                commit()
+                            }
+                        ))
+                        .frame(width: 138, height: 32)
+                        if action.hotKey != nil {
+                            Button("清除") {
+                                guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                                settings.actions[idx].hotKey = nil
+                                commit()
+                            }.controlSize(.small)
+                        }
+                    }
+                    // #6 冲突检测
+                    if let conflict = hotkeyConflict(for: action) {
+                        Label("与「\(conflict)」冲突", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption2).foregroundStyle(.orange)
+                    }
+                }
+            }
+            // #1 per-action 供应商
+            editorRow("供应商") {
+                HStack(spacing: 6) {
+                    Picker("", selection: Binding(
+                        get: { action.providerID ?? "" },
                         set: { newVal in
                             guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
-                            settings.actions[idx].hotKey = newVal.modifiers == 0 ? nil : newVal
+                            settings.actions[idx].providerID = newVal.isEmpty ? nil : newVal
+                            settings.actions[idx].modelOverride = nil
                             commit()
                         }
-                    ))
-                    .frame(width: 138, height: 32)
-                    if action.hotKey != nil {
-                        Button("清除") {
-                            guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
-                            settings.actions[idx].hotKey = nil
-                            commit()
-                        }.controlSize(.small)
+                    )) {
+                        Text("使用全局").tag("")
+                        ForEach(settings.providers.filter { $0.isEnabled }) { p in
+                            Text(p.name).tag(p.id)
+                        }
+                    }
+                    .labelsHidden().frame(maxWidth: .infinity)
+                    if let pid = action.providerID,
+                       let p = settings.providers.first(where: { $0.id == pid }) {
+                        let models = p.enabledModelNames
+                        Picker("", selection: Binding(
+                            get: { action.modelOverride ?? "" },
+                            set: { newVal in
+                                guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                                settings.actions[idx].modelOverride = newVal.isEmpty ? nil : newVal
+                                commit()
+                            }
+                        )) {
+                            Text("供应商默认").tag("")
+                            ForEach(models, id: \.self) { Text($0).tag($0) }
+                        }
+                        .labelsHidden().frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            // #2 thinking 模式
+            Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
+                .onChange(of: action.thinkingMode) { commit() }
+            if action.thinkingMode {
+                editorRow("思考预算") {
+                    HStack {
+                        TextField("tokens", value: bindingForAction(action.id, \.thinkingBudget), formatter: NumberFormatter())
+                            .textFieldStyle(.roundedBorder).frame(width: 80)
+                        Text("tokens(Anthropic 专用,建议 4000–16000)")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -788,10 +884,61 @@ struct SettingsView: View {
         commit()
     }
 
-    // MARK: - 历史(#10)
+    /// #6 检测快捷键冲突:返回冲突的动作名或"快捷提问"
+    private func hotkeyConflict(for action: AIAction) -> String? {
+        guard let hk = action.hotKey, hk.modifiers != 0 else { return nil }
+        return hotKeyConflict(for: hk, excludingActionID: action.id, includeQuickPanel: true)
+    }
+
+    private func hotKeyConflict(for combo: HotKeyCombo,
+                                excludingActionID: String?,
+                                includeQuickPanel: Bool) -> String? {
+        guard combo.modifiers != 0 else { return nil }
+        for other in settings.actions where other.id != excludingActionID {
+            if other.hotKey == combo { return other.name }
+        }
+        if includeQuickPanel && settings.quickPanelHotKey == combo {
+            return "快捷提问面板"
+        }
+        return nil
+    }
+
+    // MARK: - 历史
 
     private var historyTab: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // #11 使用统计
+            if !settings.actionUsageCounts.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("使用统计").font(.subheadline.weight(.semibold))
+                    let sorted = settings.actionUsageCounts.sorted { $0.value > $1.value }
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                        ForEach(sorted, id: \.key) { name, count in
+                            HStack {
+                                Text(name).lineLimit(1)
+                                Spacer()
+                                Text("\(count) 次").foregroundStyle(.secondary).monospacedDigit()
+                            }
+                            .font(.caption)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Color.primary.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                    HStack {
+                        Text("共 \(settings.history.count) 条记录").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("清空统计") {
+                            settings.actionUsageCounts = [:]
+                            commit()
+                        }
+                        .font(.caption2).buttonStyle(.plain).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(10).background(Color.primary.opacity(0.03)).clipShape(RoundedRectangle(cornerRadius: 8))
+                Divider()
+            }
+
             HStack {
                 Text("历史记录").font(.headline)
                 Spacer()
@@ -808,15 +955,12 @@ struct SettingsView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(settings.history) { entry in
-                            historyRow(entry)
-                        }
+                        ForEach(settings.history) { entry in historyRow(entry) }
                     }
                 }
             }
         }
-        .padding(.top, 14)
-        .padding(.horizontal, 18)
+        .padding(.top, 14).padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -888,6 +1032,17 @@ struct SettingsView: View {
                 .onChange(of: settings.useAXFirst) { commit() }
             Text("关闭后将统一通过模拟 ⌘C 取词。")
                 .font(.caption).foregroundStyle(.secondary)
+
+            Divider().padding(.vertical, 4)
+
+            Toggle("iCloud 配置同步", isOn: $settings.iCloudSyncEnabled)
+                .onChange(of: settings.iCloudSyncEnabled) {
+                    commit()
+                    if settings.iCloudSyncEnabled { iCloudSync.shared.upload(settings) }
+                }
+            Text("将供应商配置、动作和快捷键同步到 iCloud(不含 API Key)。同一 Apple ID 的多台 Mac 共享配置。")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Divider().padding(.vertical, 4)
 
@@ -997,6 +1152,7 @@ struct SettingsView: View {
 
     private func commit() {
         settings.save()
+        iCloudSync.shared.scheduleUpload(settings)
         onChange()
     }
 }

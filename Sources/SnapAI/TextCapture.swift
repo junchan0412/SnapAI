@@ -70,6 +70,10 @@ enum TextCapture {
             attempts += 1
         }
 
+        guard pasteboard.changeCount != previousChangeCount else {
+            return nil
+        }
+
         let captured = pasteboard.string(forType: .string)
 
         // 还原剪贴板,避免污染用户原有内容

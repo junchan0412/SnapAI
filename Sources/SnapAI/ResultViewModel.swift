@@ -5,72 +5,93 @@ import Combine
 @MainActor
 final class ResultViewModel: ObservableObject {
 
-    @Published var sourceText: String = ""        // 可编辑的原文(#5)
-    /// 打字机已揭示的文本(UI 绑定这个)
+    @Published var sourceText: String = ""
     @Published var output: String = ""
     @Published var isStreaming: Bool = false
     @Published var errorMessage: String?
     @Published var followUp: String = ""
-    /// 是否固定/置顶窗口(固定后点击外部不自动关闭)
     @Published var isPinned: Bool = false
-    /// 当前动作
     @Published var action: AIAction = AIAction()
-    /// 翻译类动作的目标语言(可在面板里切换重译)(#7)
     @Published var targetLanguage: TargetLanguage = .auto
-    /// 本轮耗时与字数(#9)
     @Published var elapsed: TimeInterval = 0
     @Published var charCount: Int = 0
-    /// 替换原文的回调由 AppDelegate 注入(#3)
-    var onReplace: ((String) -> Void)?
+    /// #2 Thinking/推理文本(Anthropic 或 DeepSeek R1 的 <think> 内容)
+    @Published var thinkingText: String = ""
+    @Published var showThinking: Bool = false
 
     let settings: AppSettings
-    private let client: AIClient
+    private var client: AIClient
     private var history: [ChatMessage] = []
     private var startTime: Date?
     private var savedToHistory = false
+    private var metricsFinished = false
 
-    // 打字机:fullText 为已接收的完整文本,output 逐步追上它
+    // 打字机
     private var fullText: String = ""
     private var streamDone: Bool = false
     private var typewriterTimer: Timer?
     private var charsPerTick: Int { settings.typewriterSpeed.charsPerTick }
     private var tickInterval: TimeInterval { settings.typewriterSpeed.tickInterval }
 
+    // #5 追问历史(↑/↓ 浏览)
+    private var followUpHistory: [String] = []
+    var followUpHistoryCount: Int { followUpHistory.count }
+
+    /// #3 替换原文回调
+    var onReplace: ((String) -> Void)?
+    /// #8 追加回调
+    var onAppend: ((String) -> Void)?
+
     init(settings: AppSettings) {
         self.settings = settings
         self.client = AIClient(settings: settings)
     }
 
-    /// 完整文本(供复制/替换用,不受打字机进度影响)
-    var completeText: String { fullText }
+    // #3 图片(来自截图/粘贴)
+    private var pendingImageData: Data? = nil
+    private var pendingImageMimeType: String = "image/png"
 
-    /// 是否为翻译类动作(决定是否显示语言切换)
+    var completeText: String { fullText }
     var isTranslation: Bool { action.isTranslation }
 
     // MARK: - 启动
 
-    /// 用选中文字开始一轮新对话
-    func start(text: String, action: AIAction) {
+    func start(text: String, action: AIAction, imageData: Data? = nil, imageMimeType: String = "image/png") {
         self.action = action
         self.targetLanguage = action.targetLanguage
         self.sourceText = text
+        self.pendingImageData = imageData
+        self.pendingImageMimeType = imageMimeType
+        thinkingText = ""
+        showThinking = false
         resetOutput()
-        self.history = []
+        history = []
         sendInitial()
     }
 
-    /// 用编辑后的原文重新发起(#5)
     func resendEdited() {
         guard !isStreaming, !sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         history = []
+        thinkingText = ""
         resetOutput()
         sendInitial()
     }
 
-    /// 切换翻译目标语言并重译(#7)
     func changeLanguage(_ lang: TargetLanguage) {
         targetLanguage = lang
         action.targetLanguage = lang
+        history = []
+        thinkingText = ""
+        resetOutput()
+        sendInitial()
+    }
+
+    /// #4 切换到另一个动作,对相同原文重新发起
+    func switchAction(_ newAction: AIAction) {
+        action = newAction
+        targetLanguage = newAction.targetLanguage
+        thinkingText = ""
+        showThinking = false
         history = []
         resetOutput()
         sendInitial()
@@ -85,49 +106,85 @@ final class ResultViewModel: ObservableObject {
         if !settings.systemPrompt.isEmpty {
             messages.append(ChatMessage(role: .system, content: settings.systemPrompt))
         }
-        messages.append(ChatMessage(role: .user, content: userContent))
+        // #3 图片内容挂载到第一条 user 消息
+        var userMsg = ChatMessage(role: .user, content: userContent)
+        if let img = pendingImageData {
+            userMsg.imageData = img
+            userMsg.imageMimeType = pendingImageMimeType
+            pendingImageData = nil
+        }
+        messages.append(userMsg)
         history = messages
         runStream()
     }
 
-    /// 追问
+    // MARK: - 追问
+
     func sendFollowUp() {
         let q = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isStreaming else { return }
+        // #5 追问历史
+        if !followUpHistory.contains(q) { followUpHistory.append(q) }
         if !fullText.isEmpty {
             history.append(ChatMessage(role: .assistant, content: fullText))
         }
         history.append(ChatMessage(role: .user, content: q))
         followUp = ""
+        thinkingText = ""
         resetOutput()
         runStream()
     }
 
-    /// 重新生成(可能已通过菜单切换了模型)(#9)
+    /// #5 浏览追问历史
+    func followUpHistoryUp() {
+        guard !followUpHistory.isEmpty else { return }
+        let last = followUpHistory.last ?? ""
+        followUp = last
+    }
+
+    func followUpHistoryDown() {
+        followUp = ""
+    }
+
     func regenerate() {
         guard !isStreaming else { return }
+        thinkingText = ""
+        resetOutput()
+        runStream()
+    }
+
+    /// #12 错误后重试
+    func retry() {
+        guard !isStreaming else { return }
+        thinkingText = ""
         resetOutput()
         runStream()
     }
 
     func cancel() {
+        guard isStreaming else { return }
         client.cancel()
         stopTypewriter()
         output = fullText
         isStreaming = false
-        finishMetrics()
+        finishMetrics(recordUsage: false, saveHistory: false)
     }
 
     func copyOutput() {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(fullText, forType: .string)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(fullText, forType: .string)
     }
 
-    /// 把结果替换回原文位置(#3)
+    /// #3 替换原文
     func replaceOriginal() {
         guard !fullText.isEmpty else { return }
         onReplace?(fullText)
+    }
+
+    /// #8 追加到文档
+    func appendToDocument() {
+        guard !fullText.isEmpty else { return }
+        onAppend?(fullText)
     }
 
     // MARK: - 内部
@@ -141,19 +198,75 @@ final class ResultViewModel: ObservableObject {
         elapsed = 0
         charCount = 0
         savedToHistory = false
+        metricsFinished = false
         startTime = Date()
     }
 
     private func runStream() {
+        // #1 per-action 供应商:动作指定了供应商则用临时 client
+        if let pid = action.providerID,
+           let overrideProvider = settings.providers.first(where: { $0.id == pid && $0.isEnabled }) {
+            let probe = AppSettings()
+            probe.providers = [overrideProvider]
+            probe.activeProviderID = overrideProvider.id
+            probe.activeModel = action.modelOverride ?? overrideProvider.enabledModelNames.first
+                ?? ""
+            probe.temperature = settings.temperature
+            probe.systemPrompt = settings.systemPrompt
+            client = AIClient(settings: probe)
+        } else {
+            client = AIClient(settings: settings)
+        }
+
         isStreaming = true
         streamDone = false
         startTime = Date()
         let typewriterOn = settings.typewriterSpeed != .off
+        let thinkingEnabled = action.thinkingMode
+
         if typewriterOn { startTypewriter() }
-        client.stream(messages: history) { [weak self] token in
+
+        // #2 DeepSeek R1 <think> tag 状态机
+        var inThinkTag = false
+        var thinkBuffer = ""
+
+        client.stream(messages: history, action: action) { [weak self] token in
             guard let self = self else { return }
-            self.fullText += token
+            if thinkingEnabled {
+                // 检测 <think> 标签(DeepSeek R1 style)
+                var remaining = thinkBuffer + token
+                thinkBuffer = ""
+                while !remaining.isEmpty {
+                    if inThinkTag {
+                        if let end = remaining.range(of: "</think>") {
+                            self.thinkingText += String(remaining[remaining.startIndex..<end.lowerBound])
+                            remaining = String(remaining[end.upperBound...])
+                            inThinkTag = false
+                        } else if remaining.hasSuffix("<") || remaining.hasSuffix("</") {
+                            thinkBuffer = remaining
+                            remaining = ""
+                        } else {
+                            self.thinkingText += remaining
+                            remaining = ""
+                        }
+                    } else {
+                        if let start = remaining.range(of: "<think>") {
+                            self.fullText += String(remaining[remaining.startIndex..<start.lowerBound])
+                            remaining = String(remaining[start.upperBound...])
+                            inThinkTag = true
+                        } else {
+                            self.fullText += remaining
+                            remaining = ""
+                        }
+                    }
+                }
+            } else {
+                self.fullText += token
+            }
             if !typewriterOn { self.output = self.fullText }
+        } onThinking: { [weak self] thinking in
+            // Anthropic extended thinking 块
+            self?.thinkingText += thinking
         } onComplete: { [weak self] error in
             guard let self = self else { return }
             self.streamDone = true
@@ -162,27 +275,35 @@ final class ResultViewModel: ObservableObject {
                 self.stopTypewriter()
                 self.output = self.fullText
                 self.isStreaming = false
-                self.finishMetrics()
+                self.finishMetrics(recordUsage: false, saveHistory: false)
             } else if !typewriterOn {
                 self.output = self.fullText
                 self.isStreaming = false
-                self.finishMetrics()
+                self.finishMetrics(recordUsage: true, saveHistory: true)
             }
         }
     }
 
-    private func finishMetrics() {
+    private func finishMetrics(recordUsage: Bool, saveHistory: Bool) {
+        guard !metricsFinished else { return }
+        metricsFinished = true
         if let start = startTime { elapsed = Date().timeIntervalSince(start) }
         charCount = fullText.count
-        saveToHistoryIfNeeded()
+        if recordUsage {
+            // #11 使用统计
+            settings.actionUsageCounts[action.name, default: 0] += 1
+        }
+        if saveHistory {
+            saveToHistoryIfNeeded()
+        } else if recordUsage {
+            settings.save()
+        }
     }
 
     private func saveToHistoryIfNeeded() {
         guard !savedToHistory, !fullText.isEmpty, errorMessage == nil else { return }
         savedToHistory = true
-        settings.addHistory(action: action.name,
-                            source: sourceText,
-                            output: fullText,
+        settings.addHistory(action: action.name, source: sourceText, output: fullText,
                             provider: settings.activeProvider?.name ?? "",
                             model: settings.activeModel)
     }
@@ -205,7 +326,7 @@ final class ResultViewModel: ObservableObject {
             isStreaming = false
             typewriterTimer?.invalidate()
             typewriterTimer = nil
-            finishMetrics()
+            finishMetrics(recordUsage: true, saveHistory: true)
         }
     }
 

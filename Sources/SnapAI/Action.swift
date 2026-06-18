@@ -33,50 +33,48 @@ struct AIAction: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
     var name: String = "新动作"
     var icon: String = "wand.and.stars"
+    var group: String = ""           // #10 分组标签(空=不分组)
     /// prompt 模板,{{text}} 替换为选中文字;{{lang}} 替换为目标语言指令(若为翻译类)
     var prompt: String = "{{text}}"
-    /// 可选快捷键
     var hotKey: HotKeyCombo? = nil
-    /// 是否为翻译类动作(决定是否使用 targetLanguage / 显示语言切换)
     var isTranslation: Bool = false
     var targetLanguage: TargetLanguage = .auto
-    /// 完成后是否默认把结果替换回原文位置
     var replaceByDefault: Bool = false
-    /// 是否启用(关闭则不注册快捷键、不在菜单显示)
     var isEnabled: Bool = true
+    /// #2 Thinking/推理模式(Anthropic extended thinking 或 DeepSeek R1)
+    var thinkingMode: Bool = false
+    var thinkingBudget: Int = 8000   // Anthropic budget_tokens
+    /// #1 动作专属供应商覆盖(nil = 使用全局激活的供应商)
+    var providerID: String? = nil
+    var modelOverride: String? = nil
 
-    /// 用选中文字渲染最终 user prompt
     func render(text: String) -> String {
         var p = prompt.replacingOccurrences(of: "{{text}}", with: text)
         p = p.replacingOccurrences(of: "{{lang}}", with: targetLanguage.instruction)
         return p
     }
 
-    // MARK: 默认动作
-
     static func defaults() -> [AIAction] {
         [
             AIAction(name: "提问", icon: "sparkles",
                      prompt: "请简洁、准确地回答关于以下内容的问题或解释它:\n\n{{text}}",
-                     hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey)),
-                     isTranslation: false),
+                     hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))),
             AIAction(name: "翻译", icon: "character.bubble",
                      prompt: "请将下面的文字{{lang}}。只输出翻译结果,不要解释:\n\n{{text}}",
                      hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey)),
                      isTranslation: true, targetLanguage: .auto),
             AIAction(name: "润色", icon: "wand.and.stars",
                      prompt: "请润色下面的文字,使其更通顺、自然、专业,保持原意和原语言。只输出润色后的结果:\n\n{{text}}",
-                     hotKey: nil, isTranslation: false, replaceByDefault: true),
+                     replaceByDefault: true),
             AIAction(name: "总结", icon: "list.bullet.rectangle",
-                     prompt: "请用简洁的要点总结下面的内容,抓住关键信息:\n\n{{text}}",
-                     hotKey: nil, isTranslation: false),
+                     prompt: "请用简洁的要点总结下面的内容,抓住关键信息:\n\n{{text}}"),
             AIAction(name: "解释代码", icon: "chevron.left.forwardslash.chevron.right",
-                     prompt: "请解释下面这段代码的功能、关键逻辑和潜在问题,用简洁的中文:\n\n{{text}}",
-                     hotKey: nil, isTranslation: false)
+                     prompt: "请解释下面这段代码的功能、关键逻辑和潜在问题,用简洁的中文:\n\n{{text}}")
         ]
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, icon, prompt, hotKey, isTranslation, targetLanguage, replaceByDefault, isEnabled
+        case id, name, icon, group, prompt, hotKey, isTranslation, targetLanguage
+        case replaceByDefault, isEnabled, thinkingMode, thinkingBudget, providerID, modelOverride
     }
 }
