@@ -40,6 +40,29 @@
 
 生成 `SnapAI.app`。
 
+### 无 Apple 开发者账号时的签名
+
+macOS 的「辅助功能」权限会绑定应用的代码身份。若每次发布都使用 ad-hoc
+签名,应用更新后代码身份会改变,用户可能需要反复重新授权。
+
+没有 Apple 开发者账号时,可创建一个本机稳定自签名证书:
+
+```bash
+./scripts/create-local-signing-identity.sh
+./build.sh
+```
+
+首次从旧的 ad-hoc 版本切换到自签名版本时,系统可能仍会要求重新授予一次
+辅助功能权限;之后只要继续用同一个 `SnapAI Local Signing` 证书构建发布,
+更新时的代码身份会更稳定。自签名不等同于 Apple Developer ID / notarization,
+首次安装仍可能被 Gatekeeper 识别为未认证开发者。
+
+### 应用内更新
+
+SnapAI 会从 GitHub Release 检查新版。发现新版后可选择「安装并重启」,
+应用会下载 Release zip、校验其中的 `SnapAI.app`,并在当前安装路径原地替换后
+自动重启,避免用户手动打开 Release 页面下载再覆盖安装。
+
 > **开机自启注意**:`SMAppService` 通过固定路径注册登录项。若要使用开机自启,
 > 请先把 `SnapAI.app` 移动到稳定位置(如 `/Applications` 或 `~/Applications`),
 > 再在设置里开启,不要停留在反复 rebuild 的目录里。

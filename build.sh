@@ -10,6 +10,8 @@ cd "$(dirname "$0")"
 APP_NAME="SnapAI"
 BIN="/tmp/${APP_NAME}.bin"
 APP_BUNDLE="${APP_NAME}.app"
+LOCAL_IDENTITY_NAME="SnapAI Local Signing"
+SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
 
 echo "==> 编译 (swiftc -O) ..."
 swiftc -O \
@@ -33,10 +35,26 @@ cp "Resources/AppIconLight.icns" "${APP_BUNDLE}/Contents/Resources/AppIconLight.
 cp "Resources/AppIconDark.icns" "${APP_BUNDLE}/Contents/Resources/AppIconDark.icns"
 echo -n "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
-echo "==> ad-hoc 签名 (使辅助功能授权可被系统记忆) ..."
-codesign --force --deep --sign - "${APP_BUNDLE}" 2>/dev/null \
-  && echo "    已签名" \
-  || echo "    (codesign 跳过/失败,不影响本机运行)"
+if [ -z "${SIGN_IDENTITY}" ]; then
+  if security find-identity -p codesigning -v | grep -F "\"${LOCAL_IDENTITY_NAME}\"" >/dev/null 2>&1; then
+    SIGN_IDENTITY="${LOCAL_IDENTITY_NAME}"
+  fi
+fi
+
+if [ -n "${SIGN_IDENTITY}" ]; then
+  echo "==> 稳定签名 (${SIGN_IDENTITY}) ..."
+  codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}" \
+    && echo "    已使用稳定签名"
+else
+  echo "==> ad-hoc 签名 ..."
+  codesign --force --deep --sign - "${APP_BUNDLE}" 2>/dev/null \
+    && echo "    已 ad-hoc 签名" \
+    || echo "    (codesign 跳过/失败,不影响本机运行)"
+  echo "    提示: ad-hoc 签名每次构建都会改变代码身份,更新后可能需要重新授予辅助功能权限。"
+  echo "    无 Apple 开发者账号时,可先运行:"
+  echo "      ./scripts/create-local-signing-identity.sh"
+  echo "    之后再构建,会使用稳定的本机自签名身份。"
+fi
 
 echo ""
 echo "构建完成: $(pwd)/${APP_BUNDLE}"
