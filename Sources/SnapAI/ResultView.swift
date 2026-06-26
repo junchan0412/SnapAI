@@ -31,10 +31,37 @@ struct ResultView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: vm.action.icon.isEmpty ? "sparkles" : vm.action.icon).foregroundStyle(.tint)
-                Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name).font(.headline)
-                if vm.isStreaming { ProgressView().controlSize(.small).padding(.leading, 2) }
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.accentColor.opacity(0.16))
+                    Image(systemName: vm.action.icon.isEmpty ? "sparkles" : vm.action.icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.tint)
+                }
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if vm.isStreaming {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        if vm.isPinned {
+                            Label("已固定", systemImage: "pin.fill")
+                        } else if vm.isStreaming {
+                            Label("生成中", systemImage: "sparkles")
+                        } else {
+                            Label("就绪", systemImage: "checkmark.circle")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
 
                 // #7 翻译类语言切换
                 if vm.isTranslation {
@@ -58,14 +85,21 @@ struct ResultView: View {
                     Image(systemName: vm.isPinned ? "pin.fill" : "pin")
                         .foregroundStyle(vm.isPinned ? Color.accentColor : .secondary)
                         .rotationEffect(.degrees(vm.isPinned ? 0 : 45))
+                        .frame(width: 24, height: 24)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
                 Button { onClose() } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain).keyboardShortcut(.cancelAction)
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
+            .padding(.horizontal, 14).padding(.vertical, 12)
 
             // #4 动作切换栏
             actionSwitcher
@@ -86,8 +120,8 @@ struct ResultView: View {
                                 Image(systemName: act.icon.isEmpty ? "sparkles" : act.icon).font(.caption2)
                                 Text(act.name).font(.caption2)
                             }
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(act.id == vm.action.id ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .background(act.id == vm.action.id ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.055))
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(act.id == vm.action.id ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1))
                         }
@@ -155,23 +189,35 @@ struct ResultView: View {
                 }
                 .padding(14)
             }
-            .onChange(of: vm.output) { _ in
+            .onChange(of: vm.output) {
                 withAnimation(.linear(duration: 0.1)) { proxy.scrollTo("output", anchor: .bottom) }
             }
         }
     }
 
     private var sourceEditor: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("原文", systemImage: "quote.opening")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button { vm.resendEdited() } label: {
+                    Label("重新发送", systemImage: "arrow.up.circle")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+                .disabled(vm.isStreaming)
+            }
             TextEditor(text: $vm.sourceText)
                 .font(.callout).scrollContentBackground(.hidden)
-                .frame(minHeight: 32, maxHeight: 90).padding(6)
-                .background(Color.primary.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(minHeight: 34, maxHeight: 92)
+                .padding(8)
+                .background(Color.primary.opacity(0.045))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.06), lineWidth: 1))
                 .disabled(vm.isStreaming)
-            Button { vm.resendEdited() } label: {
-                Label("用此文本重新发送", systemImage: "arrow.up.circle").font(.caption)
-            }
-            .buttonStyle(.plain).foregroundStyle(.tint).disabled(vm.isStreaming)
         }
     }
 
@@ -197,23 +243,24 @@ struct ResultView: View {
                     .disabled(vm.isStreaming)
 
                 Button { vm.copyOutput() } label: { Image(systemName: "doc.on.doc") }
-                    .help("复制结果").disabled(vm.output.isEmpty)
+                    .controlSize(.small).help("复制结果").disabled(vm.output.isEmpty)
 
                 Button { vm.replaceOriginal() } label: { Image(systemName: "arrow.uturn.left.square") }
-                    .help("替换原文").disabled(vm.output.isEmpty || vm.isStreaming)
+                    .controlSize(.small).help("替换原文").disabled(vm.output.isEmpty || vm.isStreaming)
 
                 Button { vm.appendToDocument() } label: { Image(systemName: "text.badge.plus") }
-                    .help("追加到文档").disabled(vm.output.isEmpty || vm.isStreaming)
+                    .controlSize(.small).help("追加到文档").disabled(vm.output.isEmpty || vm.isStreaming)
 
                 // #7 导出
                 Button { exportConversation() } label: { Image(systemName: "square.and.arrow.up") }
-                    .help("导出对话").disabled(vm.output.isEmpty)
+                    .controlSize(.small).help("导出对话").disabled(vm.output.isEmpty)
 
                 if vm.isStreaming {
-                    Button { vm.cancel() } label: { Image(systemName: "stop.fill") }.help("停止")
+                    Button { vm.cancel() } label: { Image(systemName: "stop.fill") }
+                        .controlSize(.small).help("停止")
                 } else {
                     Button { vm.regenerate() } label: { Image(systemName: "arrow.clockwise") }
-                        .help("重新生成").disabled(vm.sourceText.isEmpty)
+                        .controlSize(.small).help("重新生成").disabled(vm.sourceText.isEmpty)
                 }
             }
         }

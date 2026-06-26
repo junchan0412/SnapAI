@@ -1,7 +1,7 @@
 import Foundation
 import ServiceManagement
 
-/// 开机自启动封装,基于 macOS 13+ 的 SMAppService。
+/// 开机自启动封装,基于 SMAppService。
 enum LoginItem {
 
     /// 当前是否已注册为登录项

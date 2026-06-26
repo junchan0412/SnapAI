@@ -39,10 +39,21 @@ struct QuickInputView: View {
     var onCapture: () -> Void   // 触发截图
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles").foregroundStyle(.tint)
-                Text("SnapAI 快捷提问").font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.accentColor.opacity(0.16))
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.tint)
+                }
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("SnapAI").font(.headline)
+                    Text("快捷提问").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
                 Menu {
                     ForEach(model.settings.enabledActions) { act in
@@ -54,8 +65,19 @@ struct QuickInputView: View {
                         }
                     }
                 } label: {
-                    let name = model.settings.enabledActions.first(where: { $0.id == model.actionID })?.name ?? "动作"
-                    Label(name, systemImage: "wand.and.stars").font(.caption)
+                    HStack(spacing: 6) {
+                        Image(systemName: currentAction?.icon.isEmpty == false ? currentAction!.icon : "wand.and.stars")
+                        Text(currentAction?.name ?? "动作")
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Color.primary.opacity(0.06))
+                    .clipShape(Capsule())
                 }
                 .menuStyle(.borderlessButton).fixedSize()
             }
@@ -72,27 +94,47 @@ struct QuickInputView: View {
                 }
             }
 
-            TextField("输入你的问题,回车发送…", text: $model.text, onCommit: { model.submit() })
-                .textFieldStyle(.roundedBorder).font(.body)
+            QuickPromptEditor(
+                text: $model.text,
+                placeholder: "输入你的问题,回车发送…",
+                onSubmit: { model.submit() }
+            )
+            .frame(height: 76)
 
             HStack {
                 // #3 截图 / 粘贴图片
                 Button { onCapture() } label: {
-                    Label("截图", systemImage: "camera").font(.caption2)
+                    Label("截图", systemImage: "camera")
                 }
-                .buttonStyle(.borderless).help("截取当前屏幕")
+                .buttonStyle(.borderless).controlSize(.small).help("截取当前屏幕")
                 Button { model.pasteImageFromClipboard() } label: {
-                    Label("粘贴图片", systemImage: "photo").font(.caption2)
+                    Label("粘贴图片", systemImage: "photo")
                 }
-                .buttonStyle(.borderless).help("粘贴剪贴板中的图片")
+                .buttonStyle(.borderless).controlSize(.small).help("粘贴剪贴板中的图片")
 
                 Spacer()
-                Text("⏎ 发送").font(.caption2).foregroundStyle(.secondary)
-                Button("发送") { model.submit() }
-                    .disabled(model.text.trimmingCharacters(in: .whitespaces).isEmpty && model.imageData == nil)
+                Button { model.submit() } label: {
+                    Label("发送", systemImage: "paperplane.fill")
+                        .font(.callout.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canSubmit)
             }
+            .font(.caption)
         }
-        .padding(16).frame(width: 460).background(.ultraThinMaterial)
+        .padding(18)
+        .frame(width: 500)
+        .background(.ultraThinMaterial)
+    }
+
+    private var currentAction: AIAction? {
+        model.settings.enabledActions.first(where: { $0.id == model.actionID })
+            ?? model.settings.enabledActions.first
+    }
+
+    private var canSubmit: Bool {
+        !model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil
     }
 }
 
@@ -116,10 +158,14 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         if let existing = self.panel {
             panel = existing; panel.contentView = hosting
         } else {
-            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 150))
-            panel.contentView = hosting; panel.minSize = NSSize(width: 360, height: 90)
+            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 210))
+            panel.contentView = hosting; panel.minSize = NSSize(width: 420, height: 180)
             self.panel = panel
         }
+        hosting.layoutSubtreeIfNeeded()
+        let fittingSize = hosting.fittingSize
+        panel.setContentSize(NSSize(width: max(500, fittingSize.width),
+                                    height: max(210, fittingSize.height)))
         if let screen = NSScreen.main {
             let vf = screen.visibleFrame
             let origin = NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.midY + 80)
@@ -163,6 +209,173 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
     private func removeEscMonitor() {
         if let m = escMonitor { NSEvent.removeMonitor(m); escMonitor = nil }
+    }
+}
+
+// MARK: - 多行快捷提问输入框
+
+struct QuickPromptEditor: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> PromptEditorContainer {
+        let container = PromptEditorContainer()
+        let scrollView = container.scrollView
+        let textView = container.textView
+
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+
+        textView.placeholderString = placeholder
+        textView.delegate = context.coordinator
+        textView.isRichText = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.allowsUndo = true
+        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.textColor = .labelColor
+        textView.backgroundColor = .clear
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 8, height: 7)
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.lineBreakMode = .byWordWrapping
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+
+        scrollView.documentView = textView
+        container.install(scrollView)
+        return container
+    }
+
+    func updateNSView(_ container: PromptEditorContainer, context: Context) {
+        let scrollView = container.scrollView
+        let textView = container.textView
+        context.coordinator.parent = self
+        textView.placeholderString = placeholder
+        if textView.string != text {
+            textView.string = text
+            textView.needsDisplay = true
+        }
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width,
+                                                       height: CGFloat.greatestFiniteMagnitude)
+
+        guard !context.coordinator.didAttemptFocus else { return }
+        context.coordinator.didAttemptFocus = true
+        DispatchQueue.main.async {
+            container.window?.makeFirstResponder(textView)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: QuickPromptEditor
+        var didAttemptFocus = false
+
+        init(_ parent: QuickPromptEditor) {
+            self.parent = parent
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            textView.needsDisplay = true
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            (textView.enclosingScrollView?.superview as? PromptEditorContainer)?.isFocused = true
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            (textView.enclosingScrollView?.superview as? PromptEditorContainer)?.isFocused = false
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
+                return false
+            }
+            let flags = NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
+            if flags.contains(.shift) || flags.contains(.option) {
+                return false
+            }
+            parent.onSubmit()
+            return true
+        }
+    }
+}
+
+final class PromptEditorContainer: NSView {
+    let scrollView = NSScrollView()
+    let textView = PlaceholderTextView()
+    var isFocused = false {
+        didSet { needsDisplay = true }
+    }
+
+    override var isFlipped: Bool { true }
+
+    func install(_ scrollView: NSScrollView) {
+        guard scrollView.superview == nil else { return }
+        addSubview(scrollView)
+        needsDisplay = true
+    }
+
+    override func layout() {
+        super.layout()
+        scrollView.frame = bounds.insetBy(dx: 3, dy: 3)
+        let contentSize = scrollView.contentSize
+        textView.frame = NSRect(x: 0,
+                                y: 0,
+                                width: contentSize.width,
+                                height: max(contentSize.height, textView.frame.height))
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width,
+                                                       height: CGFloat.greatestFiniteMagnitude)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let borderWidth: CGFloat = isFocused ? 3 : 1
+        let rect = bounds.insetBy(dx: borderWidth / 2, dy: borderWidth / 2)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
+        NSColor.textBackgroundColor.withAlphaComponent(0.72).setFill()
+        path.fill()
+        (isFocused ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        path.lineWidth = borderWidth
+        path.stroke()
+    }
+}
+
+final class PlaceholderTextView: NSTextView {
+    var placeholderString: String = "" {
+        didSet { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard string.isEmpty, !placeholderString.isEmpty else { return }
+
+        let rect = NSRect(
+            x: textContainerInset.width + 4,
+            y: textContainerInset.height,
+            width: bounds.width - textContainerInset.width * 2 - 8,
+            height: bounds.height - textContainerInset.height * 2
+        )
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize),
+            .foregroundColor: NSColor.placeholderTextColor,
+            .paragraphStyle: paragraph
+        ]
+        placeholderString.draw(in: rect, withAttributes: attributes)
     }
 }
 

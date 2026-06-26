@@ -155,13 +155,15 @@ enum UpdateChecker {
     private static func presentResult(_ release: Release) {
         let current = currentVersion
         let latest = normalizedVersion(release.tagName)
+        let currentDisplay = displayVersion(current)
+        let latestDisplay = displayVersion(release.tagName)
         let hasUpdate = compareVersions(latest, current) == .orderedDescending
 
         let alert = NSAlert()
-        alert.messageText = hasUpdate ? "发现新版本 \(release.tagName)" : "SnapAI 已是最新版本"
+        alert.messageText = hasUpdate ? "发现新版本 \(latestDisplay)" : "SnapAI 已是最新版本"
         alert.informativeText = hasUpdate
-            ? "当前版本: \(current)\n最新版本: \(release.tagName)\n\n建议直接安装更新并重启 SnapAI,避免手动下载后覆盖安装。若发布包持续使用同一个稳定签名身份,辅助功能权限通常可保留。"
-            : "当前版本: \(current)\n最新版本: \(release.tagName)"
+            ? "当前版本: \(currentDisplay)\n最新版本: \(latestDisplay)\n\n建议直接安装更新并重启 SnapAI,避免手动下载后覆盖安装。若发布包持续使用同一个稳定签名身份,辅助功能权限通常可保留。"
+            : "当前版本: \(currentDisplay)\n最新版本: \(latestDisplay)"
         alert.alertStyle = hasUpdate ? .informational : .informational
         if hasUpdate {
             alert.addButton(withTitle: "安装并重启")
@@ -409,6 +411,10 @@ enum UpdateChecker {
 
     private static func normalizedVersion(_ version: String) -> String {
         version.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+    }
+
+    private static func displayVersion(_ version: String) -> String {
+        "v\(normalizedVersion(version))"
     }
 
     private static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
