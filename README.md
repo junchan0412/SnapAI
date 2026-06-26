@@ -100,15 +100,15 @@ SnapAI 的菜单里有“检查更新”。发现新版本后,你可以选择“
 4. 下载到临时目录并解压。
 5. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
 6. 使用 `codesign --verify --deep --strict` 做基础签名校验。
-7. 退出当前应用。
-8. 用临时安装脚本在原安装路径替换应用。
+7. 用脱离当前应用生命周期的临时安装脚本等待当前 SnapAI 进程退出。
+8. 在原安装路径替换应用。
 9. 对替换后的应用执行:
 
 ```bash
-xattr -dr com.apple.quarantine "$APP_PATH"
+xattr -cr "$APP_PATH"
 ```
 
-10. 自动重新打开 SnapAI。
+10. 使用 `open -n -F` 自动重新打开 SnapAI；如果首次打开失败,会重试并把过程写入临时安装日志。
 
 因此,应用已经正常启动以后,后续应用内更新会尽量自动处理 quarantine。首次从 GitHub 下载时,因为应用尚未运行,仍需要用户手动执行 `xattr -cr`。
 

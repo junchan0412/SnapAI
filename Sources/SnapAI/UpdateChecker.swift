@@ -314,35 +314,85 @@ enum UpdateChecker {
         NEW_APP="$2"
         BACKUP_PATH="$3"
         LOG_PATH="$4"
+        OLD_PID="$5"
 
-        while /usr/bin/pgrep -x "SnapAI" >/dev/null 2>&1; do
+        log() {
+            /bin/echo "$(/bin/date '+%Y-%m-%d %H:%M:%S') $*" >>"$LOG_PATH"
+        }
+
+        relaunch_app() {
+            attempt=1
+            while [ "$attempt" -le 5 ]; do
+                log "relaunch attempt $attempt: $APP_PATH"
+                if /usr/bin/open -n -F "$APP_PATH" >>"$LOG_PATH" 2>&1; then
+                    /bin/sleep 1
+                    if /usr/bin/pgrep -x "SnapAI" >/dev/null 2>&1; then
+                        log "relaunch succeeded"
+                        return 0
+                    fi
+                fi
+                attempt=$((attempt + 1))
+                /bin/sleep 1
+            done
+
+            log "relaunch failed after retries"
+            return 1
+        }
+
+        log "installer started"
+        waited=0
+        while /bin/kill -0 "$OLD_PID" >/dev/null 2>&1; do
             /bin/sleep 0.2
+            waited=$((waited + 1))
+            if [ "$waited" -ge 300 ]; then
+                log "old process $OLD_PID did not exit within 60s"
+                exit 1
+            fi
         done
+        /bin/sleep 0.4
+        log "old process exited"
 
+        log "moving current app to backup"
         /bin/rm -rf "$BACKUP_PATH" >>"$LOG_PATH" 2>&1
         if ! /bin/mv "$APP_PATH" "$BACKUP_PATH" >>"$LOG_PATH" 2>&1; then
-            /usr/bin/open "$APP_PATH" >/dev/null 2>&1
+            log "failed to move current app to backup"
+            relaunch_app
             exit 1
         fi
 
+        log "copying new app into place"
         if ! /usr/bin/ditto "$NEW_APP" "$APP_PATH" >>"$LOG_PATH" 2>&1; then
+            log "failed to copy new app; restoring backup"
             /bin/rm -rf "$APP_PATH" >>"$LOG_PATH" 2>&1
             /bin/mv "$BACKUP_PATH" "$APP_PATH" >>"$LOG_PATH" 2>&1
-            /usr/bin/open "$APP_PATH" >/dev/null 2>&1
+            relaunch_app
             exit 1
         fi
 
-        /usr/bin/xattr -dr com.apple.quarantine "$APP_PATH" >/dev/null 2>&1
+        log "clearing extended attributes"
+        /usr/bin/xattr -cr "$APP_PATH" >>"$LOG_PATH" 2>&1
         /bin/rm -rf "$BACKUP_PATH" >>"$LOG_PATH" 2>&1
-        /usr/bin/open "$APP_PATH" >/dev/null 2>&1
+        log "installation complete"
+        relaunch_app
         exit 0
         """
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
 
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-        proc.arguments = [scriptURL.path, currentAppURL.path, newAppURL.path, backupURL.path, logURL.path]
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+        proc.arguments = [
+            scriptURL.path,
+            currentAppURL.path,
+            newAppURL.path,
+            backupURL.path,
+            logURL.path,
+            String(ProcessInfo.processInfo.processIdentifier)
+        ]
+        if let null = FileHandle(forWritingAtPath: "/dev/null") {
+            proc.standardOutput = null
+            proc.standardError = null
+        }
         try proc.run()
 
         let alert = NSAlert()
