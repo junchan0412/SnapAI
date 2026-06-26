@@ -197,7 +197,7 @@ final class AppSettings: ObservableObject, Codable {
         providers = [AIProvider.preset(.openAI)]
         if let first = providers.first {
             activeProviderID = first.id
-            activeModel = first.models.first?.name ?? ""
+            activeModel = first.enabledModelNames.first ?? ""
         }
     }
 

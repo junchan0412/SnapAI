@@ -1,117 +1,224 @@
 # SnapAI
 
-在 **任意应用** 中选中文字,一键用 AI 提问或翻译。原生 SwiftUI + AppKit,菜单栏常驻,低开销。
+SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 功能
+## 快速安装
 
-- **自定义动作**:内置提问、翻译、润色、总结、解释代码,也可新增动作并配置 Prompt、图标、快捷键和替换行为
-- **全局快捷键**:选中文字后按 `⌥A` 提问、`⌥T` 翻译,也可为任意动作单独设置快捷键
-- **快捷提问面板**:按 `⌥Space` 直接输入问题,不依赖预先选中文字
-- **划词无感取词**:优先用 Accessibility API 直读选中文本,失败自动回退模拟 `⌘C`
-- **多供应商 / 多模型**:可保存多个供应商(各自的协议 / 端点 / Key / 模型列表),供应商与模型都能逐个启用 / 关闭;菜单栏 ✨ → 切换模型 一键切换当前使用的「供应商 + 模型」
-- **Keychain 存储**:API Key 存入 macOS Keychain,配置导出不会包含密钥
-- **自定义模型**:支持 OpenAI 兼容协议(OpenAI / DeepSeek / Ollama / 中转站等)与 Anthropic 原生协议
-- **极简配置**:只需填端点地址(如 `api.openai.com`),应用自动补全 `/v1` 等路径;填好地址和 Key 后可一键拉取模型列表下拉选择,无需手动输入模型名
-- **连接测试**:可对单个供应商发起轻量测试,快速确认端点、Key 与模型是否可用
-- **Dock 图标 + 主菜单**:Dock 显示图标,点击可打开设置;顶部菜单栏含 App / 编辑 / 窗口 菜单(可在「通用」里关闭 Dock 图标,仅留菜单栏)
-- **Markdown 渲染**:结果按 Markdown 渲染(标题/列表/引用/代码块/加粗等),代码块可一键复制
-- **替换原文**:可将生成结果写回原选区,适合翻译和润色工作流
-- **历史记录**:保留最近结果,可从菜单或设置页回看、复制、重新发起
-- **配置导入/导出**:迁移供应商、动作、快捷键等配置;历史记录和 API Key 不会导出
-- **首次引导**:新用户首次启动会看到权限、配置与使用步骤
-- **打字机动画**:流式结果逐字揭示,带闪烁光标,速度可调(关闭/慢/标准/快)
-- **可调整浮窗**:结果浮窗可调整大小并记忆尺寸;右上角图钉固定后点击外部不自动关闭(`Esc` 可解除固定)
-- **开机自启**:设置「通用」里可开启(基于 SMAppService)
-- **检查更新**:菜单栏 ✨ → 检查更新,会跳转到最新 GitHub Release 下载页
-- **标准编辑快捷键**:所有输入框支持 `⌘C / ⌘V / ⌘X / ⌘A / ⌘Z`
-- **菜单栏常驻**:无 Dock 图标(LSUIElement),不打扰
-
-## 下载
-
-前往 [GitHub Releases](https://github.com/junchan0412/SnapAI/releases) 下载最新 `SnapAI.zip`,解压后将 `SnapAI.app` 移动到 `/Applications` 或 `~/Applications`。
-
-## 构建
+1. 打开 [GitHub Releases](https://github.com/junchan0412/SnapAI/releases),下载最新的 `SnapAI-vX.X.X.zip`。
+2. 解压后,把 `SnapAI.app` 移动到 `/Applications` 或 `~/Applications`。建议先移动到固定位置,再授权辅助功能权限。
+3. 如果 macOS 提示“已损坏”“无法打开”或“来自未认证开发者”,在终端执行:
 
 ```bash
-./build.sh
+xattr -cr /Applications/SnapAI.app
+open /Applications/SnapAI.app
 ```
 
-生成 `SnapAI.app`。
+如果你放在用户应用目录:
 
-### 无 Apple 开发者账号时的签名
+```bash
+xattr -cr ~/Applications/SnapAI.app
+open ~/Applications/SnapAI.app
+```
 
-macOS 的「辅助功能」权限会绑定应用的代码身份。若每次发布都使用 ad-hoc
-签名,应用更新后代码身份会改变,用户可能需要反复重新授权。
+4. 首次启动后,到系统设置授予辅助功能权限:
 
-没有 Apple 开发者账号时,可创建一个本机稳定自签名证书:
+```text
+系统设置 -> 隐私与安全性 -> 辅助功能 -> 勾选 SnapAI
+```
+
+5. 点击菜单栏里的 SnapAI 图标,进入设置页填写 AI 供应商、API Key 和模型。
+
+## 为什么需要 `xattr -cr`
+
+当前 SnapAI 没有使用 Apple Developer ID 公证发布。通过浏览器从 GitHub 下载后,macOS 会给压缩包或应用添加 quarantine 隔离属性。未公证应用在隔离状态下可能会被 Gatekeeper 拦截,表现为无法打开、提示损坏,或需要额外确认。
+
+`xattr -cr /Applications/SnapAI.app` 会递归清除应用 bundle 上的扩展属性,包括 quarantine。应用第一次启动前还没有机会自己处理这个属性,所以首次手动安装时需要用户执行一次。
+
+这一步不会替代辅助功能授权。SnapAI 读取选中文字、模拟复制和粘贴仍然需要你在系统设置中授予辅助功能权限。
+
+## 使用方式
+
+默认快捷键:
+
+| 功能 | 快捷键 |
+|------|--------|
+| 提问选中文字 | `Option + A` |
+| 翻译选中文字 | `Option + T` |
+| 快捷提问面板 | `Option + Space` |
+
+基本流程:
+
+1. 在任意应用中选中文字。
+2. 按 `Option + A` 提问,或按 `Option + T` 翻译。
+3. 在浮动结果窗中复制结果、替换原文、追加到文档,或继续追问。
+4. 不想先选中文字时,按 `Option + Space` 打开快捷提问面板。
+
+所有动作、快捷键、Prompt、模型和供应商都可以在设置里自定义。
+
+## 功能概览
+
+- 自定义动作:内置提问、翻译、润色、总结、解释代码,也可新增动作。
+- 全局快捷键:每个动作都能设置独立快捷键,设置页会阻止冲突快捷键保存。
+- 快捷提问面板:无需选中文字,直接输入问题,也支持粘贴图片或截图。
+- 取词策略:优先使用 Accessibility API 读取选中文本,失败后才模拟 `Command + C`。
+- 多供应商与多模型:支持 OpenAI 兼容协议和 Anthropic 原生协议。
+- Keychain 存储:API Key 存入 macOS Keychain,导出配置不会包含密钥。
+- Markdown 渲染:支持标题、列表、引用、代码块、加粗、链接等基础格式。
+- 替换原文:可把生成结果粘贴回原选区,适合翻译和润色。
+- 历史记录:保存最近结果,支持回看、复制和重新发起。
+- iCloud 配置同步:可同步供应商结构、动作和快捷键,不包含 API Key 和历史内容。
+- 应用内更新:检查 GitHub Release,下载新版 zip,原地替换应用并重启。
+- 开机自启:可在设置中开启,基于 `SMAppService`。
+
+## AI 配置示例
+
+| 服务 | 协议 | Base URL | 模型名 |
+|------|------|----------|--------|
+| OpenAI | OpenAI 兼容 | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| DeepSeek | OpenAI 兼容 | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| Ollama 本地 | OpenAI 兼容 | `http://localhost:11434/v1` | `llama3.1` |
+| Claude | Anthropic 原生 | `https://api.anthropic.com/v1` | `claude-sonnet-4-6` |
+
+安全限制:
+
+- 非本机 HTTP 端点会被拒绝,避免 API Key 通过明文网络发送。
+- 本机 HTTP 仅用于 `localhost`、`127.0.0.1`、`::1`,主要服务 Ollama 等本地模型。
+
+## 更新机制
+
+SnapAI 的菜单里有“检查更新”。发现新版本后,你可以选择“安装并重启”。
+
+当前实现会:
+
+1. 请求 GitHub Releases 最新版本。
+2. 找到 Release 里的 SnapAI zip 资产。
+3. 下载到临时目录并解压。
+4. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
+5. 使用 `codesign --verify --deep --strict` 做基础签名校验。
+6. 退出当前应用。
+7. 用临时安装脚本在原安装路径替换应用。
+8. 对替换后的应用执行:
+
+```bash
+xattr -dr com.apple.quarantine "$APP_PATH"
+```
+
+9. 自动重新打开 SnapAI。
+
+因此,应用已经正常启动以后,后续应用内更新会尽量自动处理 quarantine。首次从 GitHub 下载时,因为应用尚未运行,仍需要用户手动执行 `xattr -cr`。
+
+如果自动更新提示安装位置不可写,请把 `SnapAI.app` 移动到 `~/Applications` 后再试。应用内更新需要能够写入当前安装目录。
+
+## 辅助功能权限与签名
+
+macOS 的辅助功能权限和应用的代码身份有关。SnapAI 当前没有 Apple Developer ID,所以发布包不是 Apple 公证应用。
+
+当前仓库提供两种构建签名方式:
+
+- 有稳定签名身份时:`build.sh` 会使用 `CODESIGN_IDENTITY` 或 `SnapAI Local Signing`。
+- 没有稳定签名身份时:`build.sh` 会回退到 ad-hoc 签名。
+
+ad-hoc 签名每次构建都可能让代码身份变化,更新后更容易被系统要求重新授予辅助功能权限。为了减少这种情况,可以创建本机自签名代码签名证书:
 
 ```bash
 ./scripts/create-local-signing-identity.sh
 ./build.sh
 ```
 
-首次从旧的 ad-hoc 版本切换到自签名版本时,系统可能仍会要求重新授予一次
-辅助功能权限;之后只要继续用同一个 `SnapAI Local Signing` 证书构建发布,
-更新时的代码身份会更稳定。自签名不等同于 Apple Developer ID / notarization,
-首次安装仍可能被 Gatekeeper 识别为未认证开发者。
+注意:
 
-### 应用内更新
+- 自签名不等同于 Apple Developer ID 或 notarization。
+- 首次从旧 ad-hoc 版本切换到自签名版本时,macOS 可能仍会要求重新授予一次辅助功能权限。
+- 后续只要继续使用同一个证书构建,代码身份会更稳定,可减少重复授权。
+- 对其他用户的机器来说,自签名证书默认不受系统信任,所以首次 GitHub 下载仍可能需要 `xattr -cr`。
 
-SnapAI 会从 GitHub Release 检查新版。发现新版后可选择「安装并重启」,
-应用会下载 Release zip、校验其中的 `SnapAI.app`,并在当前安装路径原地替换后
-自动重启,避免用户手动打开 Release 页面下载再覆盖安装。
+## 构建
 
-> **开机自启注意**:`SMAppService` 通过固定路径注册登录项。若要使用开机自启,
-> 请先把 `SnapAI.app` 移动到稳定位置(如 `/Applications` 或 `~/Applications`),
-> 再在设置里开启,不要停留在反复 rebuild 的目录里。
+本项目是 SwiftPM 结构,但当前构建脚本直接用 `swiftc` 编译并组装 `.app`:
 
-> 本机仅装了 Command Line Tools,其 SwiftPM(`swift build`)有缺陷,故 `build.sh`
-> 直接用 `swiftc` 编译。若以后装了完整 Xcode,也可用 `Package.swift` 打开。
+```bash
+./build.sh
+```
 
-## 首次使用
+构建成功后会生成:
 
-1. `open SnapAI.app`
-2. 授予 **辅助功能** 权限:系统设置 → 隐私与安全性 → 辅助功能 → 勾选 SnapAI
-   (用于读取选中文字 / 模拟复制按键)
-3. 点击菜单栏 ✨ → 设置,填入 API Key、模型名,选择协议
-4. 在任意应用选中文字,按 `⌥A` / `⌥T`;或按 `⌥Space` 打开快捷提问面板
-5. 后续可通过菜单栏 ✨ → 检查更新 前往最新 Release
+```text
+SnapAI.app
+```
 
-## 配置示例
+如果你要打包 Release:
 
-| 服务 | 协议 | Base URL | 模型名 |
-|------|------|----------|--------|
-| OpenAI | OpenAI 兼容 | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| DeepSeek | OpenAI 兼容 | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| Ollama(本地) | OpenAI 兼容 | `http://localhost:11434/v1` | `llama3.1` |
-| Claude | Anthropic 原生 | `https://api.anthropic.com/v1` | `claude-sonnet-4-6` |
+```bash
+mkdir -p dist
+ditto -c -k --keepParent SnapAI.app dist/SnapAI-vX.X.X.zip
+```
+
+## 常见问题
+
+### 双击提示应用损坏怎么办
+
+先确认已经把应用移动到固定位置,然后执行:
+
+```bash
+xattr -cr /Applications/SnapAI.app
+open /Applications/SnapAI.app
+```
+
+### 快捷键没有反应怎么办
+
+检查三件事:
+
+1. 系统设置里是否给 SnapAI 授予了辅助功能权限。
+2. 设置页里动作是否启用,快捷键是否冲突。
+3. 当前应用中是否真的选中了可复制的文本。
+
+### 为什么替换原文失败
+
+替换原文依赖辅助功能权限和模拟粘贴。请确认:
+
+- SnapAI 有辅助功能权限。
+- 目标应用允许粘贴。
+- 触发动作后不要立即切换到其他输入位置。
+
+### API Key 会不会导出或同步
+
+不会。API Key 存在 macOS Keychain 中。配置导出和 iCloud 配置同步都不包含 API Key。
+
+### iCloud 会同步历史记录吗
+
+不会。iCloud 只同步配置结构,例如供应商、动作、快捷键、系统 Prompt 等;不会同步历史记录、统计、窗口尺寸或 API Key。
 
 ## 项目结构
 
-```
+```text
 Sources/SnapAI/
-  main.swift            入口
-  AppDelegate.swift     菜单栏、快捷键注册、取词→展示串联
-  Settings.swift        设置模型 + UserDefaults 持久化
-  HotKeyManager.swift   Carbon 全局快捷键
-  TextCapture.swift     AX 直读 + 模拟复制兜底
-  AIClient.swift        OpenAI / Anthropic 流式 SSE
+  main.swift            应用入口
+  AppDelegate.swift     菜单栏、主菜单、快捷键、取词到结果窗流程
+  Settings.swift        设置模型与 UserDefaults 持久化
+  Provider.swift        AI 供应商与模型配置
   Action.swift          自定义动作与翻译目标语言
-  History.swift         历史记录模型
-  ResultViewModel.swift 浮动窗状态机 + 打字机动画
-  ResultView.swift      浮动窗 SwiftUI + 闪烁光标
-  MarkdownView.swift    轻量 Markdown 渲染器
-  FloatingPanel.swift   NSPanel 浮动窗 + 定位/失焦关闭
-  SettingsView.swift    设置界面
+  AIClient.swift        OpenAI / Anthropic 流式请求
+  TextCapture.swift     Accessibility 取词与复制兜底
+  ResultViewModel.swift 结果窗状态机
+  ResultView.swift      结果窗 UI
+  MarkdownView.swift    轻量 Markdown 渲染
+  FloatingPanel.swift   浮动面板
   QuickInput.swift      快捷提问面板
-  OnboardingView.swift  首次启动引导
-  Keychain.swift        API Key 安全存储
-  UpdateChecker.swift   GitHub Release 更新检查
+  SettingsView.swift    设置界面
+  HotKeyManager.swift   Carbon 全局快捷键注册
   HotKeyRecorder.swift  快捷键录制控件
-  LoginItem.swift       开机自启 (SMAppService)
-Resources/Info.plist
-docs/snapai-settings.png
+  Keychain.swift        API Key 存储
+  iCloudSync.swift      iCloud 配置同步
+  UpdateChecker.swift   GitHub Release 检查与应用内更新
+  LoginItem.swift       开机自启
+  OnboardingView.swift  首次启动引导
+Resources/
+  Info.plist
+  AppIconLight.icns
+  AppIconDark.icns
+scripts/
+  create-local-signing-identity.sh
 build.sh
 ```

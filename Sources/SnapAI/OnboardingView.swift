@@ -48,8 +48,8 @@ struct OnboardingView: View {
                 stepRow(
                     number: 2,
                     title: "配置 AI 供应商",
-                    desc: "填入 API Key,选择模型(支持 OpenAI / DeepSeek / Claude / Ollama 等)。",
-                    done: settings.activeProvider.map { !$0.apiKey.isEmpty } ?? false
+                    desc: "填入 API Key,获取并启用至少一个模型(支持 OpenAI / DeepSeek / Claude / Ollama 等)。",
+                    done: isAIConfigurationReady
                 ) {
                     Button("打开设置") { openSettings() }
                 }
@@ -80,6 +80,11 @@ struct OnboardingView: View {
         }
         .frame(width: 480, height: 460)
         .onAppear { perm.refresh() }
+    }
+
+    private var isAIConfigurationReady: Bool {
+        guard let provider = settings.activeProvider, !provider.apiKey.isEmpty else { return false }
+        return !settings.activeModel.isEmpty && provider.enabledModelNames.contains(settings.activeModel)
     }
 
     @ViewBuilder

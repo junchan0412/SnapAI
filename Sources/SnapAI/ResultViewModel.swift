@@ -209,8 +209,13 @@ final class ResultViewModel: ObservableObject {
             let probe = AppSettings()
             probe.providers = [overrideProvider]
             probe.activeProviderID = overrideProvider.id
-            probe.activeModel = action.modelOverride ?? overrideProvider.enabledModelNames.first
-                ?? ""
+            // 模型优先级:动作显式指定 → 供应商首个启用。不要自动回退到禁用模型或其他供应商模型。
+            let modelNames = Set(overrideProvider.models.map { $0.name })
+            if let modelOverride = action.modelOverride, modelNames.contains(modelOverride) {
+                probe.activeModel = modelOverride
+            } else {
+                probe.activeModel = overrideProvider.enabledModelNames.first ?? ""
+            }
             probe.temperature = settings.temperature
             probe.systemPrompt = settings.systemPrompt
             client = AIClient(settings: probe)

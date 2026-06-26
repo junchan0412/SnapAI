@@ -86,8 +86,7 @@ final class ConnectionTester: ObservableObject {
         let probe = AppSettings()
         probe.providers = [settings.providers[idx]]
         probe.activeProviderID = settings.providers[idx].id
-        probe.activeModel = settings.providers[idx].enabledModelNames.first
-            ?? settings.providers[idx].models.first?.name ?? ""
+        probe.activeModel = settings.providers[idx].enabledModelNames.first ?? ""
         let client = AIClient(settings: probe)
         Task {
             do {
@@ -807,7 +806,8 @@ struct SettingsView: View {
                     .labelsHidden().frame(maxWidth: .infinity)
                     if let pid = action.providerID,
                        let p = settings.providers.first(where: { $0.id == pid }) {
-                        let models = p.enabledModelNames
+                        // 显示该供应商下全部模型(不限已启用),便于为动作单独指定
+                        let models = p.models.map { $0.name }
                         Picker("", selection: Binding(
                             get: { action.modelOverride ?? "" },
                             set: { newVal in

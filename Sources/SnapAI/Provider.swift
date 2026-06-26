@@ -32,7 +32,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
         case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, requestTimeout
     }
 
-    /// 合并新拉取的模型名:保留已存在条目的启用状态,新模型默认启用
+    /// 合并新拉取的模型名:保留已存在条目的启用状态,新模型默认关闭(避免列表过长逐个关)
     mutating func mergeModels(_ names: [String]) {
         let existing = Dictionary(models.map { ($0.name, $0) }, uniquingKeysWith: { a, _ in a })
         var merged: [AIModelEntry] = []
@@ -40,7 +40,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
             if let old = existing[name] {
                 merged.append(old)
             } else {
-                merged.append(AIModelEntry(name: name, enabled: true))
+                merged.append(AIModelEntry(name: name, enabled: false))
             }
         }
         // 保留那些手动添加、但本次拉取未返回的模型
@@ -50,25 +50,21 @@ struct AIProvider: Codable, Identifiable, Equatable {
         models = merged
     }
 
-    /// 内置预设
+    /// 内置预设(不预置模型,由用户「获取模型」后自行启用)
     static func preset(_ kind: Preset) -> AIProvider {
         switch kind {
         case .openAI:
             return AIProvider(name: "OpenAI", apiProtocol: .openAI,
-                              baseURL: "https://api.openai.com/v1", apiKey: "",
-                              models: [AIModelEntry(name: "gpt-4o-mini")])
+                              baseURL: "https://api.openai.com/v1", apiKey: "", models: [])
         case .deepseek:
             return AIProvider(name: "DeepSeek", apiProtocol: .openAI,
-                              baseURL: "https://api.deepseek.com/v1", apiKey: "",
-                              models: [AIModelEntry(name: "deepseek-chat")])
+                              baseURL: "https://api.deepseek.com/v1", apiKey: "", models: [])
         case .anthropic:
             return AIProvider(name: "Anthropic", apiProtocol: .anthropic,
-                              baseURL: "https://api.anthropic.com/v1", apiKey: "",
-                              models: [AIModelEntry(name: "claude-sonnet-4-6")])
+                              baseURL: "https://api.anthropic.com/v1", apiKey: "", models: [])
         case .ollama:
             return AIProvider(name: "Ollama 本地", apiProtocol: .openAI,
-                              baseURL: "http://localhost:11434/v1", apiKey: "ollama",
-                              models: [])
+                              baseURL: "http://localhost:11434/v1", apiKey: "ollama", models: [])
         case .blank:
             return AIProvider()
         }
