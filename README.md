@@ -92,20 +92,21 @@ SnapAI 的菜单里有“检查更新”。发现新版本后,你可以选择“
 
 当前实现会:
 
-1. 请求 GitHub Releases 最新版本。
-2. 找到 Release 里的 SnapAI zip 资产。
-3. 下载到临时目录并解压。
-4. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
-5. 使用 `codesign --verify --deep --strict` 做基础签名校验。
-6. 退出当前应用。
-7. 用临时安装脚本在原安装路径替换应用。
-8. 对替换后的应用执行:
+1. 在应用内通过 macOS 网络栈请求 GitHub Releases 最新版本,不依赖终端、`gh` 或 `curl`。
+2. 优先使用 GitHub API；如果 API 返回 403 或临时不可用,会回退到 GitHub 普通 Release 页面获取最新版本标签。
+3. 找到或构造 Release 里的 SnapAI zip 资产下载地址。
+4. 下载到临时目录并解压。
+5. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
+6. 使用 `codesign --verify --deep --strict` 做基础签名校验。
+7. 退出当前应用。
+8. 用临时安装脚本在原安装路径替换应用。
+9. 对替换后的应用执行:
 
 ```bash
 xattr -dr com.apple.quarantine "$APP_PATH"
 ```
 
-9. 自动重新打开 SnapAI。
+10. 自动重新打开 SnapAI。
 
 因此,应用已经正常启动以后,后续应用内更新会尽量自动处理 quarantine。首次从 GitHub 下载时,因为应用尚未运行,仍需要用户手动执行 `xattr -cr`。
 

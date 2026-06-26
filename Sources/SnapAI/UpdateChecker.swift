@@ -2,7 +2,9 @@ import AppKit
 import Foundation
 
 enum UpdateChecker {
-    private static let latestReleaseURL = URL(string: "https://api.github.com/repos/junchan0412/SnapAI/releases/latest")!
+    private static let repositoryURL = URL(string: "https://github.com/junchan0412/SnapAI")!
+    private static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/junchan0412/SnapAI/releases/latest")!
+    private static let latestReleasePageURL = URL(string: "https://github.com/junchan0412/SnapAI/releases/latest")!
 
     struct Release: Decodable {
         let tagName: String
@@ -41,6 +43,7 @@ enum UpdateChecker {
         case invalidArchive
         case bundleMismatch
         case installLocationNotWritable(String)
+        case releaseLookupFailed(primary: Error, fallback: Error)
 
         var errorDescription: String? {
             switch self {
@@ -54,6 +57,13 @@ enum UpdateChecker {
                 return "更新包中的应用标识与当前 SnapAI 不一致,已取消安装。"
             case .installLocationNotWritable(let path):
                 return "当前安装位置不可写:\n\(path)\n\n请将 SnapAI 放到 /Applications 或 ~/Applications 后重试。"
+            case .releaseLookupFailed(let primary, let fallback):
+                return """
+                GitHub Releases 暂不可用。
+
+                API 检查失败: \(primary.localizedDescription)
+                备用网页检查失败: \(fallback.localizedDescription)
+                """
             }
         }
     }
@@ -74,8 +84,20 @@ enum UpdateChecker {
     }
 
     private static func latestRelease() async throws -> Release {
-        var request = URLRequest(url: latestReleaseURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        do {
+            return try await latestReleaseFromAPI()
+        } catch {
+            let apiError = error
+            do {
+                return try await latestReleaseFromWebFallback()
+            } catch {
+                throw UpdateError.releaseLookupFailed(primary: apiError, fallback: error)
+            }
+        }
+    }
+
+    private static func latestReleaseFromAPI() async throws -> Release {
+        var request = updateRequest(url: latestReleaseAPIURL, accept: "application/vnd.github+json")
         request.timeoutInterval = 12
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -86,10 +108,48 @@ enum UpdateChecker {
             throw NSError(
                 domain: "SnapAI.UpdateChecker",
                 code: http.statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "GitHub Releases 暂不可用(status \(http.statusCode))。"]
+                userInfo: [NSLocalizedDescriptionKey: apiErrorMessage(statusCode: http.statusCode, data: data)]
             )
         }
         return try JSONDecoder().decode(Release.self, from: data)
+    }
+
+    private static func latestReleaseFromWebFallback() async throws -> Release {
+        var request = updateRequest(url: uncachedLatestReleasePageURL(), accept: "text/html,application/xhtml+xml")
+        request.timeoutInterval = 12
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw NSError(
+                domain: "SnapAI.UpdateChecker",
+                code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "GitHub Releases 网页暂不可用(status \(http.statusCode))。"]
+            )
+        }
+        guard let tagName = releaseTag(from: http.url) else {
+            throw NSError(
+                domain: "SnapAI.UpdateChecker",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "GitHub Releases 网页未返回最新版本标签。"]
+            )
+        }
+
+        let htmlURL = releaseTagURL(tagName)
+        let assetName = "SnapAI-\(tagName).zip"
+        return Release(
+            tagName: tagName,
+            name: nil,
+            htmlURL: htmlURL,
+            assets: [
+                Asset(
+                    name: assetName,
+                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: assetName)
+                )
+            ]
+        )
     }
 
     private static func presentResult(_ release: Release) {
@@ -142,7 +202,7 @@ enum UpdateChecker {
     }
 
     private static func download(_ asset: Asset) async throws -> URL {
-        var request = URLRequest(url: asset.browserDownloadURL)
+        var request = updateRequest(url: asset.browserDownloadURL, accept: "application/octet-stream")
         request.timeoutInterval = 90
         let (temporaryURL, response) = try await URLSession.shared.download(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -155,6 +215,56 @@ enum UpdateChecker {
         let zipURL = updateDir.appendingPathComponent(asset.name)
         try FileManager.default.moveItem(at: temporaryURL, to: zipURL)
         return zipURL
+    }
+
+    private static func updateRequest(url: URL, accept: String) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.setValue(accept, forHTTPHeaderField: "Accept")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        return request
+    }
+
+    private static func apiErrorMessage(statusCode: Int, data: Data) -> String {
+        var message = "GitHub API 暂不可用(status \(statusCode))。"
+        if let error = try? JSONDecoder().decode(GitHubAPIError.self, from: data),
+           !error.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            message += "\n\(error.message)"
+        }
+        return message
+    }
+
+    private static func releaseTag(from url: URL?) -> String? {
+        guard let components = url?.pathComponents,
+              let tagIndex = components.firstIndex(of: "tag"),
+              components.indices.contains(tagIndex + 1) else {
+            return nil
+        }
+        return components[tagIndex + 1]
+    }
+
+    private static func releaseTagURL(_ tagName: String) -> URL {
+        repositoryURL
+            .appendingPathComponent("releases")
+            .appendingPathComponent("tag")
+            .appendingPathComponent(tagName)
+    }
+
+    private static func releaseDownloadURL(tagName: String, assetName: String) -> URL {
+        repositoryURL
+            .appendingPathComponent("releases")
+            .appendingPathComponent("download")
+            .appendingPathComponent(tagName)
+            .appendingPathComponent(assetName)
+    }
+
+    private static func uncachedLatestReleasePageURL() -> URL {
+        var components = URLComponents(url: latestReleasePageURL, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "snapai_cache_bust", value: String(Int(Date().timeIntervalSince1970)))
+        ]
+        return components?.url ?? latestReleasePageURL
     }
 
     private static func unpackApp(from zipURL: URL) throws -> URL {
@@ -287,6 +397,14 @@ enum UpdateChecker {
 
     private static var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    private static var userAgent: String {
+        "SnapAI/\(currentVersion) (+https://github.com/junchan0412/SnapAI)"
+    }
+
+    private struct GitHubAPIError: Decodable {
+        let message: String
     }
 
     private static func normalizedVersion(_ version: String) -> String {

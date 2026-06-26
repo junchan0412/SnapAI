@@ -321,7 +321,7 @@ struct SettingsView: View {
                 }
                 .labelsHidden()
                 .frame(width: 180, alignment: .leading)
-                .onChange(of: provider.apiProtocol) { commit() }
+                .onChange(of: provider.apiProtocol) { _ in commit() }
             }
             editorRow("端点") {
                 TextField("api.openai.com 或 localhost:11434", text: bindingForProvider(provider.id, \.baseURL), onCommit: commit)
@@ -636,7 +636,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("System Prompt(对所有动作生效)").font(.subheadline.weight(.semibold))
                 promptEditor(text: $settings.systemPrompt, height: 56)
-                    .onChange(of: settings.systemPrompt) { commit() }
+                    .onChange(of: settings.systemPrompt) { _ in commit() }
 
                 HStack {
                     Text("动作").font(.headline)
@@ -825,7 +825,7 @@ struct SettingsView: View {
             }
             // #2 thinking 模式
             Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
-                .onChange(of: action.thinkingMode) { commit() }
+                .onChange(of: action.thinkingMode) { _ in commit() }
             if action.thinkingMode {
                 editorRow("思考预算") {
                     HStack {
@@ -840,18 +840,18 @@ struct SettingsView: View {
                 promptEditor(text: bindingForAction(action.id, \.prompt), height: 70)
             }
             Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
-                .onChange(of: action.isTranslation) { commit() }
+                .onChange(of: action.isTranslation) { _ in commit() }
             if action.isTranslation {
                 editorRow("目标语言") {
                     Picker("", selection: bindingForAction(action.id, \.targetLanguage)) {
                         ForEach(TargetLanguage.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .labelsHidden().frame(width: 200, alignment: .leading)
-                    .onChange(of: action.targetLanguage) { commit() }
+                    .onChange(of: action.targetLanguage) { _ in commit() }
                 }
             }
             Toggle("完成后默认替换原文", isOn: bindingForAction(action.id, \.replaceByDefault))
-                .onChange(of: action.replaceByDefault) { commit() }
+                .onChange(of: action.replaceByDefault) { _ in commit() }
 
             HStack {
                 Spacer()
@@ -943,7 +943,7 @@ struct SettingsView: View {
                 Text("历史记录").font(.headline)
                 Spacer()
                 Stepper("保留 \(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
-                    .onChange(of: settings.historyLimit) { commit() }
+                    .onChange(of: settings.historyLimit) { _ in commit() }
                 Button("清空") { settings.clearHistory() }
                     .disabled(settings.history.isEmpty)
             }
@@ -1022,21 +1022,21 @@ struct SettingsView: View {
             Divider().padding(.vertical, 4)
 
             Toggle("在 Dock 显示图标", isOn: $settings.showDockIcon)
-                .onChange(of: settings.showDockIcon) { commit() }
+                .onChange(of: settings.showDockIcon) { _ in commit() }
             Text("关闭后仅保留菜单栏图标。开启时可从 Dock 点击图标打开设置。")
                 .font(.caption).foregroundStyle(.secondary)
 
             Divider().padding(.vertical, 4)
 
             Toggle("优先使用辅助功能直接取词(更无感)", isOn: $settings.useAXFirst)
-                .onChange(of: settings.useAXFirst) { commit() }
+                .onChange(of: settings.useAXFirst) { _ in commit() }
             Text("关闭后将统一通过模拟 ⌘C 取词。")
                 .font(.caption).foregroundStyle(.secondary)
 
             Divider().padding(.vertical, 4)
 
             Toggle("iCloud 配置同步", isOn: $settings.iCloudSyncEnabled)
-                .onChange(of: settings.iCloudSyncEnabled) {
+                .onChange(of: settings.iCloudSyncEnabled) { _ in
                     commit()
                     if settings.iCloudSyncEnabled { iCloudSync.shared.upload(settings) }
                 }
@@ -1050,7 +1050,7 @@ struct SettingsView: View {
                 ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            .onChange(of: settings.typewriterSpeed) { commit() }
+            .onChange(of: settings.typewriterSpeed) { _ in commit() }
             Text("控制 AI 结果逐字显示的速度。选「关闭」则整段一次性显示。")
                 .font(.caption).foregroundStyle(.secondary)
 

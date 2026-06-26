@@ -155,7 +155,7 @@ struct ResultView: View {
                 }
                 .padding(14)
             }
-            .onChange(of: vm.output) {
+            .onChange(of: vm.output) { _ in
                 withAnimation(.linear(duration: 0.1)) { proxy.scrollTo("output", anchor: .bottom) }
             }
         }
