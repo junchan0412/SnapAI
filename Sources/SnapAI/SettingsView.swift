@@ -125,6 +125,16 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .permission: return "权限"
         }
     }
+
+    var icon: String {
+        switch self {
+        case .ai: return "cpu"
+        case .actions: return "wand.and.stars"
+        case .history: return "clock.arrow.circlepath"
+        case .general: return "slider.horizontal.3"
+        case .permission: return "checkmark.shield"
+        }
+    }
 }
 
 private enum SettingsCommitPolicy {
@@ -140,13 +150,19 @@ private struct SettingsSectionPicker: View {
         HStack(spacing: 0) {
             ForEach(SettingsSection.allCases) { section in
                 Button {
-                    selection = section
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        selection = section
+                    }
                 } label: {
-                    Text(section.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                        .frame(width: 92, height: 30, alignment: .center)
-                        .contentShape(Rectangle())
+                    HStack(spacing: 5) {
+                        Image(systemName: section.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(section.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .frame(width: 104, height: 30, alignment: .center)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selection == section ? .primary : .secondary)
@@ -166,7 +182,7 @@ private struct SettingsSectionPicker: View {
         .padding(3)
         .background {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.82))
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.72))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -188,17 +204,12 @@ struct SettingsView: View {
     private let aiLabelWidth: CGFloat = 76
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             settingsHeader
-            selectedSectionContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                }
+            settingsContentSurface
         }
-        .frame(width: 560, height: 460)
-        .padding()
+        .frame(width: 660, height: 520)
+        .padding(14)
         .onDisappear {
             flushDeferredSave()
         }
@@ -237,6 +248,28 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var settingsContentSurface: some View {
+        ZStack {
+            selectedSectionContent
+                .id(ui.selectedSection.id)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .trailing)),
+                    removal: .opacity.combined(with: .move(edge: .leading))
+                ))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.38))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .animation(.easeInOut(duration: 0.18), value: ui.selectedSection)
+    }
+
     @ViewBuilder
     private var selectedSectionContent: some View {
         switch ui.selectedSection {
@@ -257,7 +290,7 @@ struct SettingsView: View {
 
     private var aiTab: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 currentSelectionCard
                 routeCard
                 Divider()
@@ -271,7 +304,7 @@ struct SettingsView: View {
                 }
                 temperatureRow
             }
-            .padding(18)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -332,7 +365,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
+        .padding(10)
         .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
@@ -349,7 +382,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(10)
         .background(Color.primary.opacity(0.035))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
@@ -448,7 +481,7 @@ struct SettingsView: View {
                 providerEditor(provider)
             }
         }
-        .padding(12)
+        .padding(10)
         .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
@@ -840,7 +873,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(12)
+                .padding(10)
                 .background(Color.primary.opacity(0.035))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
 
@@ -848,7 +881,7 @@ struct SettingsView: View {
                     actionCard(action)
                 }
             }
-            .padding(18)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -917,7 +950,7 @@ struct SettingsView: View {
                 actionEditor(action)
             }
         }
-        .padding(12)
+        .padding(10)
         .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
@@ -1154,7 +1187,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(.top, 14).padding(.horizontal, 18)
+        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -1205,96 +1238,124 @@ struct SettingsView: View {
     // MARK: - 通用
 
     private var generalTab: some View {
-        Form {
-            Toggle("开机时自动启动 SnapAI", isOn: Binding(
-                get: { perm.launchAtLogin },
-                set: { perm.setLaunchAtLogin($0) }
-            ))
-            Text("启用后,登录系统时 SnapAI 会自动在菜单栏常驻。")
-                .font(.caption).foregroundStyle(.secondary)
-
-            Divider().padding(.vertical, 4)
-
-            Toggle("在 Dock 显示图标", isOn: $settings.showDockIcon)
-                .onChange(of: settings.showDockIcon) { commit() }
-            Text("关闭后仅保留菜单栏图标。开启时可从 Dock 点击图标打开设置。")
-                .font(.caption).foregroundStyle(.secondary)
-
-            Divider().padding(.vertical, 4)
-
-            Toggle("优先使用辅助功能直接取词(更无感)", isOn: $settings.useAXFirst)
-                .onChange(of: settings.useAXFirst) { commit() }
-            Text("关闭后将统一通过模拟 ⌘C 取词。")
-                .font(.caption).foregroundStyle(.secondary)
-
-            Divider().padding(.vertical, 4)
-
-            contextProfilesSection
-
-            Divider().padding(.vertical, 4)
-
-            privacySection
-
-            Divider().padding(.vertical, 4)
-
-            Toggle("iCloud 配置同步", isOn: $settings.iCloudSyncEnabled)
-                .onChange(of: settings.iCloudSyncEnabled) {
-                    commit()
-                    if settings.iCloudSyncEnabled { iCloudSync.shared.upload(settings) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                settingsSection("启动与显示") {
+                    settingsToggleRow(
+                        title: "开机启动",
+                        description: "登录系统时自动在菜单栏常驻。",
+                        isOn: Binding(
+                            get: { perm.launchAtLogin },
+                            set: { perm.setLaunchAtLogin($0) }
+                        )
+                    )
+                    compactDivider
+                    settingsToggleRow(
+                        title: "Dock 图标",
+                        description: "关闭后仅保留菜单栏图标；开启时可从 Dock 打开设置。",
+                        isOn: Binding(
+                            get: { settings.showDockIcon },
+                            set: { settings.showDockIcon = $0; commit() }
+                        )
+                    )
                 }
-            Text("将供应商配置、动作和快捷键同步到 iCloud(不含 API Key)。同一 Apple ID 的多台 Mac 共享配置。")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
-            Divider().padding(.vertical, 4)
+                settingsSection("取词") {
+                    settingsToggleRow(
+                        title: "优先辅助功能取词",
+                        description: "更无感地读取当前选中内容；关闭后统一通过模拟 Command-C 取词。",
+                        isOn: Binding(
+                            get: { settings.useAXFirst },
+                            set: { settings.useAXFirst = $0; commit() }
+                        )
+                    )
+                }
 
-            Picker("打字机动画", selection: $settings.typewriterSpeed) {
-                ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
+                contextProfilesSection
+                privacySection
+
+                settingsSection("同步与动效") {
+                    settingsToggleRow(
+                        title: "iCloud 配置同步",
+                        description: "同步供应商配置、动作和快捷键，不包含 API Key。",
+                        isOn: Binding(
+                            get: { settings.iCloudSyncEnabled },
+                            set: { enabled in
+                                settings.iCloudSyncEnabled = enabled
+                                commit()
+                                if enabled { iCloudSync.shared.upload(settings) }
+                            }
+                        )
+                    )
+                    compactDivider
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("打字机动画")
+                                .font(.callout.weight(.medium))
+                            Text("控制 AI 结果逐字显示速度。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 16)
+                        Picker("", selection: $settings.typewriterSpeed) {
+                            ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 210)
+                        .controlSize(.small)
+                        .onChange(of: settings.typewriterSpeed) { commit() }
+                    }
+                }
+
+                settingsSection("配置迁移") {
+                    HStack(spacing: 8) {
+                        Button("导出配置…") { exportConfig() }
+                        Button("导入配置…") { importConfig() }
+                        Spacer()
+                    }
+                    Text("导出为 JSON，包含供应商、动作、快捷键等；API Key 不会被导出。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .pickerStyle(.segmented)
-            .onChange(of: settings.typewriterSpeed) { commit() }
-            Text("控制 AI 结果逐字显示的速度。选「关闭」则整段一次性显示。")
-                .font(.caption).foregroundStyle(.secondary)
-
-            Divider().padding(.vertical, 4)
-
-            // 配置导入/导出(#13)
-            Text("配置迁移").font(.subheadline.weight(.semibold))
-            HStack {
-                Button("导出配置…") { exportConfig() }
-                Button("导入配置…") { importConfig() }
-            }
-            Text("导出为 JSON(含供应商、动作、快捷键等)。出于安全,API Key 不包含在内,需在新机器重新填写。")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer()
+            .padding(14)
         }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var privacySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("隐私").font(.subheadline.weight(.semibold))
-            Toggle("发送前预览将提交给 AI 的内容", isOn: $settings.privacyPreviewEnabled)
-                .onChange(of: settings.privacyPreviewEnabled) { commit() }
-            Toggle("发送前执行本地脱敏规则", isOn: $settings.redactionEnabled)
-                .onChange(of: settings.redactionEnabled) { commit() }
-            Text("脱敏只在本机处理,会在请求发出前替换匹配文本。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        settingsSection("隐私") {
+            settingsToggleRow(
+                title: "发送前预览",
+                description: "先查看将提交给 AI 的文本和上下文。",
+                isOn: Binding(
+                    get: { settings.privacyPreviewEnabled },
+                    set: { settings.privacyPreviewEnabled = $0; commit() }
+                )
+            )
+            compactDivider
+            settingsToggleRow(
+                title: "本地脱敏",
+                description: "在请求发出前替换匹配文本，规则只在本机执行。",
+                isOn: Binding(
+                    get: { settings.redactionEnabled },
+                    set: { settings.redactionEnabled = $0; commit() }
+                )
+            )
             if settings.redactionEnabled {
+                compactDivider
                 redactionRulesEditor
             }
         }
     }
 
     private var contextProfilesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        settingsSection("上下文包") {
             HStack {
-                Text("上下文包").font(.subheadline.weight(.semibold))
+                Text("将项目背景、术语表和偏好合并进 System Prompt。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Picker("", selection: $settings.activeContextProfileID) {
                     Text("不使用上下文").tag("")
@@ -1302,20 +1363,19 @@ struct SettingsView: View {
                         Text(profile.name).tag(profile.id)
                     }
                 }
-                .frame(width: 180)
+                .frame(width: 170)
+                .controlSize(.small)
                 .onChange(of: settings.activeContextProfileID) { commit() }
             }
-            Text("上下文包会合并进 System Prompt,适合保存项目背景、术语表、写作风格或代码栈偏好。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             ForEach(settings.contextProfiles) { profile in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Toggle("", isOn: bindingForContextProfile(profile.id, \.isEnabled))
                             .labelsHidden()
+                            .controlSize(.small)
                         TextField("名称", text: bindingForContextProfile(profile.id, \.name, policy: .deferredSave), onCommit: commit)
                             .textFieldStyle(.roundedBorder)
+                            .controlSize(.small)
                         if settings.activeContextProfileID == profile.id {
                             Text("使用中")
                                 .font(.caption2.weight(.semibold))
@@ -1338,7 +1398,7 @@ struct SettingsView: View {
                     }
                     TextEditor(text: bindingForContextProfile(profile.id, \.content, policy: .deferredSave))
                         .font(.system(size: 12))
-                        .frame(height: 76)
+                        .frame(height: 58)
                         .scrollContentBackground(.hidden)
                         .padding(6)
                         .background(Color.primary.opacity(0.045))
@@ -1348,21 +1408,71 @@ struct SettingsView: View {
                                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
                         }
                 }
-                .padding(8)
-                .background(Color.primary.opacity(0.035))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(7)
+                .background(Color.primary.opacity(0.028))
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
             HStack(spacing: 8) {
                 TextField("新上下文包名称", text: $ui.newContextName)
                     .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
                 Button {
                     addContextProfile()
                 } label: {
                     Label("添加", systemImage: "plus")
                 }
+                .controlSize(.small)
                 .disabled(ui.newContextName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
+    }
+
+    private func settingsSection<Content: View>(_ title: String,
+                                                @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.035))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func settingsToggleRow(title: String,
+                                   description: String,
+                                   isOn: Binding<Bool>) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 16)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var compactDivider: some View {
+        Divider()
+            .opacity(0.55)
     }
 
     private var redactionRulesEditor: some View {
@@ -1549,31 +1659,39 @@ struct SettingsView: View {
     // MARK: - 权限
 
     private var permissionTab: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: perm.axGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(perm.axGranted ? .green : .red)
-                Text(perm.axGranted ? "已授予辅助功能权限" : "未授予辅助功能权限")
-            }
-
-            Text("SnapAI 需要「辅助功能」权限来读取选中文字、模拟复制按键。请在系统设置 → 隐私与安全性 → 辅助功能 中勾选 SnapAI。")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                Button("打开系统设置") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                        NSWorkspace.shared.open(url)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                settingsSection("辅助功能") {
+                    HStack(spacing: 10) {
+                        Image(systemName: perm.axGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(perm.axGranted ? .green : .red)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(perm.axGranted ? "已授予辅助功能权限" : "未授予辅助功能权限")
+                                .font(.callout.weight(.medium))
+                            Text("SnapAI 需要该权限来读取选中文字并模拟复制按键。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    compactDivider
+                    HStack(spacing: 8) {
+                        Button("打开系统设置") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        Button("重新检测") {
+                            perm.refresh(prompt: true)
+                        }
+                        Spacer()
                     }
                 }
-                Button("重新检测") {
-                    perm.refresh(prompt: true)
-                }
             }
-            Spacer()
+            .padding(14)
         }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func commit() {
