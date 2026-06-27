@@ -23,6 +23,18 @@ func testReleaseTagParsing() {
            "ignores latest URL without tag component")
 }
 
+func testDesignatedRequirementParsing() {
+    let output = """
+    Executable=/Applications/SnapAI.app/Contents/MacOS/SnapAI
+    Identifier=com.snapai.app
+    designated => identifier "com.snapai.app" and certificate leaf = H"547f9e9ccbac459f1ae9db2644e819edeb2e766e"
+    """
+    expect(
+        UpdateChecker.designatedRequirementLine(from: output) == "identifier \"com.snapai.app\" and certificate leaf = H\"547f9e9ccbac459f1ae9db2644e819edeb2e766e\"",
+        "parses designated requirement from codesign output"
+    )
+}
+
 func testBaseURLNormalization() {
     expect(AIClient.normalizedBase("api.openai.com", proto: .openAI) == "https://api.openai.com/v1",
            "adds https and /v1")
@@ -196,6 +208,7 @@ func testContextProfileEffectiveSystemPrompt() {
 
 testVersionNormalizationAndCompare()
 testReleaseTagParsing()
+testDesignatedRequirementParsing()
 testBaseURLNormalization()
 testPromptRender()
 testHotKeyConflictDetection()

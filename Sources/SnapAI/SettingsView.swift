@@ -135,6 +135,16 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .permission: return "checkmark.shield"
         }
     }
+
+    var tabWidth: CGFloat {
+        switch self {
+        case .ai: return 96
+        case .actions: return 82
+        case .history: return 82
+        case .general: return 82
+        case .permission: return 82
+        }
+    }
 }
 
 private enum SettingsCommitPolicy {
@@ -161,7 +171,7 @@ private struct SettingsSectionPicker: View {
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
                     }
-                    .frame(width: 104, height: 30, alignment: .center)
+                    .frame(width: section.tabWidth, height: 30, alignment: .center)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -224,25 +234,29 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Button {
-                    isPinned.toggle()
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isPinned.toggle()
+                    }
                 } label: {
-                    Image(systemName: isPinned ? "pin.fill" : "pin")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 28, height: 28)
+                    Image(systemName: isPinned ? "pin.fill" : "pin.slash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .scaleEffect(isPinned ? 1.04 : 0.96)
+                        .frame(width: 30, height: 30)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isPinned ? Color.accentColor : .secondary)
                 .background {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(isPinned ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+                        .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(0.1), lineWidth: 1)
                 }
-                .help(isPinned ? "取消置顶设置窗口" : "置顶设置窗口")
-                .accessibilityLabel(isPinned ? "取消置顶设置窗口" : "置顶设置窗口")
+                .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
+                .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
             }
         }
         .frame(maxWidth: .infinity)

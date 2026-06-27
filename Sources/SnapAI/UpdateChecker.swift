@@ -67,6 +67,8 @@ enum UpdateChecker {
         case releaseLookupFailed(primary: Error, fallback: Error)
         case checksumMismatch(expected: String, actual: String)
         case invalidManifest(String)
+        case signingIdentityChanged(current: String, incoming: String)
+        case signingRequirementUnavailable(String)
 
         var errorDescription: String? {
             switch self {
@@ -91,6 +93,17 @@ enum UpdateChecker {
                 return "更新包 SHA256 校验失败。\n期望: \(expected)\n实际: \(actual)"
             case .invalidManifest(let message):
                 return "Release manifest 无法验证:\n\(message)"
+            case .signingIdentityChanged(let current, let incoming):
+                return """
+                更新包的签名身份与当前 SnapAI 不一致,已取消自动安装。
+
+                这通常会导致钥匙串、辅助功能等系统授权在更新后重新询问。请确认发布包继续使用同一个稳定签名证书。
+
+                当前: \(current)
+                新包: \(incoming)
+                """
+            case .signingRequirementUnavailable(let path):
+                return "无法读取应用签名要求,已取消自动安装:\n\(path)"
             }
         }
     }
@@ -367,9 +380,35 @@ enum UpdateChecker {
                 throw UpdateError.bundleMismatch
             }
             try runTool("/usr/bin/codesign", arguments: ["--verify", "--deep", "--strict", url.path])
+            try validateSigningContinuity(newAppURL: url)
             return url
         }
         throw UpdateError.invalidArchive
+    }
+
+    private static func validateSigningContinuity(newAppURL: URL) throws {
+        let currentRequirement = try designatedRequirement(for: Bundle.main.bundleURL)
+        let incomingRequirement = try designatedRequirement(for: newAppURL)
+        guard currentRequirement == incomingRequirement else {
+            throw UpdateError.signingIdentityChanged(current: currentRequirement,
+                                                     incoming: incomingRequirement)
+        }
+    }
+
+    private static func designatedRequirement(for appURL: URL) throws -> String {
+        let output = try runToolOutput("/usr/bin/codesign", arguments: ["-d", "-r-", appURL.path])
+        guard let requirement = designatedRequirementLine(from: output) else {
+            throw UpdateError.signingRequirementUnavailable(appURL.path)
+        }
+        return requirement
+    }
+
+    static func designatedRequirementLine(from codesignOutput: String) -> String? {
+        codesignOutput
+            .split(separator: "\n")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { $0.hasPrefix("designated =>") }
+            .map { String($0.dropFirst("designated =>".count)).trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
     @MainActor
@@ -558,22 +597,30 @@ enum UpdateChecker {
     }
 
     private static func runTool(_ executable: String, arguments: [String]) throws {
+        _ = try runToolOutput(executable, arguments: arguments)
+    }
+
+    @discardableResult
+    private static func runToolOutput(_ executable: String, arguments: [String]) throws -> String {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: executable)
         proc.arguments = arguments
-        let err = Pipe()
-        proc.standardError = err
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
         try proc.run()
-        let data = err.fileHandleForReading.readDataToEndOfFile()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
+        let output = String(data: data, encoding: .utf8) ?? ""
         guard proc.terminationStatus == 0 else {
-            let message = String(data: data, encoding: .utf8) ?? "\(executable) failed"
+            let message = output.isEmpty ? "\(executable) failed" : output
             throw NSError(
                 domain: "SnapAI.UpdateChecker",
                 code: Int(proc.terminationStatus),
                 userInfo: [NSLocalizedDescriptionKey: message]
             )
         }
+        return output
     }
 
     static func latestInstallLogURL() -> URL? {

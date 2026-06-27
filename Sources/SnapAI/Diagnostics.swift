@@ -72,10 +72,18 @@ struct PermissionHealthSnapshot {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             proc.waitUntilExit()
             let text = String(data: data, encoding: .utf8) ?? ""
-            let lines = text
+            let requirement = text
+                .split(separator: "\n")
+                .map(String.init)
+                .first { $0.hasPrefix("designated =>") }
+                .map { String($0.dropFirst("designated =>".count)).trimmingCharacters(in: .whitespacesAndNewlines) }
+            var lines = text
                 .split(separator: "\n")
                 .map(String.init)
                 .filter { $0.hasPrefix("Authority=") || $0.hasPrefix("TeamIdentifier=") || $0.hasPrefix("CDHash=") }
+            if let requirement {
+                lines.append("Requirement=\(requirement)")
+            }
             return lines.isEmpty ? "未获取到签名详情" : lines.joined(separator: ", ")
         } catch {
             return "签名检查失败: \(error.localizedDescription)"
