@@ -47,6 +47,19 @@ struct HotKeyRecorder: NSViewRepresentable {
 
         override func keyDown(with event: NSEvent) {
             guard recording else { super.keyDown(with: event); return }
+            if event.keyCode == UInt16(kVK_Escape) {
+                recording = false
+                refreshTitle()
+                return
+            }
+            if event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete) {
+                let empty = HotKeyCombo.unset
+                combo = empty
+                recording = false
+                refreshTitle()
+                onCapture?(empty)
+                return
+            }
             var mods: UInt32 = 0
             let flags = event.modifierFlags
             if flags.contains(.command) { mods |= UInt32(cmdKey) }

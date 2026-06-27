@@ -18,6 +18,10 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI")
             ]
+        ),
+        .executableTarget(
+            name: "SnapAIUpdater",
+            path: "Sources/SnapAIUpdater"
         )
     ]
 )

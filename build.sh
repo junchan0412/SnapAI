@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="SnapAI"
 BIN="/tmp/${APP_NAME}.bin"
+UPDATER_BIN="/tmp/${APP_NAME}Updater.bin"
 APP_BUNDLE="${APP_NAME}.app"
 LOCAL_IDENTITY_NAME="SnapAI Local Signing"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
@@ -22,12 +23,19 @@ swiftc -O \
   -framework Carbon \
   -framework ApplicationServices
 
+echo "==> 编译 updater helper ..."
+swiftc -O \
+  Sources/SnapAIUpdater/main.swift \
+  -o "${UPDATER_BIN}"
+
 echo "==> 组装 .app bundle ..."
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+mkdir -p "${APP_BUNDLE}/Contents/Helpers"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BIN}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+cp "${UPDATER_BIN}" "${APP_BUNDLE}/Contents/Helpers/${APP_NAME}Updater"
 cp "Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 cp "Resources/AppIconLight.png" "${APP_BUNDLE}/Contents/Resources/AppIconLight.png"
 cp "Resources/AppIconDark.png" "${APP_BUNDLE}/Contents/Resources/AppIconDark.png"

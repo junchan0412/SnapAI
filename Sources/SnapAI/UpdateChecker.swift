@@ -1,10 +1,12 @@
 import AppKit
+import CryptoKit
 import Foundation
 
 enum UpdateChecker {
     private static let repositoryURL = URL(string: "https://github.com/junchan0412/SnapAI")!
     private static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/junchan0412/SnapAI/releases/latest")!
     private static let latestReleasePageURL = URL(string: "https://github.com/junchan0412/SnapAI/releases/latest")!
+    private static let latestInstallLogKey = "SnapAI.UpdateChecker.latestInstallLogPath"
 
     struct Release: Decodable {
         let tagName: String
@@ -25,16 +27,35 @@ enum UpdateChecker {
                 return lower.hasSuffix(".zip") && lower.contains("snapai")
             }
         }
+
+        var manifestAsset: Asset? {
+            assets.first { asset in
+                let lower = asset.name.lowercased()
+                return lower.hasSuffix(".json") && lower.contains("manifest")
+            }
+        }
     }
 
     struct Asset: Decodable {
         let name: String
         let browserDownloadURL: URL
+        let digest: String?
 
         enum CodingKeys: String, CodingKey {
             case name
             case browserDownloadURL = "browser_download_url"
+            case digest
         }
+    }
+
+    struct ReleaseManifest: Decodable {
+        struct ManifestAsset: Decodable {
+            let name: String
+            let sha256: String
+        }
+
+        let version: String?
+        let assets: [ManifestAsset]
     }
 
     enum UpdateError: LocalizedError {
@@ -44,6 +65,8 @@ enum UpdateChecker {
         case bundleMismatch
         case installLocationNotWritable(String)
         case releaseLookupFailed(primary: Error, fallback: Error)
+        case checksumMismatch(expected: String, actual: String)
+        case invalidManifest(String)
 
         var errorDescription: String? {
             switch self {
@@ -64,6 +87,10 @@ enum UpdateChecker {
                 API 检查失败: \(primary.localizedDescription)
                 备用网页检查失败: \(fallback.localizedDescription)
                 """
+            case .checksumMismatch(let expected, let actual):
+                return "更新包 SHA256 校验失败。\n期望: \(expected)\n实际: \(actual)"
+            case .invalidManifest(let message):
+                return "Release manifest 无法验证:\n\(message)"
             }
         }
     }
@@ -146,7 +173,8 @@ enum UpdateChecker {
             assets: [
                 Asset(
                     name: assetName,
-                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: assetName)
+                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: assetName),
+                    digest: nil
                 )
             ]
         )
@@ -186,6 +214,7 @@ enum UpdateChecker {
             do {
                 let asset = try installAsset(from: release)
                 let zipURL = try await download(asset)
+                try await verifyDownload(zipURL: zipURL, asset: asset, release: release)
                 let newAppURL = try unpackApp(from: zipURL)
                 try await MainActor.run {
                     try launchInstaller(newAppURL: newAppURL, releaseTag: release.tagName)
@@ -219,6 +248,54 @@ enum UpdateChecker {
         return zipURL
     }
 
+    private static func verifyDownload(zipURL: URL, asset: Asset, release: Release) async throws {
+        let actual = try sha256Hex(for: zipURL)
+        if let expected = sha256FromGitHubDigest(asset.digest) {
+            guard actual == expected else {
+                throw UpdateError.checksumMismatch(expected: expected, actual: actual)
+            }
+            return
+        }
+
+        guard let manifestAsset = release.manifestAsset else { return }
+        let manifest = try await downloadManifest(manifestAsset)
+        guard let expected = manifest.assets.first(where: { $0.name == asset.name })?.sha256.lowercased() else {
+            throw UpdateError.invalidManifest("manifest 中未找到 \(asset.name) 的 sha256。")
+        }
+        guard actual == expected else {
+            throw UpdateError.checksumMismatch(expected: expected, actual: actual)
+        }
+    }
+
+    private static func downloadManifest(_ asset: Asset) async throws -> ReleaseManifest {
+        var request = updateRequest(url: asset.browserDownloadURL, accept: "application/json")
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw UpdateError.invalidManifest("manifest 下载失败(status \(http.statusCode))。")
+        }
+        do {
+            return try JSONDecoder().decode(ReleaseManifest.self, from: data)
+        } catch {
+            throw UpdateError.invalidManifest(error.localizedDescription)
+        }
+    }
+
+    private static func sha256FromGitHubDigest(_ digest: String?) -> String? {
+        guard let digest else { return nil }
+        let lower = digest.lowercased()
+        if lower.hasPrefix("sha256:") {
+            return String(lower.dropFirst("sha256:".count))
+        }
+        return nil
+    }
+
+    static func sha256Hex(for url: URL) throws -> String {
+        let data = try Data(contentsOf: url)
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
     private static func updateRequest(url: URL, accept: String) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue(accept, forHTTPHeaderField: "Accept")
@@ -237,7 +314,7 @@ enum UpdateChecker {
         return message
     }
 
-    private static func releaseTag(from url: URL?) -> String? {
+    static func releaseTag(from url: URL?) -> String? {
         guard let components = url?.pathComponents,
               let tagIndex = components.firstIndex(of: "tag"),
               components.indices.contains(tagIndex + 1) else {
@@ -306,6 +383,16 @@ enum UpdateChecker {
         let helperDir = newAppURL.deletingLastPathComponent().deletingLastPathComponent()
         let backupURL = helperDir.appendingPathComponent("SnapAI-old-\(UUID().uuidString).app", isDirectory: true)
         let logURL = helperDir.appendingPathComponent("install.log")
+        UserDefaults.standard.set(logURL.path, forKey: latestInstallLogKey)
+
+        if try launchBundledUpdaterIfAvailable(currentAppURL: currentAppURL,
+                                               newAppURL: newAppURL,
+                                               backupURL: backupURL,
+                                               logURL: logURL,
+                                               releaseTag: releaseTag) {
+            return
+        }
+
         let scriptURL = helperDir.appendingPathComponent("install.sh")
         let script = """
         #!/bin/sh
@@ -394,7 +481,43 @@ enum UpdateChecker {
             proc.standardError = null
         }
         try proc.run()
+        presentInstallStarted(releaseTag)
+    }
 
+    @MainActor
+    private static func launchBundledUpdaterIfAvailable(currentAppURL: URL,
+                                                        newAppURL: URL,
+                                                        backupURL: URL,
+                                                        logURL: URL,
+                                                        releaseTag: String) throws -> Bool {
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents")
+            .appendingPathComponent("Helpers")
+            .appendingPathComponent("SnapAIUpdater")
+        guard FileManager.default.isExecutableFile(atPath: helperURL.path) else {
+            return false
+        }
+
+        let proc = Process()
+        proc.executableURL = helperURL
+        proc.arguments = [
+            currentAppURL.path,
+            newAppURL.path,
+            backupURL.path,
+            logURL.path,
+            String(ProcessInfo.processInfo.processIdentifier)
+        ]
+        if let null = FileHandle(forWritingAtPath: "/dev/null") {
+            proc.standardOutput = null
+            proc.standardError = null
+        }
+        try proc.run()
+        presentInstallStarted(releaseTag)
+        return true
+    }
+
+    @MainActor
+    private static func presentInstallStarted(_ releaseTag: String) {
         let alert = NSAlert()
         alert.messageText = "正在安装 \(releaseTag)"
         alert.informativeText = "SnapAI 将退出,完成原位置替换后自动重新打开。"
@@ -409,9 +532,15 @@ enum UpdateChecker {
         alert.messageText = "自动安装更新失败"
         alert.informativeText = "\(error.localizedDescription)\n\n你仍可打开 GitHub Release 页面手动下载。"
         alert.addButton(withTitle: "打开下载页")
+        if latestInstallLogURL() != nil {
+            alert.addButton(withTitle: "打开安装日志")
+        }
         alert.addButton(withTitle: "取消")
-        if run(alert) == .alertFirstButtonReturn {
+        let response = run(alert)
+        if response == .alertFirstButtonReturn {
             NSWorkspace.shared.open(release.htmlURL)
+        } else if response == .alertSecondButtonReturn, let logURL = latestInstallLogURL() {
+            NSWorkspace.shared.open(logURL)
         }
     }
 
@@ -435,9 +564,9 @@ enum UpdateChecker {
         let err = Pipe()
         proc.standardError = err
         try proc.run()
+        let data = err.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
         guard proc.terminationStatus == 0 else {
-            let data = err.fileHandleForReading.readDataToEndOfFile()
             let message = String(data: data, encoding: .utf8) ?? "\(executable) failed"
             throw NSError(
                 domain: "SnapAI.UpdateChecker",
@@ -445,6 +574,12 @@ enum UpdateChecker {
                 userInfo: [NSLocalizedDescriptionKey: message]
             )
         }
+    }
+
+    static func latestInstallLogURL() -> URL? {
+        guard let path = UserDefaults.standard.string(forKey: latestInstallLogKey),
+              FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path)
     }
 
     private static var currentVersion: String {
@@ -459,7 +594,7 @@ enum UpdateChecker {
         let message: String
     }
 
-    private static func normalizedVersion(_ version: String) -> String {
+    static func normalizedVersion(_ version: String) -> String {
         version.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
     }
 
@@ -467,7 +602,7 @@ enum UpdateChecker {
         "v\(normalizedVersion(version))"
     }
 
-    private static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
+    static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
         let left = lhs.split(separator: ".").map { Int($0) ?? 0 }
         let right = rhs.split(separator: ".").map { Int($0) ?? 0 }
         let count = max(left.count, right.count)

@@ -2,13 +2,16 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let settings = AppSettings.shared
     private var statusItem: NSStatusItem!
     private var resultVM: ResultViewModel!
     private var panelController: FloatingPanelController!
     private var quickInput: QuickInputController!
     private var quickInputModel: QuickInputModel!
+    private var commandPalette: CommandPaletteController!
+    private var historyWindow: HistoryWindowController!
+    private var permissionHealth: PermissionHealthController!
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var appearanceObserver: NSObjectProtocol?
@@ -43,6 +46,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.runQuickInput(text: text, action: action, imageData: imageData)
         }
         quickInput = QuickInputController(model: quickInputModel)
+        commandPalette = CommandPaletteController { [weak self] in
+            self?.commandPaletteItems() ?? []
+        }
+        historyWindow = HistoryWindowController(settings: settings) { [weak self] entry in
+            self?.reopenHistoryEntry(entry)
+        }
+        permissionHealth = PermissionHealthController(settings: settings) { [weak self] in
+            self?.hotKeyRegistrationFailures ?? []
+        }
 
         registerHotKeys()
         buildMenu()
@@ -74,12 +86,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let allActions = settings.enabledActions
         let grouped = Dictionary(grouping: allActions) { $0.group }
         func addActionItem(_ action: AIAction) {
-            let suffix = action.hotKey.map { " (\($0.displayString))" } ?? ""
-            let item = NSMenuItem(title: "\(action.name)\(suffix)",
+            let item = NSMenuItem(title: action.name,
                                   action: #selector(triggerActionFromMenu(_:)),
                                   keyEquivalent: "")
             item.target = self
             item.representedObject = action.id
+            configureMenuItemShortcut(item, combo: action.hotKey)
             menu.addItem(item)
         }
         // 无分组的动作先列
@@ -94,10 +106,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menu.addItem(.separator())
 
+        let paletteItem = menu.addItem(withTitle: "命令面板",
+                                       action: #selector(openCommandPalette),
+                                       keyEquivalent: "k")
+        paletteItem.target = self
+        paletteItem.keyEquivalentModifierMask = [.command]
+
         // 快捷提问面板
         let quickItem = menu.addItem(withTitle: "快捷提问 (\(settings.quickPanelHotKey.displayString))",
                                      action: #selector(toggleQuickInput), keyEquivalent: "")
         quickItem.target = self
+        configureMenuItemShortcut(quickItem, combo: settings.quickPanelHotKey)
         menu.addItem(.separator())
 
         if !hotKeyRegistrationFailures.isEmpty {
@@ -135,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealth), keyEquivalent: "").target = self
         menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出 SnapAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -174,14 +194,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildHistoryMenu() -> NSMenu {
         let sub = NSMenu()
+        let open = sub.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindow), keyEquivalent: "")
+        open.target = self
+        sub.addItem(.separator())
         if settings.history.isEmpty {
             let item = NSMenuItem(title: "(暂无记录)", action: nil, keyEquivalent: "")
             item.isEnabled = false
             sub.addItem(item)
             return sub
         }
-        for entry in settings.history.prefix(15) {
-            let item = NSMenuItem(title: "[\(entry.actionName)] \(entry.preview)",
+        for entry in settings.history.prefix(5) {
+            let item = NSMenuItem(title: shortMenuTitle("[\(entry.actionName)] \(entry.preview)"),
                                   action: #selector(reopenHistory(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = entry.id
@@ -193,22 +216,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return sub
     }
 
+    private func addResultCommandItems(to menu: NSMenu) {
+        let copy = menu.addItem(withTitle: "复制结果", action: #selector(copyResult), keyEquivalent: "c")
+        copy.target = self
+        copy.keyEquivalentModifierMask = [.command, .shift]
+
+        let replace = menu.addItem(withTitle: "替换原文", action: #selector(replaceResult), keyEquivalent: "\r")
+        replace.target = self
+        replace.keyEquivalentModifierMask = [.command]
+
+        let append = menu.addItem(withTitle: "追加到文档", action: #selector(appendResult), keyEquivalent: "\r")
+        append.target = self
+        append.keyEquivalentModifierMask = [.command, .shift]
+
+        let export = menu.addItem(withTitle: "导出对话…", action: #selector(exportResult), keyEquivalent: "e")
+        export.target = self
+        export.keyEquivalentModifierMask = [.command]
+
+        let regenerate = menu.addItem(withTitle: "重新生成", action: #selector(regenerateResult), keyEquivalent: "r")
+        regenerate.target = self
+        regenerate.keyEquivalentModifierMask = [.command]
+
+        let stop = menu.addItem(withTitle: "停止生成", action: #selector(stopResult), keyEquivalent: "\u{1b}")
+        stop.target = self
+        stop.keyEquivalentModifierMask = []
+
+        let pin = menu.addItem(withTitle: "固定/取消固定结果窗", action: #selector(togglePinResult), keyEquivalent: "p")
+        pin.target = self
+        pin.keyEquivalentModifierMask = [.command, .shift]
+    }
+
+    private func configureMenuItemShortcut(_ item: NSMenuItem, combo: HotKeyCombo?) {
+        guard let combo, !combo.isUnset else { return }
+        item.keyEquivalent = combo.keyEquivalent
+        item.keyEquivalentModifierMask = combo.nsModifierFlags
+    }
+
+    private func shortMenuTitle(_ title: String) -> String {
+        title.count <= 30 ? title : String(title.prefix(27)) + "..."
+    }
+
     @objc private func switchModel(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? [String: String],
               let pid = info["provider"], let model = info["model"] else { return }
         settings.activate(providerID: pid, model: model)
         buildMenu()
+        installMainMenu()
     }
 
     @objc private func reopenHistory(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
               let entry = settings.history.first(where: { $0.id == id }) else { return }
+        reopenHistoryEntry(entry)
+    }
+
+    private func reopenHistoryEntry(_ entry: HistoryEntry) {
         // 用历史里的原文 + 同名动作重新发起
         let action = settings.enabledActions.first(where: { $0.name == entry.actionName })
             ?? settings.enabledActions.first
         guard let action = action else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
-        resultVM.start(text: entry.source, action: action)
+        resultVM.start(text: entry.source, action: action, autoReplaceEnabled: false)
         panelController.show()
     }
 
@@ -251,6 +319,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
         appMenuItem.submenu = appMenu
+
+        let operationMenuItem = NSMenuItem()
+        mainMenu.addItem(operationMenuItem)
+        let operationMenu = NSMenu(title: "操作")
+        let palette = operationMenu.addItem(withTitle: "命令面板",
+                                            action: #selector(openCommandPalette),
+                                            keyEquivalent: "k")
+        palette.target = self
+        palette.keyEquivalentModifierMask = [.command]
+        let quick = operationMenu.addItem(withTitle: "快捷提问",
+                                          action: #selector(toggleQuickInput),
+                                          keyEquivalent: "")
+        quick.target = self
+        configureMenuItemShortcut(quick, combo: settings.quickPanelHotKey)
+        operationMenu.addItem(.separator())
+        for action in settings.enabledActions {
+            let item = NSMenuItem(title: action.name,
+                                  action: #selector(triggerActionFromMenu(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = action.id
+            configureMenuItemShortcut(item, combo: action.hotKey)
+            operationMenu.addItem(item)
+        }
+        operationMenu.addItem(.separator())
+        addResultCommandItems(to: operationMenu)
+        operationMenu.addItem(.separator())
+        operationMenu.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindow), keyEquivalent: "").target = self
+        operationMenu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealth), keyEquivalent: "").target = self
+        operationMenu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        operationMenuItem.submenu = operationMenu
 
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
@@ -362,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quickInputModel.actionID = settings.enabledActions.first(where: { $0.id == quickInputModel.actionID })?.id
             ?? settings.enabledActions.first?.id ?? ""
         buildMenu()
+        installMainMenu()
         applyActivationPolicy()
     }
 
@@ -381,7 +481,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.notifyNoSelection()
                 return
             }
-            self.resultVM.start(text: text, action: action)
+            guard let prepared = self.prepareTextForSubmission(text,
+                                                               action: action,
+                                                               imageData: nil) else { return }
+            self.resultVM.start(text: prepared,
+                                action: action,
+                                autoReplaceEnabled: action.replaceByDefault)
             self.panelController.show()
         }
     }
@@ -393,19 +498,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func runQuickInput(text: String, action: AIAction, imageData: Data? = nil) {
         quickInput.hide()
-        resultVM.start(text: text, action: action, imageData: imageData)
+        guard let prepared = prepareTextForSubmission(text,
+                                                      action: action,
+                                                      imageData: imageData) else { return }
+        resultVM.start(text: prepared,
+                       action: action,
+                       imageData: imageData,
+                       autoReplaceEnabled: false)
         panelController.show()
+    }
+
+    private func prepareTextForSubmission(_ text: String,
+                                          action: AIAction,
+                                          imageData: Data?) -> String? {
+        let processed = settings.redactionEnabled
+            ? PrivacyFilter.apply(to: text, rules: settings.redactionRules)
+            : text
+        guard settings.privacyPreviewEnabled else { return processed }
+        return confirmPrivacyPreview(text: processed, action: action, hasImage: imageData != nil)
+            ? processed
+            : nil
+    }
+
+    private func confirmPrivacyPreview(text: String, action: AIAction, hasImage: Bool) -> Bool {
+        let rendered = action.render(text: text)
+        let content = """
+        System Prompt:
+        \(settings.systemPrompt.isEmpty ? "(空)" : settings.systemPrompt)
+
+        User Prompt:
+        \(rendered)
+
+        \(hasImage ? "附加内容: 1 张图片" : "附加内容: 无")
+        """
+
+        let alert = NSAlert()
+        alert.messageText = "发送给 AI 前确认"
+        alert.informativeText = settings.redactionEnabled
+            ? "下面是经过本地脱敏后的内容。"
+            : "下面是即将发送给 AI 的内容。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "发送")
+        alert.addButton(withTitle: "取消")
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 560, height: 240))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        let textView = NSTextView(frame: scroll.bounds)
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.string = content
+        textView.textContainerInset = NSSize(width: 8, height: 8)
+        scroll.documentView = textView
+        alert.accessoryView = scroll
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// 把结果替换回原文位置(#3)
     private func replaceSelection(with text: String) {
         panelController.hide()
         let pb = NSPasteboard.general
+        let previousItems = TextCapture.snapshotPasteboard(pb)
         pb.clearContents()
         pb.setString(text, forType: .string)
         previousApp?.activate()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             TextCapture.sendCmdV()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                TextCapture.restorePasteboard(pb, items: previousItems)
+            }
         }
     }
 
@@ -413,6 +576,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func appendSelection(with text: String) {
         let appended = "\n" + text
         let pb = NSPasteboard.general
+        let previousItems = TextCapture.snapshotPasteboard(pb)
         pb.clearContents()
         pb.setString(appended, forType: .string)
         previousApp?.activate()
@@ -425,6 +589,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 TextCapture.sendCmdV()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    TextCapture.restorePasteboard(pb, items: previousItems)
+                }
             }
         }
     }
@@ -437,6 +604,143 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "好")
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
+    }
+
+    @objc private func openCommandPalette() {
+        commandPalette.show()
+    }
+
+    @objc private func openHistoryWindow() {
+        historyWindow.show()
+    }
+
+    @objc private func openPermissionHealth() {
+        permissionHealth.show()
+    }
+
+    @objc private func copyResult() {
+        resultVM.copyOutput()
+    }
+
+    @objc private func replaceResult() {
+        resultVM.replaceOriginal()
+    }
+
+    @objc private func appendResult() {
+        resultVM.appendToDocument()
+    }
+
+    @objc private func exportResult() {
+        resultVM.exportConversation()
+    }
+
+    @objc private func regenerateResult() {
+        resultVM.regenerate()
+    }
+
+    @objc private func stopResult() {
+        resultVM.cancel()
+    }
+
+    @objc private func togglePinResult() {
+        resultVM.isPinned.toggle()
+        panelController.show()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(copyResult), #selector(exportResult):
+            return !resultVM.completeText.isEmpty
+        case #selector(replaceResult), #selector(appendResult):
+            return !resultVM.completeText.isEmpty && !resultVM.isStreaming
+        case #selector(regenerateResult):
+            return !resultVM.sourceText.isEmpty && !resultVM.isStreaming
+        case #selector(stopResult):
+            return resultVM.isStreaming
+        default:
+            return true
+        }
+    }
+
+    private func commandPaletteItems() -> [CommandPaletteItem] {
+        var items: [CommandPaletteItem] = []
+        items.append(CommandPaletteItem(
+            id: "quick",
+            title: "快捷提问",
+            subtitle: settings.quickPanelHotKey.displayString,
+            systemImage: "sparkles",
+            keywords: "quick prompt ask",
+            perform: { [weak self] in self?.toggleQuickInput() }
+        ))
+        for action in settings.enabledActions {
+            items.append(CommandPaletteItem(
+                id: "action-\(action.id)",
+                title: action.name,
+                subtitle: action.hotKey?.displayString ?? "动作",
+                systemImage: action.icon.isEmpty ? "wand.and.stars" : action.icon,
+                keywords: "action prompt \(action.group)",
+                perform: { [weak self] in self?.triggerAction(id: action.id) }
+            ))
+        }
+        for entry in settings.switchableEntries {
+            items.append(CommandPaletteItem(
+                id: "model-\(entry.provider.id)-\(entry.model)",
+                title: entry.model,
+                subtitle: "切换模型 - \(entry.provider.name)",
+                systemImage: "cpu",
+                keywords: "model provider \(entry.provider.name)",
+                perform: { [weak self] in
+                    self?.settings.activate(providerID: entry.provider.id, model: entry.model)
+                    self?.buildMenu()
+                    self?.installMainMenu()
+                }
+            ))
+        }
+        for entry in settings.history.prefix(30) {
+            items.append(CommandPaletteItem(
+                id: "history-\(entry.id)",
+                title: entry.preview,
+                subtitle: "历史记录 - \(entry.actionName)",
+                systemImage: entry.isFavorite ? "star.fill" : "clock.arrow.circlepath",
+                keywords: "\(entry.source) \(entry.output) \(entry.model)",
+                perform: { [weak self] in self?.reopenHistoryEntry(entry) }
+            ))
+        }
+        items.append(contentsOf: [
+            CommandPaletteItem(
+                id: "history-window",
+                title: "打开历史记录",
+                subtitle: "搜索、收藏、删除历史",
+                systemImage: "clock",
+                keywords: "history",
+                perform: { [weak self] in self?.openHistoryWindow() }
+            ),
+            CommandPaletteItem(
+                id: "settings",
+                title: "打开设置",
+                subtitle: "供应商、动作、隐私、快捷键",
+                systemImage: "gearshape",
+                keywords: "settings preferences",
+                perform: { [weak self] in self?.openSettings() }
+            ),
+            CommandPaletteItem(
+                id: "health",
+                title: "权限健康中心",
+                subtitle: "权限、签名、快捷键诊断",
+                systemImage: "lock.shield",
+                keywords: "permission diagnostics signing hotkey",
+                perform: { [weak self] in self?.openPermissionHealth() }
+            ),
+            CommandPaletteItem(
+                id: "updates",
+                title: "检查更新",
+                subtitle: "GitHub Release",
+                systemImage: "arrow.down.circle",
+                keywords: "update release",
+                perform: { [weak self] in self?.checkForUpdates() }
+            )
+        ])
+        return items
     }
 
     // MARK: - 设置窗口

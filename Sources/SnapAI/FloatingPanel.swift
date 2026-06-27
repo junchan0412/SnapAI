@@ -108,7 +108,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard let self = self else { return event }
             if event.keyCode == 53 { // esc
-                if self.vm.isPinned {
+                if self.vm.isStreaming {
+                    self.vm.cancel()
+                } else if self.vm.isPinned {
                     self.vm.isPinned = false
                 } else {
                     self.hide()

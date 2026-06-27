@@ -90,6 +90,9 @@ struct ResultView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .help("固定窗口 (⌘⇧P)")
+                .accessibilityLabel(vm.isPinned ? "取消固定窗口" : "固定窗口")
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                         .foregroundStyle(.secondary)
@@ -97,7 +100,9 @@ struct ResultView: View {
                         .background(Color.primary.opacity(0.06))
                         .clipShape(Circle())
                 }
-                .buttonStyle(.plain).keyboardShortcut(.cancelAction)
+                .buttonStyle(.plain)
+                .help("关闭")
+                .accessibilityLabel("关闭")
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
 
@@ -231,7 +236,14 @@ struct ResultView: View {
                     if vm.elapsed > 0 { Label(String(format: "%.1fs", vm.elapsed), systemImage: "clock") }
                     if vm.charCount > 0 { Label("\(vm.charCount) 字", systemImage: "textformat") }
                     Spacer()
-                    Text(vm.settings.activeModel).truncationMode(.middle).lineLimit(1)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(vm.activeModelName.isEmpty ? vm.settings.activeModel : vm.activeModelName)
+                            .truncationMode(.middle)
+                            .lineLimit(1)
+                        if let note = vm.routeNote {
+                            Text(note).lineLimit(1)
+                        }
+                    }
                 }
                 .font(.caption2).foregroundStyle(.secondary)
             }
@@ -243,44 +255,51 @@ struct ResultView: View {
                     .disabled(vm.isStreaming)
 
                 Button { vm.copyOutput() } label: { Image(systemName: "doc.on.doc") }
-                    .controlSize(.small).help("复制结果").disabled(vm.output.isEmpty)
+                    .controlSize(.small)
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .help("复制结果 (⌘⇧C)")
+                    .accessibilityLabel("复制结果")
+                    .disabled(vm.output.isEmpty)
 
                 Button { vm.replaceOriginal() } label: { Image(systemName: "arrow.uturn.left.square") }
-                    .controlSize(.small).help("替换原文").disabled(vm.output.isEmpty || vm.isStreaming)
+                    .controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .help("替换原文 (⌘↩)")
+                    .accessibilityLabel("替换原文")
+                    .disabled(vm.output.isEmpty || vm.isStreaming)
 
                 Button { vm.appendToDocument() } label: { Image(systemName: "text.badge.plus") }
-                    .controlSize(.small).help("追加到文档").disabled(vm.output.isEmpty || vm.isStreaming)
+                    .controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: [.command, .shift])
+                    .help("追加到文档 (⌘⇧↩)")
+                    .accessibilityLabel("追加到文档")
+                    .disabled(vm.output.isEmpty || vm.isStreaming)
 
                 // #7 导出
-                Button { exportConversation() } label: { Image(systemName: "square.and.arrow.up") }
-                    .controlSize(.small).help("导出对话").disabled(vm.output.isEmpty)
+                Button { vm.exportConversation() } label: { Image(systemName: "square.and.arrow.up") }
+                    .controlSize(.small)
+                    .keyboardShortcut("e", modifiers: [.command])
+                    .help("导出对话 (⌘E)")
+                    .accessibilityLabel("导出对话")
+                    .disabled(vm.output.isEmpty)
 
                 if vm.isStreaming {
                     Button { vm.cancel() } label: { Image(systemName: "stop.fill") }
-                        .controlSize(.small).help("停止")
+                        .controlSize(.small)
+                        .keyboardShortcut(.cancelAction)
+                        .help("停止 (Esc)")
+                        .accessibilityLabel("停止生成")
                 } else {
                     Button { vm.regenerate() } label: { Image(systemName: "arrow.clockwise") }
-                        .controlSize(.small).help("重新生成").disabled(vm.sourceText.isEmpty)
+                        .controlSize(.small)
+                        .keyboardShortcut("r", modifiers: [.command])
+                        .help("重新生成 (⌘R)")
+                        .accessibilityLabel("重新生成")
+                        .disabled(vm.sourceText.isEmpty)
                 }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
-    }
-
-    // MARK: - 导出(#7)
-
-    private func exportConversation() {
-        var md = "# \(vm.action.name) — \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))\n\n"
-        md += "**原文:**\n\n\(vm.sourceText)\n\n---\n\n"
-        md += vm.completeText
-        md += "\n\n---\n*模型: \(vm.settings.activeModel) |耗时: \(String(format: "%.1f", vm.elapsed))s*"
-
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(vm.action.name)-\(Int(Date().timeIntervalSince1970)).md"
-        panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .text]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? md.write(to: url, atomically: true, encoding: .utf8)
-        }
     }
 }
 

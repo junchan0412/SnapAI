@@ -62,6 +62,7 @@ struct HotKeyCombo: Codable, Equatable, Hashable {
 /// 全局设置,持久化到 UserDefaults
 final class AppSettings: ObservableObject, Codable {
     static let shared = AppSettings.load()
+    static let currentSchemaVersion = 2
     static let defaultAskPrompt = "请简洁、准确地回答关于以下内容的问题或解释它:\n\n{{text}}"
     static let oldDefaultTranslatePrompt = "请把下面的文字翻译成中文;如果它本身就是中文,则翻译成英文。只输出翻译结果,不要解释:\n\n{{text}}"
     static let defaultTranslatePrompt = "请将下面的文字在中文和英文之间互译:如果原文是中文,翻译成自然流畅的英文;如果原文是英文或其他语言,翻译成简体中文。只输出翻译结果,不要解释:\n\n{{text}}"
@@ -72,12 +73,13 @@ final class AppSettings: ObservableObject, Codable {
     @Published var activeProviderID: String = ""   // 当前激活的供应商 id
     @Published var activeModel: String = ""        // 当前激活的模型名
     @Published var temperature: Double = 0.3
+    @Published var settingsSchemaVersion: Int = AppSettings.currentSchemaVersion
 
     // 快捷键(旧:仅保留用于迁移与「快捷输入面板」)
     @Published var askHotKey: HotKeyCombo = .askDefault
     @Published var translateHotKey: HotKeyCombo = .translateDefault
     /// 快捷输入面板(不依赖选中文字)的全局快捷键
-    @Published var quickPanelHotKey: HotKeyCombo = HotKeyCombo(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+    @Published var quickPanelHotKey: HotKeyCombo = .quickPanelDefault
 
     // 自定义动作(提问/翻译/润色/总结/解释代码…)
     @Published var actions: [AIAction] = AIAction.defaults()
@@ -91,6 +93,11 @@ final class AppSettings: ObservableObject, Codable {
     @Published var useAXFirst: Bool = true   // 优先用辅助功能取词
     @Published var showDockIcon: Bool = true // 在 Dock 显示图标(可点击打开设置)
     @Published var typewriterSpeed: TypewriterSpeed = .normal // 打字机动画速度
+    @Published var autoRouteEnabled: Bool = false
+    @Published var fallbackEnabled: Bool = true
+    @Published var privacyPreviewEnabled: Bool = false
+    @Published var redactionEnabled: Bool = false
+    @Published var redactionRules: [PrivacyRedactionRule] = PrivacyRedactionRule.defaults()
 
     // 历史 / 引导 / 窗口尺寸
     @Published var history: [HistoryEntry] = []
@@ -179,14 +186,27 @@ final class AppSettings: ObservableObject, Codable {
         save()
     }
 
+    func deleteHistory(id: String) {
+        history.removeAll { $0.id == id }
+        save()
+    }
+
+    func toggleHistoryFavorite(id: String) {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
+        history[idx].isFavorite.toggle()
+        save()
+    }
+
     enum CodingKeys: String, CodingKey {
         // 新:多供应商
         case providers, activeProviderID, activeModel
-        case temperature
+        case temperature, settingsSchemaVersion
         case askHotKey, translateHotKey, quickPanelHotKey
         case actions
         case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon
         case typewriterSpeed
+        case autoRouteEnabled, fallbackEnabled
+        case privacyPreviewEnabled, redactionEnabled, redactionRules
         case history, historyLimit, onboardingDone, panelWidth, panelHeight
         case actionUsageCounts, iCloudSyncEnabled
         // 旧:单配置(仅用于迁移,不再写出)
@@ -203,6 +223,8 @@ final class AppSettings: ObservableObject, Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedSchemaVersion = (try? c.decode(Int.self, forKey: .settingsSchemaVersion)) ?? 1
+        settingsSchemaVersion = decodedSchemaVersion
         temperature = (try? c.decode(Double.self, forKey: .temperature)) ?? 0.3
         askHotKey = (try? c.decode(HotKeyCombo.self, forKey: .askHotKey)) ?? .askDefault
         translateHotKey = (try? c.decode(HotKeyCombo.self, forKey: .translateHotKey)) ?? .translateDefault
@@ -215,9 +237,14 @@ final class AppSettings: ObservableObject, Codable {
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
+        autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
+        fallbackEnabled = (try? c.decode(Bool.self, forKey: .fallbackEnabled)) ?? true
+        privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
+        redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
+        redactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
 
         quickPanelHotKey = (try? c.decode(HotKeyCombo.self, forKey: .quickPanelHotKey))
-            ?? HotKeyCombo(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+            ?? .quickPanelDefault
 
         // 动作:有则用,无则用默认 5 个;并把旧的 ask/translate 快捷键迁移到对应动作
         if let acts = try? c.decode([AIAction].self, forKey: .actions), !acts.isEmpty {
@@ -236,6 +263,7 @@ final class AppSettings: ObservableObject, Codable {
             }
             actions = defs
         }
+        applyMigrations(from: decodedSchemaVersion)
 
         history = (try? c.decode([HistoryEntry].self, forKey: .history)) ?? []
         historyLimit = (try? c.decode(Int.self, forKey: .historyLimit)) ?? 50
@@ -272,6 +300,7 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(activeProviderID, forKey: .activeProviderID)
         try c.encode(activeModel, forKey: .activeModel)
         try c.encode(temperature, forKey: .temperature)
+        try c.encode(settingsSchemaVersion, forKey: .settingsSchemaVersion)
         try c.encode(askHotKey, forKey: .askHotKey)
         try c.encode(translateHotKey, forKey: .translateHotKey)
         try c.encode(quickPanelHotKey, forKey: .quickPanelHotKey)
@@ -282,6 +311,11 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(useAXFirst, forKey: .useAXFirst)
         try c.encode(showDockIcon, forKey: .showDockIcon)
         try c.encode(typewriterSpeed, forKey: .typewriterSpeed)
+        try c.encode(autoRouteEnabled, forKey: .autoRouteEnabled)
+        try c.encode(fallbackEnabled, forKey: .fallbackEnabled)
+        try c.encode(privacyPreviewEnabled, forKey: .privacyPreviewEnabled)
+        try c.encode(redactionEnabled, forKey: .redactionEnabled)
+        try c.encode(redactionRules, forKey: .redactionRules)
         try c.encode(history, forKey: .history)
         try c.encode(historyLimit, forKey: .historyLimit)
         try c.encode(onboardingDone, forKey: .onboardingDone)
@@ -299,7 +333,7 @@ final class AppSettings: ObservableObject, Codable {
             let hadPlaintext = String(data: data, encoding: .utf8)?.contains("\"apiKey\"") ?? false
             s.loadKeysFromKeychain()
             // 旧版本可能把明文 Key 存在 JSON 里;迁移后立即重写一次以彻底清除明文
-            if hadPlaintext { s.save() }
+            if hadPlaintext || s.needsPostLoadSave { s.save() }
             return s
         }
         return AppSettings()
@@ -307,6 +341,27 @@ final class AppSettings: ObservableObject, Codable {
 
     /// 已写入 Keychain 的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
     private var keychainCache: [String: String] = [:]
+    private var needsPostLoadSave = false
+
+    private func applyMigrations(from version: Int) {
+        guard version < Self.currentSchemaVersion else { return }
+        if version < 2 {
+            applyMissingDefaultHotKeys()
+        }
+        settingsSchemaVersion = Self.currentSchemaVersion
+        needsPostLoadSave = true
+    }
+
+    private func applyMissingDefaultHotKeys() {
+        let defaults = Dictionary(uniqueKeysWithValues: AIAction.defaults().compactMap { action in
+            action.hotKey.map { (action.name, $0) }
+        })
+        for idx in actions.indices {
+            guard actions[idx].hotKey == nil,
+                  let hk = defaults[actions[idx].name] else { continue }
+            actions[idx].hotKey = hk
+        }
+    }
 
     /// 从 Keychain 回填各供应商的 apiKey(decode 后它们都是空字符串)
     private func loadKeysFromKeychain() {
@@ -347,7 +402,8 @@ enum KeyCodeMap {
             kVK_ANSI_0: "0", kVK_ANSI_1: "1", kVK_ANSI_2: "2", kVK_ANSI_3: "3",
             kVK_ANSI_4: "4", kVK_ANSI_5: "5", kVK_ANSI_6: "6", kVK_ANSI_7: "7",
             kVK_ANSI_8: "8", kVK_ANSI_9: "9",
-            kVK_Space: "Space", kVK_Return: "↩", kVK_Escape: "⎋"
+            kVK_Space: "Space", kVK_Return: "↩", kVK_Escape: "⎋",
+            kVK_Delete: "Delete", kVK_ForwardDelete: "⌦"
         ]
         return map[Int(keyCode)] ?? "Key\(keyCode)"
     }

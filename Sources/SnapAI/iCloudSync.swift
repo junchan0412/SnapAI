@@ -85,6 +85,11 @@ private struct CloudSettingsPayload: Codable {
     var useAXFirst: Bool
     var showDockIcon: Bool
     var typewriterSpeed: TypewriterSpeed
+    var autoRouteEnabled: Bool
+    var fallbackEnabled: Bool
+    var privacyPreviewEnabled: Bool
+    var redactionEnabled: Bool
+    var redactionRules: [PrivacyRedactionRule]
 
     init(settings: AppSettings) {
         providers = settings.providers
@@ -101,6 +106,43 @@ private struct CloudSettingsPayload: Codable {
         useAXFirst = settings.useAXFirst
         showDockIcon = settings.showDockIcon
         typewriterSpeed = settings.typewriterSpeed
+        autoRouteEnabled = settings.autoRouteEnabled
+        fallbackEnabled = settings.fallbackEnabled
+        privacyPreviewEnabled = settings.privacyPreviewEnabled
+        redactionEnabled = settings.redactionEnabled
+        redactionRules = settings.redactionRules
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case providers, activeProviderID, activeModel, temperature
+        case askHotKey, translateHotKey, quickPanelHotKey
+        case actions, askPrompt, translatePrompt, systemPrompt
+        case useAXFirst, showDockIcon, typewriterSpeed
+        case autoRouteEnabled, fallbackEnabled
+        case privacyPreviewEnabled, redactionEnabled, redactionRules
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        providers = (try? c.decode([AIProvider].self, forKey: .providers)) ?? []
+        activeProviderID = (try? c.decode(String.self, forKey: .activeProviderID)) ?? ""
+        activeModel = (try? c.decode(String.self, forKey: .activeModel)) ?? ""
+        temperature = (try? c.decode(Double.self, forKey: .temperature)) ?? 0.3
+        askHotKey = (try? c.decode(HotKeyCombo.self, forKey: .askHotKey)) ?? .askDefault
+        translateHotKey = (try? c.decode(HotKeyCombo.self, forKey: .translateHotKey)) ?? .translateDefault
+        quickPanelHotKey = (try? c.decode(HotKeyCombo.self, forKey: .quickPanelHotKey)) ?? .quickPanelDefault
+        actions = (try? c.decode([AIAction].self, forKey: .actions)) ?? AIAction.defaults()
+        askPrompt = (try? c.decode(String.self, forKey: .askPrompt)) ?? AppSettings.defaultAskPrompt
+        translatePrompt = (try? c.decode(String.self, forKey: .translatePrompt)) ?? AppSettings.defaultTranslatePrompt
+        systemPrompt = (try? c.decode(String.self, forKey: .systemPrompt)) ?? AppSettings.defaultSystemPrompt
+        useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
+        showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
+        typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
+        autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
+        fallbackEnabled = (try? c.decode(Bool.self, forKey: .fallbackEnabled)) ?? true
+        privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
+        redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
+        redactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
     }
 
     func apply(to settings: AppSettings) {
@@ -123,6 +165,11 @@ private struct CloudSettingsPayload: Codable {
         settings.useAXFirst = useAXFirst
         settings.showDockIcon = showDockIcon
         settings.typewriterSpeed = typewriterSpeed
+        settings.autoRouteEnabled = autoRouteEnabled
+        settings.fallbackEnabled = fallbackEnabled
+        settings.privacyPreviewEnabled = privacyPreviewEnabled
+        settings.redactionEnabled = redactionEnabled
+        settings.redactionRules = redactionRules
         settings.normalizeActive()
     }
 }

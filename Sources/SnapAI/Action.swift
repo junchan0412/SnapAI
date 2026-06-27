@@ -47,6 +47,8 @@ struct AIAction: Codable, Identifiable, Equatable {
     /// #1 动作专属供应商覆盖(nil = 使用全局激活的供应商)
     var providerID: String? = nil
     var modelOverride: String? = nil
+    /// 是否把该动作的结果写入历史。隐私敏感动作可以关闭。
+    var saveHistory: Bool = true
 
     func render(text: String) -> String {
         var p = prompt.replacingOccurrences(of: "{{text}}", with: text)
@@ -76,5 +78,46 @@ struct AIAction: Codable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, name, icon, group, prompt, hotKey, isTranslation, targetLanguage
         case replaceByDefault, isEnabled, thinkingMode, thinkingBudget, providerID, modelOverride
+        case saveHistory
+    }
+}
+
+extension AIAction {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        name = (try? c.decode(String.self, forKey: .name)) ?? "新动作"
+        icon = (try? c.decode(String.self, forKey: .icon)) ?? "wand.and.stars"
+        group = (try? c.decode(String.self, forKey: .group)) ?? ""
+        prompt = (try? c.decode(String.self, forKey: .prompt)) ?? "{{text}}"
+        hotKey = try? c.decode(HotKeyCombo.self, forKey: .hotKey)
+        isTranslation = (try? c.decode(Bool.self, forKey: .isTranslation)) ?? false
+        targetLanguage = (try? c.decode(TargetLanguage.self, forKey: .targetLanguage)) ?? .auto
+        replaceByDefault = (try? c.decode(Bool.self, forKey: .replaceByDefault)) ?? false
+        isEnabled = (try? c.decode(Bool.self, forKey: .isEnabled)) ?? true
+        thinkingMode = (try? c.decode(Bool.self, forKey: .thinkingMode)) ?? false
+        thinkingBudget = (try? c.decode(Int.self, forKey: .thinkingBudget)) ?? 8000
+        providerID = try? c.decode(String.self, forKey: .providerID)
+        modelOverride = try? c.decode(String.self, forKey: .modelOverride)
+        saveHistory = (try? c.decode(Bool.self, forKey: .saveHistory)) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(icon, forKey: .icon)
+        try c.encode(group, forKey: .group)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encodeIfPresent(hotKey, forKey: .hotKey)
+        try c.encode(isTranslation, forKey: .isTranslation)
+        try c.encode(targetLanguage, forKey: .targetLanguage)
+        try c.encode(replaceByDefault, forKey: .replaceByDefault)
+        try c.encode(isEnabled, forKey: .isEnabled)
+        try c.encode(thinkingMode, forKey: .thinkingMode)
+        try c.encode(thinkingBudget, forKey: .thinkingBudget)
+        try c.encodeIfPresent(providerID, forKey: .providerID)
+        try c.encodeIfPresent(modelOverride, forKey: .modelOverride)
+        try c.encode(saveHistory, forKey: .saveHistory)
     }
 }

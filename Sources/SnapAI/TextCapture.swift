@@ -105,7 +105,7 @@ enum TextCapture {
         up?.post(tap: .cghidEventTap)
     }
 
-    private static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {
+    static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {
         var snapshot: [[String: Data]] = []
         for item in pb.pasteboardItems ?? [] {
             var dict: [String: Data] = [:]
@@ -119,7 +119,7 @@ enum TextCapture {
         return snapshot
     }
 
-    private static func restorePasteboard(_ pb: NSPasteboard, items: [[String: Data]]) {
+    static func restorePasteboard(_ pb: NSPasteboard, items: [[String: Data]]) {
         pb.clearContents()
         guard !items.isEmpty else { return }
         var newItems: [NSPasteboardItem] = []

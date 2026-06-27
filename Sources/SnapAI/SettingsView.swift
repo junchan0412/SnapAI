@@ -68,6 +68,9 @@ final class AISettingsUI: ObservableObject {
     @Published var expandedActionID: String?
     @Published var newModelName: String = ""
     @Published var hotKeyError: String?
+    @Published var newRedactionName: String = ""
+    @Published var newRedactionPattern: String = ""
+    @Published var newRedactionReplacement: String = "[已隐藏]"
 }
 
 /// 供应商连接测试状态(#2)
@@ -128,6 +131,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 currentSelectionCard
+                routeCard
                 Divider()
                 HStack {
                     Text("供应商").font(.headline)
@@ -202,6 +206,23 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var routeCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("AI 路由").font(.headline)
+            Toggle("自动按动作、文本长度和图片输入选择模型", isOn: $settings.autoRouteEnabled)
+                .onChange(of: settings.autoRouteEnabled) { commit() }
+            Toggle("请求失败时自动切换备用供应商/模型", isOn: $settings.fallbackEnabled)
+                .onChange(of: settings.fallbackEnabled) { commit() }
+            Text("动作专属供应商仍然优先。若已产生部分输出,失败后不会自动重发,避免重复内容。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -671,7 +692,7 @@ struct SettingsView: View {
                                     ui.hotKeyError = "快捷提问面板与「\(conflict)」冲突,未保存"
                                     return
                                 }
-                                ui.hotKeyError = nil
+                                ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
                                 settings.quickPanelHotKey = newVal
                                 commit()
                             }
@@ -765,7 +786,7 @@ struct SettingsView: View {
                                     ui.hotKeyError = "动作「\(action.name)」与「\(conflict)」冲突,未保存"
                                     return
                                 }
-                                ui.hotKeyError = nil
+                                ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
                                 settings.actions[idx].hotKey = newVal.modifiers == 0 ? nil : newVal
                                 commit()
                             }
@@ -852,6 +873,8 @@ struct SettingsView: View {
             }
             Toggle("完成后默认替换原文", isOn: bindingForAction(action.id, \.replaceByDefault))
                 .onChange(of: action.replaceByDefault) { commit() }
+            Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
+                .onChange(of: action.saveHistory) { commit() }
 
             HStack {
                 Spacer()
@@ -893,14 +916,11 @@ struct SettingsView: View {
     private func hotKeyConflict(for combo: HotKeyCombo,
                                 excludingActionID: String?,
                                 includeQuickPanel: Bool) -> String? {
-        guard combo.modifiers != 0 else { return nil }
-        for other in settings.actions where other.id != excludingActionID {
-            if other.hotKey == combo { return other.name }
-        }
-        if includeQuickPanel && settings.quickPanelHotKey == combo {
-            return "快捷提问面板"
-        }
-        return nil
+        HotKeyConflictDetector.conflict(for: combo,
+                                        actions: settings.actions,
+                                        excludingActionID: excludingActionID,
+                                        quickPanelHotKey: settings.quickPanelHotKey,
+                                        includeQuickPanel: includeQuickPanel)
     }
 
     // MARK: - 历史
@@ -1035,6 +1055,10 @@ struct SettingsView: View {
 
             Divider().padding(.vertical, 4)
 
+            privacySection
+
+            Divider().padding(.vertical, 4)
+
             Toggle("iCloud 配置同步", isOn: $settings.iCloudSyncEnabled)
                 .onChange(of: settings.iCloudSyncEnabled) {
                     commit()
@@ -1070,6 +1094,105 @@ struct SettingsView: View {
         }
         .padding(.top, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var privacySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("隐私").font(.subheadline.weight(.semibold))
+            Toggle("发送前预览将提交给 AI 的内容", isOn: $settings.privacyPreviewEnabled)
+                .onChange(of: settings.privacyPreviewEnabled) { commit() }
+            Toggle("发送前执行本地脱敏规则", isOn: $settings.redactionEnabled)
+                .onChange(of: settings.redactionEnabled) { commit() }
+            Text("脱敏只在本机处理,会在请求发出前替换匹配文本。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if settings.redactionEnabled {
+                redactionRulesEditor
+            }
+        }
+    }
+
+    private var redactionRulesEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(settings.redactionRules) { rule in
+                HStack(spacing: 6) {
+                    Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
+                        .labelsHidden()
+                    TextField("名称", text: bindingForRedactionRule(rule.id, \.name), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 82)
+                    TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 86)
+                    Button {
+                        settings.redactionRules.removeAll { $0.id == rule.id }
+                        commit()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
+                    .help("删除规则")
+                }
+            }
+            HStack(spacing: 6) {
+                TextField("名称", text: $ui.newRedactionName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 82)
+                TextField("正则表达式", text: $ui.newRedactionPattern)
+                    .textFieldStyle(.roundedBorder)
+                TextField("替换为", text: $ui.newRedactionReplacement)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 86)
+                Button {
+                    addRedactionRule()
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .disabled(ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("恢复默认") {
+                    settings.redactionRules = PrivacyRedactionRule.defaults()
+                    commit()
+                }
+                .font(.caption)
+            }
+        }
+        .font(.caption)
+        .padding(8)
+        .background(Color.primary.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func bindingForRedactionRule<V>(_ id: String,
+                                             _ keyPath: WritableKeyPath<PrivacyRedactionRule, V>) -> Binding<V> {
+        Binding(
+            get: {
+                (settings.redactionRules.first(where: { $0.id == id }) ?? PrivacyRedactionRule(name: "", pattern: "", replacement: ""))[keyPath: keyPath]
+            },
+            set: { newValue in
+                guard let idx = settings.redactionRules.firstIndex(where: { $0.id == id }) else { return }
+                settings.redactionRules[idx][keyPath: keyPath] = newValue
+                commit()
+            }
+        )
+    }
+
+    private func addRedactionRule() {
+        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pattern.isEmpty else { return }
+        let name = ui.newRedactionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let replacement = ui.newRedactionReplacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.redactionRules.append(PrivacyRedactionRule(
+            name: name.isEmpty ? "自定义规则" : name,
+            pattern: pattern,
+            replacement: replacement.isEmpty ? "[已隐藏]" : replacement
+        ))
+        ui.newRedactionName = ""
+        ui.newRedactionPattern = ""
+        ui.newRedactionReplacement = "[已隐藏]"
+        commit()
     }
 
     // MARK: 导入/导出(#13)
@@ -1115,6 +1238,11 @@ struct SettingsView: View {
         settings.useAXFirst = imported.useAXFirst
         settings.showDockIcon = imported.showDockIcon
         settings.typewriterSpeed = imported.typewriterSpeed
+        settings.autoRouteEnabled = imported.autoRouteEnabled
+        settings.fallbackEnabled = imported.fallbackEnabled
+        settings.privacyPreviewEnabled = imported.privacyPreviewEnabled
+        settings.redactionEnabled = imported.redactionEnabled
+        settings.redactionRules = imported.redactionRules
         settings.historyLimit = imported.historyLimit
         settings.normalizeActive()
         commit()

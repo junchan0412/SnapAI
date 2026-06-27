@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 /// 浮动结果窗口的状态机
 @MainActor
@@ -15,6 +16,9 @@ final class ResultViewModel: ObservableObject {
     @Published var targetLanguage: TargetLanguage = .auto
     @Published var elapsed: TimeInterval = 0
     @Published var charCount: Int = 0
+    @Published var activeProviderName: String = ""
+    @Published var activeModelName: String = ""
+    @Published var routeNote: String?
     /// #2 Thinking/推理文本(Anthropic 或 DeepSeek R1 的 <think> 内容)
     @Published var thinkingText: String = ""
     @Published var showThinking: Bool = false
@@ -25,6 +29,7 @@ final class ResultViewModel: ObservableObject {
     private var startTime: Date?
     private var savedToHistory = false
     private var metricsFinished = false
+    private var autoReplaceEnabled = false
 
     // 打字机
     private var fullText: String = ""
@@ -56,12 +61,17 @@ final class ResultViewModel: ObservableObject {
 
     // MARK: - 启动
 
-    func start(text: String, action: AIAction, imageData: Data? = nil, imageMimeType: String = "image/png") {
+    func start(text: String,
+               action: AIAction,
+               imageData: Data? = nil,
+               imageMimeType: String = "image/png",
+               autoReplaceEnabled: Bool = false) {
         self.action = action
         self.targetLanguage = action.targetLanguage
         self.sourceText = text
         self.pendingImageData = imageData
         self.pendingImageMimeType = imageMimeType
+        self.autoReplaceEnabled = autoReplaceEnabled
         thinkingText = ""
         showThinking = false
         resetOutput()
@@ -101,6 +111,7 @@ final class ResultViewModel: ObservableObject {
         var act = action
         act.targetLanguage = targetLanguage
         let userContent = act.render(text: sourceText)
+        let hasImage = pendingImageData != nil
 
         var messages: [ChatMessage] = []
         if !settings.systemPrompt.isEmpty {
@@ -115,7 +126,7 @@ final class ResultViewModel: ObservableObject {
         }
         messages.append(userMsg)
         history = messages
-        runStream()
+        runStream(hasImage: hasImage)
     }
 
     // MARK: - 追问
@@ -132,7 +143,7 @@ final class ResultViewModel: ObservableObject {
         followUp = ""
         thinkingText = ""
         resetOutput()
-        runStream()
+        runStream(hasImage: false)
     }
 
     /// #5 浏览追问历史
@@ -150,7 +161,7 @@ final class ResultViewModel: ObservableObject {
         guard !isStreaming else { return }
         thinkingText = ""
         resetOutput()
-        runStream()
+        runStream(hasImage: false)
     }
 
     /// #12 错误后重试
@@ -158,7 +169,7 @@ final class ResultViewModel: ObservableObject {
         guard !isStreaming else { return }
         thinkingText = ""
         resetOutput()
-        runStream()
+        runStream(hasImage: false)
     }
 
     func cancel() {
@@ -187,6 +198,21 @@ final class ResultViewModel: ObservableObject {
         onAppend?(fullText)
     }
 
+    func exportConversation() {
+        var md = "# \(action.name) - \(DateFormatter.localizedString(from: Date(), dateStyle: .short, timeStyle: .short))\n\n"
+        md += "**原文:**\n\n\(sourceText)\n\n---\n\n"
+        md += completeText
+        let modelText = [activeProviderName, activeModelName].filter { !$0.isEmpty }.joined(separator: " / ")
+        md += "\n\n---\n*模型: \(modelText.isEmpty ? settings.activeModel : modelText) | 耗时: \(String(format: "%.1f", elapsed))s*"
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(action.name)-\(Int(Date().timeIntervalSince1970)).md"
+        panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .text]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? md.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
     // MARK: - 内部
 
     private func resetOutput() {
@@ -195,6 +221,7 @@ final class ResultViewModel: ObservableObject {
         output = ""
         streamDone = false
         errorMessage = nil
+        routeNote = nil
         elapsed = 0
         charCount = 0
         savedToHistory = false
@@ -202,26 +229,33 @@ final class ResultViewModel: ObservableObject {
         startTime = Date()
     }
 
-    private func runStream() {
-        // #1 per-action 供应商:动作指定了供应商则用临时 client
-        if let pid = action.providerID,
-           let overrideProvider = settings.providers.first(where: { $0.id == pid && $0.isEnabled }) {
-            let probe = AppSettings()
-            probe.providers = [overrideProvider]
-            probe.activeProviderID = overrideProvider.id
-            // 模型优先级:动作显式指定 → 供应商首个启用。不要自动回退到禁用模型或其他供应商模型。
-            let modelNames = Set(overrideProvider.models.map { $0.name })
-            if let modelOverride = action.modelOverride, modelNames.contains(modelOverride) {
-                probe.activeModel = modelOverride
-            } else {
-                probe.activeModel = overrideProvider.enabledModelNames.first ?? ""
-            }
-            probe.temperature = settings.temperature
-            probe.systemPrompt = settings.systemPrompt
-            client = AIClient(settings: probe)
-        } else {
-            client = AIClient(settings: settings)
+    private func runStream(hasImage: Bool) {
+        let routes = AIRequestRouter.candidates(settings: settings,
+                                                action: action,
+                                                sourceText: sourceText,
+                                                hasImage: hasImage)
+        guard !routes.isEmpty else {
+            errorMessage = "没有可用的 AI 供应商或模型,请在设置中启用至少一个模型。"
+            return
         }
+        runRoute(at: 0, routes: routes)
+    }
+
+    private func runRoute(at index: Int, routes: [AIRequestRoute]) {
+        let route = routes[index]
+        guard let scoped = AIRequestRouter.scopedSettings(from: settings, route: route) else {
+            if routes.indices.contains(index + 1) {
+                runRoute(at: index + 1, routes: routes)
+            } else {
+                errorMessage = "路由到的模型不可用,请检查供应商和模型设置。"
+            }
+            return
+        }
+
+        client = AIClient(settings: scoped)
+        activeProviderName = route.providerName
+        activeModelName = route.modelName
+        routeNote = route.reason
 
         isStreaming = true
         streamDone = false
@@ -276,6 +310,16 @@ final class ResultViewModel: ObservableObject {
             guard let self = self else { return }
             self.streamDone = true
             if let error = error {
+                if self.fullText.isEmpty,
+                   self.settings.fallbackEnabled,
+                   routes.indices.contains(index + 1) {
+                    self.stopTypewriter()
+                    self.output = ""
+                    self.errorMessage = nil
+                    self.routeNote = "\(route.providerName) / \(route.modelName) 失败,正在切换备用模型"
+                    self.runRoute(at: index + 1, routes: routes)
+                    return
+                }
                 self.errorMessage = error.localizedDescription
                 self.stopTypewriter()
                 self.output = self.fullText
@@ -298,10 +342,18 @@ final class ResultViewModel: ObservableObject {
             // #11 使用统计
             settings.actionUsageCounts[action.name, default: 0] += 1
         }
-        if saveHistory {
+        if saveHistory && action.saveHistory {
             saveToHistoryIfNeeded()
         } else if recordUsage {
             settings.save()
+        }
+        if recordUsage,
+           autoReplaceEnabled,
+           action.replaceByDefault,
+           !fullText.isEmpty,
+           errorMessage == nil {
+            autoReplaceEnabled = false
+            onReplace?(fullText)
         }
     }
 
@@ -309,8 +361,8 @@ final class ResultViewModel: ObservableObject {
         guard !savedToHistory, !fullText.isEmpty, errorMessage == nil else { return }
         savedToHistory = true
         settings.addHistory(action: action.name, source: sourceText, output: fullText,
-                            provider: settings.activeProvider?.name ?? "",
-                            model: settings.activeModel)
+                            provider: activeProviderName.isEmpty ? (settings.activeProvider?.name ?? "") : activeProviderName,
+                            model: activeModelName.isEmpty ? settings.activeModel : activeModelName)
     }
 
     private func startTypewriter() {
