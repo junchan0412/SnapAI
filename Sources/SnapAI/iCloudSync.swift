@@ -90,6 +90,8 @@ private struct CloudSettingsPayload: Codable {
     var privacyPreviewEnabled: Bool
     var redactionEnabled: Bool
     var redactionRules: [PrivacyRedactionRule]
+    var contextProfiles: [ContextProfile]
+    var activeContextProfileID: String
 
     init(settings: AppSettings) {
         providers = settings.providers
@@ -111,6 +113,8 @@ private struct CloudSettingsPayload: Codable {
         privacyPreviewEnabled = settings.privacyPreviewEnabled
         redactionEnabled = settings.redactionEnabled
         redactionRules = settings.redactionRules
+        contextProfiles = settings.contextProfiles
+        activeContextProfileID = settings.activeContextProfileID
     }
 
     enum CodingKeys: String, CodingKey {
@@ -120,6 +124,7 @@ private struct CloudSettingsPayload: Codable {
         case useAXFirst, showDockIcon, typewriterSpeed
         case autoRouteEnabled, fallbackEnabled
         case privacyPreviewEnabled, redactionEnabled, redactionRules
+        case contextProfiles, activeContextProfileID
     }
 
     init(from decoder: Decoder) throws {
@@ -143,6 +148,8 @@ private struct CloudSettingsPayload: Codable {
         privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
         redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
         redactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
+        contextProfiles = (try? c.decode([ContextProfile].self, forKey: .contextProfiles)) ?? ContextProfile.defaults()
+        activeContextProfileID = (try? c.decode(String.self, forKey: .activeContextProfileID)) ?? ""
     }
 
     func apply(to settings: AppSettings) {
@@ -170,6 +177,8 @@ private struct CloudSettingsPayload: Codable {
         settings.privacyPreviewEnabled = privacyPreviewEnabled
         settings.redactionEnabled = redactionEnabled
         settings.redactionRules = redactionRules
+        settings.contextProfiles = contextProfiles
+        settings.activeContextProfileID = activeContextProfileID
         settings.normalizeActive()
     }
 }

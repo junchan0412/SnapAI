@@ -66,11 +66,15 @@ final class ModelLoader: ObservableObject {
 final class AISettingsUI: ObservableObject {
     @Published var expandedProviderID: String?
     @Published var expandedActionID: String?
+    @Published var selectedSection: SettingsSection = .ai
     @Published var newModelName: String = ""
     @Published var hotKeyError: String?
     @Published var newRedactionName: String = ""
     @Published var newRedactionPattern: String = ""
     @Published var newRedactionReplacement: String = "[已隐藏]"
+    @Published var newContextName: String = ""
+    @Published var redactionSample: String = "联系我 test@example.com 或 13800138000"
+    var deferredSaveTask: Task<Void, Never>?
 }
 
 /// 供应商连接测试状态(#2)
@@ -103,9 +107,79 @@ final class ConnectionTester: ObservableObject {
     }
 }
 
+enum SettingsSection: String, CaseIterable, Identifiable {
+    case ai
+    case actions
+    case history
+    case general
+    case permission
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .ai: return "AI 模型"
+        case .actions: return "动作"
+        case .history: return "历史"
+        case .general: return "通用"
+        case .permission: return "权限"
+        }
+    }
+}
+
+private enum SettingsCommitPolicy {
+    case fullReload
+    case saveOnly
+    case deferredSave
+}
+
+private struct SettingsSectionPicker: View {
+    @Binding var selection: SettingsSection
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(SettingsSection.allCases) { section in
+                Button {
+                    selection = section
+                } label: {
+                    Text(section.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                        .frame(width: 92, height: 30, alignment: .center)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(selection == section ? .primary : .secondary)
+                .background {
+                    if selection == section {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color(nsColor: .selectedControlColor).opacity(0.22))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                            }
+                    }
+                }
+                .accessibilityLabel(section.title)
+            }
+        }
+        .padding(3)
+        .background {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.82))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     var onChange: () -> Void   // 设置变更后回调(用于重注册快捷键 + 保存)
+    @Binding var isPinned: Bool
 
     @StateObject private var perm = PermissionState()
     @StateObject private var modelLoader = ModelLoader()
@@ -114,15 +188,69 @@ struct SettingsView: View {
     private let aiLabelWidth: CGFloat = 76
 
     var body: some View {
-        TabView {
-            aiTab.tabItem { Label("AI 模型", systemImage: "brain") }
-            actionsTab.tabItem { Label("动作", systemImage: "wand.and.stars") }
-            historyTab.tabItem { Label("历史", systemImage: "clock.arrow.circlepath") }
-            generalTab.tabItem { Label("通用", systemImage: "gearshape") }
-            permissionTab.tabItem { Label("权限", systemImage: "lock.shield") }
+        VStack(spacing: 10) {
+            settingsHeader
+            selectedSectionContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                }
         }
         .frame(width: 560, height: 460)
         .padding()
+        .onDisappear {
+            flushDeferredSave()
+        }
+    }
+
+    private var settingsHeader: some View {
+        ZStack {
+            SettingsSectionPicker(selection: Binding(
+                get: { ui.selectedSection },
+                set: { ui.selectedSection = $0 }
+            ))
+            HStack {
+                Spacer()
+                Button {
+                    isPinned.toggle()
+                } label: {
+                    Image(systemName: isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isPinned ? Color.accentColor : .secondary)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(isPinned ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                }
+                .help(isPinned ? "取消置顶设置窗口" : "置顶设置窗口")
+                .accessibilityLabel(isPinned ? "取消置顶设置窗口" : "置顶设置窗口")
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var selectedSectionContent: some View {
+        switch ui.selectedSection {
+        case .ai:
+            aiTab
+        case .actions:
+            actionsTab
+        case .history:
+            historyTab
+        case .general:
+            generalTab
+        case .permission:
+            permissionTab
+        }
     }
 
     // MARK: - AI
@@ -333,7 +461,7 @@ struct SettingsView: View {
     private func providerEditor(_ provider: AIProvider) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             editorRow("名称") {
-                TextField("供应商名称", text: bindingForProvider(provider.id, \.name), onCommit: commit)
+                TextField("供应商名称", text: bindingForProvider(provider.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
             editorRow("协议") {
@@ -345,11 +473,11 @@ struct SettingsView: View {
                 .onChange(of: provider.apiProtocol) { commit() }
             }
             editorRow("端点") {
-                TextField("api.openai.com 或 localhost:11434", text: bindingForProvider(provider.id, \.baseURL), onCommit: commit)
+                TextField("api.openai.com 或 localhost:11434", text: bindingForProvider(provider.id, \.baseURL, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
             editorRow("API Key") {
-                SecureField("API Key", text: bindingForProvider(provider.id, \.apiKey), onCommit: commit)
+                SecureField("API Key", text: bindingForProvider(provider.id, \.apiKey, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -582,7 +710,9 @@ struct SettingsView: View {
     // MARK: 供应商 / 模型 绑定与增删
 
     /// 生成对某个供应商某字段的 Binding(按 id 定位,避免下标失效)
-    private func bindingForProvider<V>(_ id: String, _ keyPath: WritableKeyPath<AIProvider, V>) -> Binding<V> {
+    private func bindingForProvider<V>(_ id: String,
+                                       _ keyPath: WritableKeyPath<AIProvider, V>,
+                                       policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
         Binding(
             get: {
                 (self.settings.providers.first(where: { $0.id == id }) ?? AIProvider())[keyPath: keyPath]
@@ -591,7 +721,7 @@ struct SettingsView: View {
                 guard let idx = self.settings.providers.firstIndex(where: { $0.id == id }) else { return }
                 self.settings.providers[idx][keyPath: keyPath] = newValue
                 self.settings.normalizeActive()
-                self.commit()
+                self.applyCommit(policy)
             }
         )
     }
@@ -656,20 +786,25 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("System Prompt(对所有动作生效)").font(.subheadline.weight(.semibold))
-                promptEditor(text: $settings.systemPrompt, height: 56)
-                    .onChange(of: settings.systemPrompt) { commit() }
+                promptEditor(text: systemPromptBinding, height: 56)
 
                 HStack {
                     Text("动作").font(.headline)
                     Spacer()
-                    Button {
-                        let a = AIAction(name: "新动作", icon: "wand.and.stars",
-                                         prompt: "请处理下面的文字:\n\n{{text}}")
-                        settings.actions.append(a)
-                        ui.expandedActionID = a.id
-                        commit()
-                    } label: { Label("添加", systemImage: "plus") }
-                    .menuStyle(.borderlessButton)
+                    Menu {
+                        Button("空白动作") {
+                            addAction(AIAction(name: "新动作", icon: "wand.and.stars",
+                                               prompt: "请处理下面的文字:\n\n{{text}}"))
+                        }
+                        Divider()
+                        ForEach(actionTemplates, id: \.name) { template in
+                            Button(template.name) {
+                                addAction(template)
+                            }
+                        }
+                    } label: {
+                        Label("添加", systemImage: "plus")
+                    }
                 }
                 Text("{{text}} = 选中文字;{{lang}} = 目标语言指令(翻译类)。带快捷键的动作可全局触发。")
                     .font(.caption2).foregroundStyle(.secondary)
@@ -718,6 +853,35 @@ struct SettingsView: View {
         }
     }
 
+    private var actionTemplates: [AIAction] {
+        [
+            AIAction(name: "邮件回复", icon: "envelope",
+                     group: "写作",
+                     prompt: "请根据下面的内容起草一封自然、礼貌、简洁的邮件回复。保留必要事实,语气专业,最后只输出邮件正文:\n\n{{text}}"),
+            AIAction(name: "会议纪要", icon: "list.clipboard",
+                     group: "总结",
+                     prompt: "请把下面的会议内容整理为会议纪要,包含:背景、关键结论、待办事项、负责人/时间(如原文有)。使用清晰的 Markdown:\n\n{{text}}"),
+            AIAction(name: "代码审查", icon: "checklist",
+                     group: "代码",
+                     prompt: "请审查下面的代码或变更,优先指出 bug、回归风险、边界条件和测试缺口。按严重程度排序,给出可执行修改建议:\n\n{{text}}"),
+            AIAction(name: "中英双语润色", icon: "character.book.closed",
+                     group: "写作",
+                     prompt: "请将下面内容润色为自然、专业的中英双语表达。先给中文优化版,再给英文优化版,保持原意:\n\n{{text}}"),
+            AIAction(name: "图片理解", icon: "photo",
+                     group: "图片",
+                     prompt: "请仔细理解图片和随附文字,提取关键信息、可见问题和下一步建议:\n\n{{text}}")
+        ]
+    }
+
+    private func addAction(_ template: AIAction) {
+        var action = template
+        action.id = UUID().uuidString
+        action.hotKey = nil
+        settings.actions.append(action)
+        ui.expandedActionID = action.id
+        commit()
+    }
+
     @ViewBuilder
     private func actionCard(_ action: AIAction) -> some View {
         let isExpanded = ui.expandedActionID == action.id
@@ -762,16 +926,16 @@ struct SettingsView: View {
     private func actionEditor(_ action: AIAction) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             editorRow("名称") {
-                TextField("动作名称", text: bindingForAction(action.id, \.name), onCommit: commit)
+                TextField("动作名称", text: bindingForAction(action.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
             editorRow("图标") {
-                TextField("SF Symbol 名,如 wand.and.stars", text: bindingForAction(action.id, \.icon), onCommit: commit)
+                TextField("SF Symbol 名,如 wand.and.stars", text: bindingForAction(action.id, \.icon, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
             // #10 分组标签
             editorRow("分组") {
-                TextField("分组名(留空=不分组)", text: bindingForAction(action.id, \.group), onCommit: commit)
+                TextField("分组名(留空=不分组)", text: bindingForAction(action.id, \.group, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
             editorRow("快捷键") {
@@ -846,7 +1010,6 @@ struct SettingsView: View {
             }
             // #2 thinking 模式
             Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
-                .onChange(of: action.thinkingMode) { commit() }
             if action.thinkingMode {
                 editorRow("思考预算") {
                     HStack {
@@ -858,23 +1021,22 @@ struct SettingsView: View {
                 }
             }
             editorRow("Prompt") {
-                promptEditor(text: bindingForAction(action.id, \.prompt), height: 70)
+                promptEditor(text: bindingForAction(action.id, \.prompt, policy: .deferredSave), height: 70)
             }
             Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
-                .onChange(of: action.isTranslation) { commit() }
             if action.isTranslation {
                 editorRow("目标语言") {
                     Picker("", selection: bindingForAction(action.id, \.targetLanguage)) {
                         ForEach(TargetLanguage.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .labelsHidden().frame(width: 200, alignment: .leading)
-                    .onChange(of: action.targetLanguage) { commit() }
                 }
             }
-            Toggle("完成后默认替换原文", isOn: bindingForAction(action.id, \.replaceByDefault))
-                .onChange(of: action.replaceByDefault) { commit() }
+            Toggle("完成后进入替换确认", isOn: bindingForAction(action.id, \.replaceByDefault))
+            Text("启用后会先展示差异预览,确认后才写回原应用。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
-                .onChange(of: action.saveHistory) { commit() }
 
             HStack {
                 Spacer()
@@ -888,13 +1050,25 @@ struct SettingsView: View {
         }
     }
 
-    private func bindingForAction<V>(_ id: String, _ keyPath: WritableKeyPath<AIAction, V>) -> Binding<V> {
+    private var systemPromptBinding: Binding<String> {
+        Binding(
+            get: { settings.systemPrompt },
+            set: { newValue in
+                settings.systemPrompt = newValue
+                applyCommit(.deferredSave)
+            }
+        )
+    }
+
+    private func bindingForAction<V>(_ id: String,
+                                     _ keyPath: WritableKeyPath<AIAction, V>,
+                                     policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
         Binding(
             get: { (settings.actions.first(where: { $0.id == id }) ?? AIAction())[keyPath: keyPath] },
             set: { newValue in
                 guard let idx = settings.actions.firstIndex(where: { $0.id == id }) else { return }
                 settings.actions[idx][keyPath: keyPath] = newValue
-                commit()
+                applyCommit(policy)
             }
         )
     }
@@ -1055,6 +1229,10 @@ struct SettingsView: View {
 
             Divider().padding(.vertical, 4)
 
+            contextProfilesSection
+
+            Divider().padding(.vertical, 4)
+
             privacySection
 
             Divider().padding(.vertical, 4)
@@ -1113,18 +1291,92 @@ struct SettingsView: View {
         }
     }
 
+    private var contextProfilesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("上下文包").font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("", selection: $settings.activeContextProfileID) {
+                    Text("不使用上下文").tag("")
+                    ForEach(settings.contextProfiles) { profile in
+                        Text(profile.name).tag(profile.id)
+                    }
+                }
+                .frame(width: 180)
+                .onChange(of: settings.activeContextProfileID) { commit() }
+            }
+            Text("上下文包会合并进 System Prompt,适合保存项目背景、术语表、写作风格或代码栈偏好。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(settings.contextProfiles) { profile in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: bindingForContextProfile(profile.id, \.isEnabled))
+                            .labelsHidden()
+                        TextField("名称", text: bindingForContextProfile(profile.id, \.name, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                        if settings.activeContextProfileID == profile.id {
+                            Text("使用中")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.blue)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.12), in: Capsule())
+                        }
+                        Button {
+                            if settings.activeContextProfileID == profile.id {
+                                settings.activeContextProfileID = ""
+                            }
+                            settings.contextProfiles.removeAll { $0.id == profile.id }
+                            commit()
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .help("删除上下文包")
+                    }
+                    TextEditor(text: bindingForContextProfile(profile.id, \.content, policy: .deferredSave))
+                        .font(.system(size: 12))
+                        .frame(height: 76)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .background(Color.primary.opacity(0.045))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                        }
+                }
+                .padding(8)
+                .background(Color.primary.opacity(0.035))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            HStack(spacing: 8) {
+                TextField("新上下文包名称", text: $ui.newContextName)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    addContextProfile()
+                } label: {
+                    Label("添加", systemImage: "plus")
+                }
+                .disabled(ui.newContextName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
     private var redactionRulesEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(settings.redactionRules) { rule in
                 HStack(spacing: 6) {
                     Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
                         .labelsHidden()
-                    TextField("名称", text: bindingForRedactionRule(rule.id, \.name), onCommit: commit)
+                    TextField("名称", text: bindingForRedactionRule(rule.id, \.name, policy: .deferredSave), onCommit: commit)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 82)
-                    TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern), onCommit: commit)
+                    TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern, policy: .deferredSave), onCommit: commit)
                         .textFieldStyle(.roundedBorder)
-                    TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement), onCommit: commit)
+                    TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement, policy: .deferredSave), onCommit: commit)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 86)
                     Button {
@@ -1158,6 +1410,24 @@ struct SettingsView: View {
                 }
                 .font(.caption)
             }
+            Divider().padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("规则测试").font(.caption.weight(.semibold))
+                TextEditor(text: $ui.redactionSample)
+                    .font(.system(size: 12))
+                    .frame(height: 58)
+                    .scrollContentBackground(.hidden)
+                    .padding(5)
+                    .background(Color.primary.opacity(0.045))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                Text(PrivacyFilter.apply(to: ui.redactionSample, rules: settings.redactionRules))
+                    .font(.system(size: 12, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(7)
+                    .background(Color.green.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
         }
         .font(.caption)
         .padding(8)
@@ -1165,8 +1435,24 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private func bindingForContextProfile<V>(_ id: String,
+                                             _ keyPath: WritableKeyPath<ContextProfile, V>,
+                                             policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
+        Binding(
+            get: {
+                (settings.contextProfiles.first(where: { $0.id == id }) ?? ContextProfile(name: "", content: ""))[keyPath: keyPath]
+            },
+            set: { newValue in
+                guard let idx = settings.contextProfiles.firstIndex(where: { $0.id == id }) else { return }
+                settings.contextProfiles[idx][keyPath: keyPath] = newValue
+                applyCommit(policy)
+            }
+        )
+    }
+
     private func bindingForRedactionRule<V>(_ id: String,
-                                             _ keyPath: WritableKeyPath<PrivacyRedactionRule, V>) -> Binding<V> {
+                                             _ keyPath: WritableKeyPath<PrivacyRedactionRule, V>,
+                                             policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
         Binding(
             get: {
                 (settings.redactionRules.first(where: { $0.id == id }) ?? PrivacyRedactionRule(name: "", pattern: "", replacement: ""))[keyPath: keyPath]
@@ -1174,7 +1460,7 @@ struct SettingsView: View {
             set: { newValue in
                 guard let idx = settings.redactionRules.firstIndex(where: { $0.id == id }) else { return }
                 settings.redactionRules[idx][keyPath: keyPath] = newValue
-                commit()
+                applyCommit(policy)
             }
         )
     }
@@ -1192,6 +1478,16 @@ struct SettingsView: View {
         ui.newRedactionName = ""
         ui.newRedactionPattern = ""
         ui.newRedactionReplacement = "[已隐藏]"
+        commit()
+    }
+
+    private func addContextProfile() {
+        let name = ui.newContextName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let profile = ContextProfile(name: name, content: "")
+        settings.contextProfiles.append(profile)
+        settings.activeContextProfileID = profile.id
+        ui.newContextName = ""
         commit()
     }
 
@@ -1243,6 +1539,8 @@ struct SettingsView: View {
         settings.privacyPreviewEnabled = imported.privacyPreviewEnabled
         settings.redactionEnabled = imported.redactionEnabled
         settings.redactionRules = imported.redactionRules
+        settings.contextProfiles = imported.contextProfiles
+        settings.activeContextProfileID = imported.activeContextProfileID
         settings.historyLimit = imported.historyLimit
         settings.normalizeActive()
         commit()
@@ -1282,5 +1580,37 @@ struct SettingsView: View {
         settings.save()
         iCloudSync.shared.scheduleUpload(settings)
         onChange()
+    }
+
+    private func applyCommit(_ policy: SettingsCommitPolicy) {
+        switch policy {
+        case .fullReload:
+            commit()
+        case .saveOnly:
+            settings.save()
+            iCloudSync.shared.scheduleUpload(settings)
+        case .deferredSave:
+            scheduleDeferredSave()
+        }
+    }
+
+    private func scheduleDeferredSave() {
+        ui.deferredSaveTask?.cancel()
+        ui.deferredSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                settings.save()
+                iCloudSync.shared.scheduleUpload(settings)
+                ui.deferredSaveTask = nil
+            }
+        }
+    }
+
+    private func flushDeferredSave() {
+        ui.deferredSaveTask?.cancel()
+        ui.deferredSaveTask = nil
+        settings.save()
+        iCloudSync.shared.scheduleUpload(settings)
     }
 }

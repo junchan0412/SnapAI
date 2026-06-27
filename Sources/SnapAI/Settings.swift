@@ -98,6 +98,8 @@ final class AppSettings: ObservableObject, Codable {
     @Published var privacyPreviewEnabled: Bool = false
     @Published var redactionEnabled: Bool = false
     @Published var redactionRules: [PrivacyRedactionRule] = PrivacyRedactionRule.defaults()
+    @Published var contextProfiles: [ContextProfile] = ContextProfile.defaults()
+    @Published var activeContextProfileID: String = ""
 
     // 历史 / 引导 / 窗口尺寸
     @Published var history: [HistoryEntry] = []
@@ -122,6 +124,26 @@ final class AppSettings: ObservableObject, Codable {
     var baseURL: String { activeProvider?.baseURL ?? "" }
     var apiKey: String { activeProvider?.apiKey ?? "" }
     var model: String { activeModel }
+
+    var activeContextProfile: ContextProfile? {
+        contextProfiles.first {
+            $0.id == activeContextProfileID &&
+            $0.isEnabled &&
+            !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    var effectiveSystemPrompt: String {
+        let base = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let profile = activeContextProfile else { return base }
+        let context = profile.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !context.isEmpty else { return base }
+        let block = """
+        当前上下文包: \(profile.name)
+        \(context)
+        """
+        return [base, block].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
 
     /// 选中某个供应商的某个模型为当前激活
     func activate(providerID: String, model: String) {
@@ -197,6 +219,12 @@ final class AppSettings: ObservableObject, Codable {
         save()
     }
 
+    func updateHistoryTags(id: String, tags: [String]) {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
+        history[idx].tags = tags
+        save()
+    }
+
     enum CodingKeys: String, CodingKey {
         // 新:多供应商
         case providers, activeProviderID, activeModel
@@ -207,6 +235,7 @@ final class AppSettings: ObservableObject, Codable {
         case typewriterSpeed
         case autoRouteEnabled, fallbackEnabled
         case privacyPreviewEnabled, redactionEnabled, redactionRules
+        case contextProfiles, activeContextProfileID
         case history, historyLimit, onboardingDone, panelWidth, panelHeight
         case actionUsageCounts, iCloudSyncEnabled
         // 旧:单配置(仅用于迁移,不再写出)
@@ -242,6 +271,8 @@ final class AppSettings: ObservableObject, Codable {
         privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
         redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
         redactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
+        contextProfiles = (try? c.decode([ContextProfile].self, forKey: .contextProfiles)) ?? ContextProfile.defaults()
+        activeContextProfileID = (try? c.decode(String.self, forKey: .activeContextProfileID)) ?? ""
 
         quickPanelHotKey = (try? c.decode(HotKeyCombo.self, forKey: .quickPanelHotKey))
             ?? .quickPanelDefault
@@ -316,6 +347,8 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(privacyPreviewEnabled, forKey: .privacyPreviewEnabled)
         try c.encode(redactionEnabled, forKey: .redactionEnabled)
         try c.encode(redactionRules, forKey: .redactionRules)
+        try c.encode(contextProfiles, forKey: .contextProfiles)
+        try c.encode(activeContextProfileID, forKey: .activeContextProfileID)
         try c.encode(history, forKey: .history)
         try c.encode(historyLimit, forKey: .historyLimit)
         try c.encode(onboardingDone, forKey: .onboardingDone)

@@ -9,7 +9,7 @@ final class QuickInputModel: ObservableObject {
     @Published var imageData: Data? = nil   // #3 截图/粘贴的图片
     @Published var imageMimeType: String = "image/png"
     let settings: AppSettings
-    var onSubmit: ((String, AIAction, Data?) -> Void)?
+    var onSubmit: ((String, AIAction, Data?, String) -> Void)?
 
     init(settings: AppSettings) { self.settings = settings }
 
@@ -19,16 +19,19 @@ final class QuickInputModel: ObservableObject {
         let act = settings.enabledActions.first(where: { $0.id == actionID })
             ?? settings.enabledActions.first
         guard let act = act else { return }
-        onSubmit?(t, act, imageData)
+        onSubmit?(t, act, imageData, imageMimeType)
         text = ""
         imageData = nil
+        imageMimeType = "image/png"
     }
 
     /// 从剪贴板读取图片(#3)
     func pasteImageFromClipboard() {
         if let image = NSPasteboard.general.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage {
-            imageData = image.snapAIPNGData()
-            imageMimeType = "image/png"
+            if let payload = image.snapAIOptimizedData() {
+                imageData = payload.data
+                imageMimeType = payload.mimeType
+            }
         }
     }
 }
@@ -143,6 +146,7 @@ struct QuickInputView: View {
 final class QuickInputController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
     let model: QuickInputModel
+    private let captureQueue = DispatchQueue(label: "com.snapai.screen-capture", qos: .userInitiated)
 
     init(model: QuickInputModel) { self.model = model; super.init() }
 
@@ -178,25 +182,69 @@ final class QuickInputController: NSObject, NSWindowDelegate {
 
     func hide() { panel?.orderOut(nil); removeEscMonitor() }
 
-    /// #3 截图:隐藏所有窗口 → 等300ms → 用 screencapture 命令截全屏 → 重新显示
+    /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
     private func captureScreen() {
         let visible = NSApp.windows.filter { $0.isVisible }
         visible.forEach { $0.orderOut(nil) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            let tmpPath = "/tmp/snapai_ss_\(Int(Date().timeIntervalSince1970)).png"
-            let proc = Process()
-            proc.launchPath = "/usr/sbin/screencapture"
-            proc.arguments = ["-x", tmpPath]   // -x 静音
-            proc.launch()
-            proc.waitUntilExit()
-            if let data = try? Data(contentsOf: URL(fileURLWithPath: tmpPath)) {
-                self?.model.imageData = data
-                self?.model.imageMimeType = "image/png"
-                try? FileManager.default.removeItem(atPath: tmpPath)
-            }
-            visible.forEach { $0.makeKeyAndOrderFront(nil) }
-            self?.show()
+            self?.runScreenCapture(visibleWindows: visible)
         }
+    }
+
+    private func runScreenCapture(visibleWindows: [NSWindow]) {
+        let tmpPath = "/tmp/snapai_ss_\(Int(Date().timeIntervalSince1970)).png"
+        captureQueue.async { [weak self] in
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            proc.arguments = ["-x", tmpPath]   // -x 静音
+            let timeout = DispatchWorkItem {
+                if proc.isRunning {
+                    proc.terminate()
+                }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 15, execute: timeout)
+
+            let result: Result<SnapAIImagePayload, Error>
+            do {
+                try proc.run()
+                proc.waitUntilExit()
+                timeout.cancel()
+                guard proc.terminationStatus == 0 else {
+                    throw ScreenCaptureError.failed(proc.terminationStatus)
+                }
+                let url = URL(fileURLWithPath: tmpPath)
+                let data = try Data(contentsOf: url)
+                guard let image = NSImage(data: data),
+                      let payload = image.snapAIOptimizedData() else {
+                    throw ScreenCaptureError.invalidImage
+                }
+                result = .success(payload)
+            } catch {
+                timeout.cancel()
+                result = .failure(error)
+            }
+            try? FileManager.default.removeItem(atPath: tmpPath)
+
+            DispatchQueue.main.async {
+                self?.finishScreenCapture(result, visibleWindows: visibleWindows)
+            }
+        }
+    }
+
+    private func finishScreenCapture(_ result: Result<SnapAIImagePayload, Error>, visibleWindows: [NSWindow]) {
+        visibleWindows.forEach { $0.makeKeyAndOrderFront(nil) }
+        switch result {
+        case .success(let payload):
+            model.imageData = payload.data
+            model.imageMimeType = payload.mimeType
+        case .failure(let error):
+            let alert = NSAlert()
+            alert.messageText = "截图失败"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+        show()
     }
 
     private var escMonitor: Any?
@@ -209,6 +257,20 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
     private func removeEscMonitor() {
         if let m = escMonitor { NSEvent.removeMonitor(m); escMonitor = nil }
+    }
+}
+
+private enum ScreenCaptureError: LocalizedError {
+    case failed(Int32)
+    case invalidImage
+
+    var errorDescription: String? {
+        switch self {
+        case .failed(let status):
+            return "screencapture 退出码 \(status)。请确认屏幕录制权限可用后重试。"
+        case .invalidImage:
+            return "截图文件无法解析。"
+        }
     }
 }
 
@@ -381,11 +443,59 @@ final class PlaceholderTextView: NSTextView {
 
 // MARK: - NSImage 扩展
 
+struct SnapAIImagePayload {
+    var data: Data
+    var mimeType: String
+}
+
 extension NSImage {
-    /// 转换为 PNG Data(用于 API 上传)
-    func snapAIPNGData() -> Data? {
+    /// 转换为适合 API 上传的图片数据,限制像素和字节数,避免请求体过大。
+    func snapAIOptimizedData(maxPixel: CGFloat = 1600,
+                             maxBytes: Int = 2_500_000) -> SnapAIImagePayload? {
+        for pixelLimit in [maxPixel, 1200, 900, 640] {
+            guard let resized = snapAIResized(maxPixel: pixelLimit) else { continue }
+            if let png = resized.snapAIImageData(type: .png), png.count <= maxBytes {
+                return SnapAIImagePayload(data: png, mimeType: "image/png")
+            }
+            for quality in [0.82, 0.68, 0.52, 0.42] {
+                if let jpeg = resized.snapAIImageData(type: .jpeg, compression: quality),
+                   jpeg.count <= maxBytes {
+                    return SnapAIImagePayload(data: jpeg, mimeType: "image/jpeg")
+                }
+            }
+        }
+        guard let fallback = snapAIResized(maxPixel: 640)?
+            .snapAIImageData(type: .jpeg, compression: 0.36) else { return nil }
+        return SnapAIImagePayload(data: fallback, mimeType: "image/jpeg")
+    }
+
+    private func snapAIResized(maxPixel: CGFloat) -> NSImage? {
+        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        let largest = max(width, height)
+        let scale = largest > maxPixel ? maxPixel / largest : 1
+        let targetSize = NSSize(width: max(1, floor(width * scale)),
+                                height: max(1, floor(height * scale)))
+        let resized = NSImage(size: targetSize)
+        resized.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        draw(in: NSRect(origin: .zero, size: targetSize),
+             from: NSRect(origin: .zero, size: size),
+             operation: .copy,
+             fraction: 1)
+        resized.unlockFocus()
+        return resized
+    }
+
+    private func snapAIImageData(type: NSBitmapImageRep.FileType,
+                                 compression: Double = 0.8) -> Data? {
         guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let rep = NSBitmapImageRep(cgImage: cgImage)
-        return rep.representation(using: .png, properties: [:])
+        var properties: [NSBitmapImageRep.PropertyKey: Any] = [:]
+        if type == .jpeg {
+            properties[.compressionFactor] = compression
+        }
+        return rep.representation(using: type, properties: properties)
     }
 }

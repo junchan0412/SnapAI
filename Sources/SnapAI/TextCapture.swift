@@ -105,6 +105,14 @@ enum TextCapture {
         up?.post(tap: .cghidEventTap)
     }
 
+    static func sendRightArrow() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let right = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_RightArrow), keyDown: true)
+        right?.post(tap: .cghidEventTap)
+        CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_RightArrow), keyDown: false)?
+            .post(tap: .cghidEventTap)
+    }
+
     static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {
         var snapshot: [[String: Data]] = []
         for item in pb.pasteboardItems ?? [] {

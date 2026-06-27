@@ -43,7 +43,7 @@ final class ResultViewModel: ObservableObject {
     var followUpHistoryCount: Int { followUpHistory.count }
 
     /// #3 替换原文回调
-    var onReplace: ((String) -> Void)?
+    var onReplace: ((String, String) -> Void)?
     /// #8 追加回调
     var onAppend: ((String) -> Void)?
 
@@ -114,8 +114,9 @@ final class ResultViewModel: ObservableObject {
         let hasImage = pendingImageData != nil
 
         var messages: [ChatMessage] = []
-        if !settings.systemPrompt.isEmpty {
-            messages.append(ChatMessage(role: .system, content: settings.systemPrompt))
+        let systemPrompt = settings.effectiveSystemPrompt
+        if !systemPrompt.isEmpty {
+            messages.append(ChatMessage(role: .system, content: systemPrompt))
         }
         // #3 图片内容挂载到第一条 user 消息
         var userMsg = ChatMessage(role: .user, content: userContent)
@@ -189,7 +190,7 @@ final class ResultViewModel: ObservableObject {
     /// #3 替换原文
     func replaceOriginal() {
         guard !fullText.isEmpty else { return }
-        onReplace?(fullText)
+        onReplace?(sourceText, fullText)
     }
 
     /// #8 追加到文档
@@ -353,7 +354,7 @@ final class ResultViewModel: ObservableObject {
            !fullText.isEmpty,
            errorMessage == nil {
             autoReplaceEnabled = false
-            onReplace?(fullText)
+            onReplace?(sourceText, fullText)
         }
     }
 

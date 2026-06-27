@@ -46,6 +46,7 @@ final class AIClient {
         case badResponse(Int, String)
         case insecureHTTPHost(String)
         case invalidURL
+        case imageTooLarge(Int)
         var errorDescription: String? {
             switch self {
             case .missingAPIKey: return "未配置 API Key,请在设置中填写。"
@@ -54,10 +55,12 @@ final class AIClient {
             case .badResponse(let code, let body): return "请求失败 (HTTP \(code)): \(body)"
             case .insecureHTTPHost(let host): return "HTTP 明文端点仅允许用于本机地址。当前主机 \(host) 不安全,请改用 HTTPS。"
             case .invalidURL: return "Base URL 无效。"
+            case .imageTooLarge(let bytes): return "图片过大(\(bytes / 1024 / 1024) MB),请压缩后重试。"
             }
         }
     }
 
+    private static let maxImageBytes = 5_000_000
     private let settings: AppSettings
     private var task: Task<Void, Never>?
 
@@ -249,6 +252,7 @@ final class AIClient {
         let proto = settings.apiProtocol
         task = Task {
             do {
+                try validateImagePayloads(messages)
                 switch proto {
                 case .openAI:
                     try await streamOpenAI(messages: messages, action: action, onToken: onToken)
@@ -263,6 +267,14 @@ final class AIClient {
                 if !Task.isCancelled {
                     await MainActor.run { onComplete(error) }
                 }
+            }
+        }
+    }
+
+    private func validateImagePayloads(_ messages: [ChatMessage]) throws {
+        for message in messages {
+            if let imageData = message.imageData, imageData.count > Self.maxImageBytes {
+                throw AIError.imageTooLarge(imageData.count)
             }
         }
     }

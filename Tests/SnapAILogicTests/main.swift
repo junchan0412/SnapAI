@@ -112,6 +112,47 @@ func testAIRouterSkipsDisabledActionOverrideModel() {
     expect(routes.first?.modelName == "enabled-model", "skips disabled action override model")
 }
 
+func testModelCapabilityInference() {
+    let gemini = ModelCapabilityRegistry.capability(for: "gemini-1.5-pro-1m")
+    expect(gemini.supportsVision, "gemini supports vision")
+    expect(gemini.supportsLongContext, "gemini 1m supports long context")
+
+    let r1 = ModelCapabilityRegistry.capability(for: "deepseek-r1")
+    expect(r1.supportsReasoning, "r1 supports reasoning")
+    expect(r1.isCodeCapable, "deepseek is code capable")
+
+    let mini = ModelCapabilityRegistry.capability(for: "gpt-4o-mini")
+    expect(mini.isFast, "mini model is fast")
+    expect(mini.isEconomical, "mini model is economical")
+}
+
+func testAIRouterUsesCapabilityReasonForCodeAction() {
+    let settings = AppSettings()
+    var provider = AIProvider(name: "Primary", apiProtocol: .openAI,
+                              baseURL: "https://primary.test/v1",
+                              apiKey: "key",
+                              models: [
+                                AIModelEntry(name: "gpt-4o-mini"),
+                                AIModelEntry(name: "deepseek-coder")
+                              ])
+    provider.isEnabled = true
+    settings.providers = [provider]
+    settings.activeProviderID = provider.id
+    settings.activeModel = "gpt-4o-mini"
+    settings.autoRouteEnabled = true
+    settings.fallbackEnabled = false
+
+    var action = AIAction.defaults()[4]
+    action.providerID = nil
+
+    let routes = AIRequestRouter.candidates(settings: settings,
+                                            action: action,
+                                            sourceText: "func test() {}",
+                                            hasImage: false)
+    expect(routes.first?.reason == "当前模型", "keeps current model as explicit first route")
+    expect(routes.contains { $0.reason == "代码任务优先" }, "adds code capability route reason")
+}
+
 func testPrivacyRedactionDefaults() {
     let text = "联系我 test@example.com 或 13800138000, token sk-abcdefghijklmnopqrstuvwxyz"
     let redacted = PrivacyFilter.apply(to: text, rules: PrivacyRedactionRule.defaults())
@@ -121,6 +162,38 @@ func testPrivacyRedactionDefaults() {
     expect(redacted.contains("[手机号]"), "uses phone replacement")
 }
 
+func testTextDiffSummary() {
+    let rows = TextDiff.rows(original: "A\nB\nD", revised: "A\nC\nD\nE")
+    let summary = TextDiff.summary(for: rows)
+    expect(summary.changed == 1, "counts changed lines")
+    expect(summary.inserted == 1, "counts inserted lines")
+    expect(summary.deleted == 0, "does not count paired change as delete")
+    expect(rows.contains { $0.kind == .unchanged && $0.original == "A" }, "keeps common prefix")
+    expect(rows.contains { $0.kind == .unchanged && $0.original == "D" }, "keeps common suffix")
+}
+
+func testTextDiffCapsLargePreviewRows() {
+    let original = (0..<2_000).map { "old-\($0)" }.joined(separator: "\n")
+    let revised = (0..<2_000).map { "new-\($0)" }.joined(separator: "\n")
+    let rows = TextDiff.rows(original: original, revised: revised, maxRows: 100)
+    expect(rows.count == 100, "caps large diff preview rows")
+    expect(rows.allSatisfy { $0.kind == .changed }, "keeps changed rows when capped")
+}
+
+func testContextProfileEffectiveSystemPrompt() {
+    let settings = AppSettings()
+    let profile = ContextProfile(name: "项目 A", content: "术语: SnapAI = 菜单栏 AI 工具")
+    settings.systemPrompt = "基础提示"
+    settings.contextProfiles = [profile]
+    settings.activeContextProfileID = profile.id
+    expect(settings.effectiveSystemPrompt.contains("基础提示"), "keeps base system prompt")
+    expect(settings.effectiveSystemPrompt.contains("项目 A"), "includes active context profile name")
+    expect(settings.effectiveSystemPrompt.contains("术语"), "includes active context content")
+
+    settings.contextProfiles[0].isEnabled = false
+    expect(settings.effectiveSystemPrompt == "基础提示", "ignores disabled context profile")
+}
+
 testVersionNormalizationAndCompare()
 testReleaseTagParsing()
 testBaseURLNormalization()
@@ -128,7 +201,12 @@ testPromptRender()
 testHotKeyConflictDetection()
 testAIRouterIncludesFallbackCandidates()
 testAIRouterSkipsDisabledActionOverrideModel()
+testModelCapabilityInference()
+testAIRouterUsesCapabilityReasonForCodeAction()
 testPrivacyRedactionDefaults()
+testTextDiffSummary()
+testTextDiffCapsLargePreviewRows()
+testContextProfileEffectiveSystemPrompt()
 
 if failures.isEmpty {
     print("SnapAILogicTests passed")

@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var historyWindow: HistoryWindowController!
     private var permissionHealth: PermissionHealthController!
     private var settingsWindow: NSWindow?
+    private var settingsWindowPinned = false
     private var onboardingWindow: NSWindow?
     private var appearanceObserver: NSObjectProtocol?
     private var hotKeyRegistrationFailures: [String] = []
@@ -36,14 +37,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         resultVM = ResultViewModel(settings: settings)
-        resultVM.onReplace = { [weak self] text in self?.replaceSelection(with: text) }
+        resultVM.onReplace = { [weak self] original, replacement in
+            self?.replaceSelection(original: original, with: replacement)
+        }
         resultVM.onAppend = { [weak self] text in self?.appendSelection(with: text) }   // #8
         panelController = FloatingPanelController(vm: resultVM)
 
         quickInputModel = QuickInputModel(settings: settings)
         quickInputModel.actionID = settings.enabledActions.first?.id ?? ""
-        quickInputModel.onSubmit = { [weak self] text, action, imageData in   // #3 imageData
-            self?.runQuickInput(text: text, action: action, imageData: imageData)
+        quickInputModel.onSubmit = { [weak self] text, action, imageData, imageMimeType in   // #3 imageData
+            self?.runQuickInput(text: text, action: action, imageData: imageData, imageMimeType: imageMimeType)
         }
         quickInput = QuickInputController(model: quickInputModel)
         commandPalette = CommandPaletteController { [weak self] in
@@ -496,7 +499,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         quickInput.toggle()
     }
 
-    private func runQuickInput(text: String, action: AIAction, imageData: Data? = nil) {
+    private func runQuickInput(text: String,
+                               action: AIAction,
+                               imageData: Data? = nil,
+                               imageMimeType: String = "image/png") {
         quickInput.hide()
         guard let prepared = prepareTextForSubmission(text,
                                                       action: action,
@@ -504,6 +510,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         resultVM.start(text: prepared,
                        action: action,
                        imageData: imageData,
+                       imageMimeType: imageMimeType,
                        autoReplaceEnabled: false)
         panelController.show()
     }
@@ -524,7 +531,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let rendered = action.render(text: text)
         let content = """
         System Prompt:
-        \(settings.systemPrompt.isEmpty ? "(空)" : settings.systemPrompt)
+        \(settings.effectiveSystemPrompt.isEmpty ? "(空)" : settings.effectiveSystemPrompt)
 
         User Prompt:
         \(rendered)
@@ -557,43 +564,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// 把结果替换回原文位置(#3)
-    private func replaceSelection(with text: String) {
-        panelController.hide()
-        let pb = NSPasteboard.general
-        let previousItems = TextCapture.snapshotPasteboard(pb)
-        pb.clearContents()
-        pb.setString(text, forType: .string)
-        previousApp?.activate()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            TextCapture.sendCmdV()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                TextCapture.restorePasteboard(pb, items: previousItems)
-            }
+    private func replaceSelection(original: String, with replacement: String) {
+        let decision = DiffPreviewWindowController.present(original: original,
+                                                           revised: replacement,
+                                                           actionName: resultVM.action.name)
+        switch decision {
+        case .replace:
+            panelController.hide()
+            TextEditTransaction(targetApp: previousApp).replace(with: replacement)
+        case .copy:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(replacement, forType: .string)
+        case .cancel:
+            break
         }
     }
 
     /// 把结果追加到光标后(#8):先发 → 键移到选区末尾,再粘贴 "\n" + result
     private func appendSelection(with text: String) {
-        let appended = "\n" + text
-        let pb = NSPasteboard.general
-        let previousItems = TextCapture.snapshotPasteboard(pb)
-        pb.clearContents()
-        pb.setString(appended, forType: .string)
-        previousApp?.activate()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            // 先右箭头取消选中(光标移到选区末尾)
-            if let src = CGEventSource(stateID: .combinedSessionState) {
-                let right = CGEvent(keyboardEventSource: src, virtualKey: 124, keyDown: true)
-                right?.post(tap: .cghidEventTap)
-                CGEvent(keyboardEventSource: src, virtualKey: 124, keyDown: false)?.post(tap: .cghidEventTap)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                TextCapture.sendCmdV()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    TextCapture.restorePasteboard(pb, items: previousItems)
-                }
-            }
-        }
+        TextEditTransaction(targetApp: previousApp).append(text)
     }
 
     private func notifyNoSelection() {
@@ -747,22 +736,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc private func openSettings() {
         if let w = settingsWindow {
+            applySettingsWindowPinnedState(to: w)
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = SettingsView(settings: settings) { [weak self] in
-            self?.reloadAfterSettingsChange()
-        }
+        let view = SettingsView(
+            settings: settings,
+            onChange: { [weak self] in
+                self?.reloadAfterSettingsChange()
+            },
+            isPinned: Binding(
+                get: { [weak self] in self?.settingsWindowPinned ?? false },
+                set: { [weak self] newValue in
+                    self?.setSettingsWindowPinned(newValue)
+                }
+            )
+        )
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "SnapAI 设置"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
+        applySettingsWindowPinnedState(to: window)
         window.center()
         settingsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func setSettingsWindowPinned(_ pinned: Bool) {
+        settingsWindowPinned = pinned
+        if let settingsWindow {
+            applySettingsWindowPinnedState(to: settingsWindow)
+        }
+    }
+
+    private func applySettingsWindowPinnedState(to window: NSWindow) {
+        window.level = settingsWindowPinned ? .floating : .normal
     }
 
     @objc private func checkForUpdates() {

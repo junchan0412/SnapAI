@@ -10,6 +10,7 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
     var provider: String         // 供应商名
     var model: String            // 模型名
     var isFavorite: Bool = false
+    var tags: [String] = []
 
     /// 列表里显示的简短预览
     var preview: String {
@@ -24,7 +25,7 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, date, actionName, source, output, provider, model, isFavorite
+        case id, date, actionName, source, output, provider, model, isFavorite, tags
     }
 }
 
@@ -39,6 +40,7 @@ extension HistoryEntry {
         provider = (try? c.decode(String.self, forKey: .provider)) ?? ""
         model = (try? c.decode(String.self, forKey: .model)) ?? ""
         isFavorite = (try? c.decode(Bool.self, forKey: .isFavorite)) ?? false
+        tags = (try? c.decode([String].self, forKey: .tags)) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -51,5 +53,6 @@ extension HistoryEntry {
         try c.encode(provider, forKey: .provider)
         try c.encode(model, forKey: .model)
         try c.encode(isFavorite, forKey: .isFavorite)
+        try c.encode(tags, forKey: .tags)
     }
 }

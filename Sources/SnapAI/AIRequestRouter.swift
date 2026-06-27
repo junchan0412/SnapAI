@@ -90,15 +90,19 @@ enum AIRequestRouter {
         probe.activeModel = route.modelName
         probe.temperature = settings.temperature
         probe.systemPrompt = settings.systemPrompt
+        probe.contextProfiles = settings.contextProfiles
+        probe.activeContextProfileID = settings.activeContextProfileID
         return probe
     }
 
     private static func routeReason(model: String, textLength: Int, hasImage: Bool, action: AIAction) -> String {
-        let lower = model.lowercased()
-        if hasImage && looksVisionCapable(lower) { return "图片输入优先" }
-        if textLength > 8_000 && looksLongContextCapable(lower) { return "长文本优先" }
-        if action.thinkingMode || looksReasoningCapable(lower) { return "推理任务优先" }
-        if looksFastOrEconomical(lower) { return "速度/成本优先" }
+        let capability = ModelCapabilityRegistry.capability(for: model)
+        if hasImage && capability.supportsVision { return "图片输入优先" }
+        if textLength > 8_000 && capability.supportsLongContext { return "长文本优先" }
+        if action.thinkingMode && capability.supportsReasoning { return "推理任务优先" }
+        if isCodeAction(action) && capability.isCodeCapable { return "代码任务优先" }
+        if action.isTranslation && capability.isFast { return "翻译/速度优先" }
+        if capability.isFast || capability.isEconomical { return "速度/成本优先" }
         return "备用模型"
     }
 
@@ -107,50 +111,26 @@ enum AIRequestRouter {
                               action: AIAction,
                               textLength: Int,
                               hasImage: Bool) -> Int {
-        let lower = route.modelName.lowercased()
+        let capability = ModelCapabilityRegistry.capability(for: route.modelName,
+                                                            providerName: route.providerName)
         var value = 0
         if route.providerID == action.providerID { value += 500 }
         if route.providerID == settings.activeProviderID && route.modelName == settings.activeModel { value += 200 }
-        if hasImage { value += looksVisionCapable(lower) ? 80 : -40 }
-        if textLength > 8_000 { value += looksLongContextCapable(lower) ? 60 : -20 }
-        if action.thinkingMode { value += looksReasoningCapable(lower) ? 60 : -10 }
-        if !hasImage && textLength < 2_000 && looksFastOrEconomical(lower) { value += 25 }
+        if hasImage { value += capability.supportsVision ? 80 : -40 }
+        if textLength > 8_000 { value += capability.supportsLongContext ? 60 : -20 }
+        if action.thinkingMode { value += capability.supportsReasoning ? 60 : -10 }
+        if isCodeAction(action) { value += capability.isCodeCapable ? 35 : -10 }
+        if action.isTranslation { value += capability.isFast ? 20 : 0 }
+        if !hasImage && textLength < 2_000 && (capability.isFast || capability.isEconomical) { value += 25 }
         return value
     }
 
-    private static func looksVisionCapable(_ model: String) -> Bool {
-        model.contains("vision") ||
-        model.contains("gpt-4o") ||
-        model.contains("omni") ||
-        model.contains("claude") ||
-        model.contains("sonnet") ||
-        model.contains("gemini")
-    }
-
-    private static func looksLongContextCapable(_ model: String) -> Bool {
-        model.contains("long") ||
-        model.contains("128k") ||
-        model.contains("200k") ||
-        model.contains("1m") ||
-        model.contains("claude") ||
-        model.contains("sonnet") ||
-        model.contains("gemini") ||
-        model.contains("gpt-4o")
-    }
-
-    private static func looksReasoningCapable(_ model: String) -> Bool {
-        model.contains("reason") ||
-        model.contains("r1") ||
-        model.contains("o1") ||
-        model.contains("o3") ||
-        model.contains("thinking")
-    }
-
-    private static func looksFastOrEconomical(_ model: String) -> Bool {
-        model.contains("mini") ||
-        model.contains("flash") ||
-        model.contains("haiku") ||
-        model.contains("chat") ||
-        model.contains("lite")
+    private static func isCodeAction(_ action: AIAction) -> Bool {
+        let text = "\(action.name) \(action.prompt)".lowercased()
+        return text.contains("代码") ||
+        text.contains("code") ||
+        text.contains("program") ||
+        text.contains("函数") ||
+        text.contains("bug")
     }
 }

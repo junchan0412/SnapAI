@@ -70,6 +70,12 @@ open ~/Applications/SnapAI.app
 - Markdown 渲染:支持标题、列表、引用、代码块、加粗、链接等基础格式。
 - 替换原文:可把生成结果粘贴回原选区,适合翻译和润色。
 - 历史记录:保存最近结果,支持回看、复制和重新发起。
+- 历史知识库:历史窗口支持搜索、收藏、删除、按动作/模型/标签筛选,并可为单条记录添加标签。
+- 上下文包:可保存项目背景、术语表、写作风格或代码栈偏好,并自动合并进请求上下文。
+- 工作流模板:可一键创建邮件回复、会议纪要、代码审查、中英双语润色、图片理解等动作。
+- 替换前预览:替换原文前显示原文/新文 Diff,确认后才写回目标应用。
+- 文本事务保护:替换和追加会保护用户剪贴板,并尽量恢复触发前的焦点应用。
+- 隐私规则测试:脱敏规则可在设置中实时预览替换结果。
 - iCloud 配置同步:可同步供应商结构、动作和快捷键,不包含 API Key 和历史内容。
 - 应用内更新:检查 GitHub Release,下载新版 zip,原地替换应用并重启。
 - 开机自启:可在设置中开启,基于 `SMAppService`。
@@ -154,9 +160,11 @@ SnapAI.app
 如果你要打包 Release:
 
 ```bash
-mkdir -p dist
-ditto -c -k --keepParent SnapAI.app dist/SnapAI-vX.X.X.zip
+./build.sh
+scripts/package-release.sh
 ```
+
+`scripts/package-release.sh` 会生成干净的 zip 和 `snapai-manifest-vX.X.X.json`,并写入 zip 的 SHA256。若设置 `SNAPAI_MANIFEST_PRIVATE_KEY`,脚本还会额外生成 manifest 签名文件。
 
 ## 常见问题
 
@@ -206,10 +214,15 @@ Sources/SnapAI/
   TextCapture.swift     Accessibility 取词与复制兜底
   ResultViewModel.swift 结果窗状态机
   ResultView.swift      结果窗 UI
+  TextEditTransaction.swift 替换/追加事务与剪贴板保护
+  TextDiff.swift        替换前 Diff 计算
+  DiffPreviewWindow.swift 替换前预览窗口
   MarkdownView.swift    轻量 Markdown 渲染
   FloatingPanel.swift   浮动面板
   QuickInput.swift      快捷提问面板
   SettingsView.swift    设置界面
+  ContextProfile.swift  上下文包
+  ModelCapability.swift 模型能力推断与路由依据
   HotKeyManager.swift   Carbon 全局快捷键注册
   HotKeyRecorder.swift  快捷键录制控件
   Keychain.swift        API Key 存储
