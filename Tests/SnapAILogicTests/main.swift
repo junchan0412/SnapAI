@@ -52,6 +52,22 @@ func testPromptRender() {
     expect(action.render(text: "你好") == "翻译: 翻译成自然流畅的英语\n你好", "renders text and language placeholders")
 }
 
+func testDefaultPolishActionConfirmsReplacement() {
+    let polish = AIAction.defaults().first { $0.name == "润色" }
+    expect(polish?.replaceByDefault == true, "polish action enters replacement confirmation by default")
+}
+
+func testTextReplacementSelectionDelay() {
+    expect(TextEditTransaction.selectionDelay(forCharacterCount: 0) == 0.03, "uses short delay for existing selections")
+    expect(TextEditTransaction.selectionDelay(forCharacterCount: 100) > 0.03, "allows keyboard reselection to settle")
+    expect(TextEditTransaction.selectionDelay(forCharacterCount: 10_000) == 0.75, "caps long reselection delay")
+}
+
+func testCapturedTextPreservesSelectionWhitespace() {
+    expect(TextCapture.usableCapturedText("  hello\n") == "  hello\n", "preserves selected whitespace for exact replacement")
+    expect(TextCapture.usableCapturedText(" \n\t") == nil, "rejects whitespace-only captures")
+}
+
 func testHotKeyConflictDetection() {
     var ask = AIAction.defaults()[0]
     ask.id = "ask"
@@ -211,6 +227,9 @@ testReleaseTagParsing()
 testDesignatedRequirementParsing()
 testBaseURLNormalization()
 testPromptRender()
+testDefaultPolishActionConfirmsReplacement()
+testTextReplacementSelectionDelay()
+testCapturedTextPreservesSelectionWhitespace()
 testHotKeyConflictDetection()
 testAIRouterIncludesFallbackCandidates()
 testAIRouterSkipsDisabledActionOverrideModel()

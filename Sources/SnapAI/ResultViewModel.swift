@@ -30,6 +30,7 @@ final class ResultViewModel: ObservableObject {
     private var savedToHistory = false
     private var metricsFinished = false
     private var autoReplaceEnabled = false
+    private var replacementOriginalText: String = ""
 
     // 打字机
     private var fullText: String = ""
@@ -62,6 +63,7 @@ final class ResultViewModel: ObservableObject {
     // MARK: - 启动
 
     func start(text: String,
+               originalText: String? = nil,
                action: AIAction,
                imageData: Data? = nil,
                imageMimeType: String = "image/png",
@@ -69,6 +71,7 @@ final class ResultViewModel: ObservableObject {
         self.action = action
         self.targetLanguage = action.targetLanguage
         self.sourceText = text
+        self.replacementOriginalText = originalText ?? text
         self.pendingImageData = imageData
         self.pendingImageMimeType = imageMimeType
         self.autoReplaceEnabled = autoReplaceEnabled
@@ -190,7 +193,7 @@ final class ResultViewModel: ObservableObject {
     /// #3 替换原文
     func replaceOriginal() {
         guard !fullText.isEmpty else { return }
-        onReplace?(sourceText, fullText)
+        onReplace?(replacementOriginalText, fullText)
     }
 
     /// #8 追加到文档
@@ -354,7 +357,7 @@ final class ResultViewModel: ObservableObject {
            !fullText.isEmpty,
            errorMessage == nil {
             autoReplaceEnabled = false
-            onReplace?(sourceText, fullText)
+            onReplace?(replacementOriginalText, fullText)
         }
     }
 

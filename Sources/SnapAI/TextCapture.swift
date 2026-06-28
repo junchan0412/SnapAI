@@ -2,10 +2,28 @@ import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 
+struct TextSelectionSnapshot {
+    fileprivate let element: AXUIElement
+    let selectedRange: CFRange
+    let selectedText: String
+
+    func restoreSelection() -> Bool {
+        var range = selectedRange
+        guard let value = AXValueCreate(.cfRange, &range) else { return false }
+        return AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            value
+        ) == .success
+    }
+}
+
 /// 取词模块。
 /// 策略:优先用 Accessibility API 直接读取焦点元素的 kAXSelectedTextAttribute(无感、不污染剪贴板);
 /// 失败时回退到模拟 ⌘C 复制再读剪贴板。
 enum TextCapture {
+    private static let snapshotQueue = DispatchQueue(label: "com.snapai.text-selection-snapshot")
+    private static var recentSnapshot: TextSelectionSnapshot?
 
     /// 当前进程是否已被授予辅助功能权限
     static func hasAccessibilityPermission(prompt: Bool = false) -> Bool {
@@ -23,15 +41,34 @@ enum TextCapture {
             if result == nil || result?.isEmpty == true {
                 result = captureViaCopy()
             }
-            let trimmed = result?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let final = (trimmed?.isEmpty == false) ? trimmed : nil
+            let final = usableCapturedText(result)
             Task { @MainActor in
                 completion(final)
             }
         }
     }
 
+    static func usableCapturedText(_ text: String?) -> String? {
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? text : nil
+    }
+
     // MARK: - AX 直读
+
+    static func selectedTextViaAX() -> String? {
+        captureViaAX()
+    }
+
+    static func recentSelectionSnapshot(matching text: String) -> TextSelectionSnapshot? {
+        snapshotQueue.sync {
+            guard recentSnapshot?.selectedText == text else { return nil }
+            return recentSnapshot
+        }
+    }
+
+    static func clearRecentSelectionSnapshot() {
+        clearSelectionSnapshot()
+    }
 
     private static func captureViaAX() -> String? {
         let systemWide = AXUIElementCreateSystemWide()
@@ -49,14 +86,52 @@ enum TextCapture {
                                          kAXSelectedTextAttribute as CFString,
                                          &selected) == .success,
            let text = selected as? String, !text.isEmpty {
+            storeSelectionSnapshot(element: axElement, selectedText: text)
             return text
         }
+        clearSelectionSnapshot()
         return nil
+    }
+
+    private static func storeSelectionSnapshot(element: AXUIElement, selectedText: String) {
+        var rangeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element,
+                                            kAXSelectedTextRangeAttribute as CFString,
+                                            &rangeValue) == .success,
+              let rawValue = rangeValue,
+              CFGetTypeID(rawValue) == AXValueGetTypeID() else {
+            clearSelectionSnapshot()
+            return
+        }
+        let axValue = rawValue as! AXValue
+        guard
+              AXValueGetType(axValue) == .cfRange else {
+            clearSelectionSnapshot()
+            return
+        }
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else {
+            clearSelectionSnapshot()
+            return
+        }
+        let snapshot = TextSelectionSnapshot(element: element,
+                                             selectedRange: range,
+                                             selectedText: selectedText)
+        snapshotQueue.sync {
+            recentSnapshot = snapshot
+        }
+    }
+
+    private static func clearSelectionSnapshot() {
+        snapshotQueue.sync {
+            recentSnapshot = nil
+        }
     }
 
     // MARK: - 模拟复制兜底
 
     private static func captureViaCopy() -> String? {
+        clearSelectionSnapshot()
         let pasteboard = NSPasteboard.general
         let previousItems = snapshotPasteboard(pasteboard)
         let previousChangeCount = pasteboard.changeCount
@@ -111,6 +186,24 @@ enum TextCapture {
         right?.post(tap: .cghidEventTap)
         CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_RightArrow), keyDown: false)?
             .post(tap: .cghidEventTap)
+    }
+
+    static func sendShiftLeftArrow(repeat count: Int) {
+        guard count > 0,
+              let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let cappedCount = min(count, 20_000)
+        for _ in 0..<cappedCount {
+            let down = CGEvent(keyboardEventSource: source,
+                               virtualKey: CGKeyCode(kVK_LeftArrow),
+                               keyDown: true)
+            down?.flags = .maskShift
+            let up = CGEvent(keyboardEventSource: source,
+                             virtualKey: CGKeyCode(kVK_LeftArrow),
+                             keyDown: false)
+            up?.flags = .maskShift
+            down?.post(tap: .cghidEventTap)
+            up?.post(tap: .cghidEventTap)
+        }
     }
 
     static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {

@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var hotKeyRegistrationFailures: [String] = []
     /// 触发前的前台 App,用于「替换原文」时把焦点交还
     private var previousApp: NSRunningApplication?
+    private var previousSelectionSnapshot: TextSelectionSnapshot?
 
     /// nonisolated 以便在 main.swift 顶层(非 main-actor 上下文)构造
     nonisolated override init() {
@@ -478,16 +479,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func triggerAction(id: String) {
         guard let action = settings.enabledActions.first(where: { $0.id == id }) else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
+        previousSelectionSnapshot = nil
         TextCapture.capture(preferAX: settings.useAXFirst) { [weak self] text in
             guard let self = self else { return }
             guard let text = text, !text.isEmpty else {
                 self.notifyNoSelection()
                 return
             }
+            self.previousSelectionSnapshot = TextCapture.recentSelectionSnapshot(matching: text)
             guard let prepared = self.prepareTextForSubmission(text,
                                                                action: action,
                                                                imageData: nil) else { return }
             self.resultVM.start(text: prepared,
+                                originalText: text,
                                 action: action,
                                 autoReplaceEnabled: action.replaceByDefault)
             self.panelController.show()
@@ -496,6 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc private func toggleQuickInput() {
         previousApp = NSWorkspace.shared.frontmostApplication
+        previousSelectionSnapshot = nil
         quickInput.toggle()
     }
 
@@ -565,13 +570,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// 把结果替换回原文位置(#3)
     private func replaceSelection(original: String, with replacement: String) {
+        defer {
+            previousSelectionSnapshot = nil
+            TextCapture.clearRecentSelectionSnapshot()
+        }
         let decision = DiffPreviewWindowController.present(original: original,
                                                            revised: replacement,
                                                            actionName: resultVM.action.name)
         switch decision {
         case .replace:
             panelController.hide()
-            TextEditTransaction(targetApp: previousApp).replace(with: replacement)
+            TextEditTransaction(targetApp: previousApp,
+                                selectionSnapshot: previousSelectionSnapshot)
+                .replace(original: original, with: replacement)
         case .copy:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(replacement, forType: .string)

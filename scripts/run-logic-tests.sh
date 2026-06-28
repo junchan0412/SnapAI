@@ -14,6 +14,8 @@ swiftc \
   Sources/SnapAI/Settings.swift \
   Sources/SnapAI/HotKeyUtilities.swift \
   Sources/SnapAI/PrivacyFilter.swift \
+  Sources/SnapAI/TextCapture.swift \
+  Sources/SnapAI/TextEditTransaction.swift \
   Sources/SnapAI/TextDiff.swift \
   Sources/SnapAI/ModelCapability.swift \
   Sources/SnapAI/AIRequestRouter.swift \
