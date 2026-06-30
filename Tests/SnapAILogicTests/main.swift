@@ -3664,6 +3664,68 @@ func testAIRequestDiagnosticsReportsFirstRequestRouteAfterSkips() {
            "auto routing does not report the final candidate as skipped")
 }
 
+func testAIRequestDiagnosticsBuildsVisibleRouteExplanation() {
+    let skipped = AIRequestRoute(providerID: "p1",
+                                 providerName: "Tiny",
+                                 modelName: "tiny-8k",
+                                 reason: "当前模型")
+    let selected = AIRequestRoute(providerID: "p2",
+                                  providerName: "Long",
+                                  modelName: "gpt-4o-mini-r1-128k",
+                                  reason: "长文本优先")
+    let diagnostics = AIRequestDiagnostics(actionName: "总结",
+                                           sourceCharacterCount: 32_000,
+                                           hasImage: true,
+                                           fallbackEnabled: true,
+                                           autoRouteEnabled: true,
+                                           routingPreference: .quality,
+                                           candidateCount: 2,
+                                           context: AIRequestContextDiagnostic(contextProfileCount: 2,
+                                                                               usableContextProfileCount: 1,
+                                                                               activeContextCharacterCount: 420,
+                                                                               globalSystemPromptCharacterCount: 80,
+                                                                               effectiveSystemPromptCharacterCount: 500),
+                                           payload: AIRequestPayloadDiagnostic(messageCount: 2,
+                                                                               textCharacterCount: 32_000,
+                                                                               estimatedTextTokens: 8_000,
+                                                                               imageAttachmentCount: 1),
+                                           candidateRoutes: [skipped, selected])
+
+    let explanation = diagnostics.visibleRouteExplanation
+    expect(explanation.contains("将优先使用 Long / gpt-4o-mini-r1-128k"),
+           "visible route explanation names the actual first request route")
+    expect(explanation.contains("长文本优先"),
+           "visible route explanation includes route reason")
+    expect(explanation.contains("自动路由: 最佳质量"),
+           "visible route explanation includes routing preference")
+    expect(explanation.contains("失败时可 fallback"),
+           "visible route explanation includes fallback state")
+    expect(explanation.contains("已合并上下文 420 字"),
+           "visible route explanation includes active context size")
+    expect(explanation.contains("约 8000 tokens"),
+           "visible route explanation includes request token estimate")
+    expect(explanation.contains("包含图片输入"),
+           "visible route explanation includes image input state")
+    expect(explanation.contains("预检跳过 1 个不适配模型"),
+           "visible route explanation includes preflight skips")
+    expect(diagnostics.visibleRouteStatusTitle == "自动路由 + Fallback",
+           "visible route status combines auto route and fallback state")
+
+    let empty = AIRequestDiagnostics(actionName: "提问",
+                                     sourceCharacterCount: 0,
+                                     hasImage: false,
+                                     fallbackEnabled: false,
+                                     autoRouteEnabled: false,
+                                     routingPreference: .balanced,
+                                     candidateCount: 0,
+                                     candidateRoutes: [],
+                                     candidateUnavailabilityRecoverySuggestion: "请先启用模型")
+    expect(empty.visibleRouteExplanation == "请先启用模型",
+           "visible route explanation reports no-candidate recovery")
+    expect(empty.visibleRouteStatusTitle == "无可用模型",
+           "visible route status reports no available model")
+}
+
 func testAIRequestDiagnosticsBuildsRouteDisplayNotesWithIssues() {
     let problematic = AIRequestRoute(providerID: "p1",
                                      providerName: "Primary",
@@ -8806,6 +8868,7 @@ testAIRequestDiagnosticsReportsCandidateFitIssueSummary()
 testAIRequestDiagnosticsReportsRecommendedRouteSafely()
 testAIRequestDiagnosticsReportsRecommendedRouteIssues()
 testAIRequestDiagnosticsReportsFirstRequestRouteAfterSkips()
+testAIRequestDiagnosticsBuildsVisibleRouteExplanation()
 testAIRequestDiagnosticsBuildsRouteDisplayNotesWithIssues()
 testAIRequestDiagnosticsAnnotatesAttemptsWithRouteIssues()
 testAIRequestDiagnosticsSkipsHardIncompatibleRoutes()

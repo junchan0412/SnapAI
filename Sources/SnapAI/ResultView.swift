@@ -140,24 +140,37 @@ struct ResultView: View {
         let model = vm.activeModelName.isEmpty ? vm.settings.model : vm.activeModelName
         let provider = vm.activeProviderName
         let routeText = [provider, model].filter { !$0.isEmpty }.joined(separator: " / ")
-        if !routeText.isEmpty || vm.routeNote != nil || vm.isStreaming {
-            HStack(spacing: 7) {
-                SnapAIStatusPill(title: vm.isStreaming ? "生成中" : "模型",
-                                 systemImage: vm.isStreaming ? "sparkles" : "server.rack",
-                                 tint: vm.isStreaming ? .accentColor : .secondary,
-                                 filled: vm.isStreaming)
-                if !routeText.isEmpty {
-                    Text(routeText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+        if !routeText.isEmpty || vm.routeNote != nil || vm.routeExplanationText != nil || vm.isStreaming {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 7) {
+                    SnapAIStatusPill(title: vm.isStreaming ? "生成中" : vm.routeStatusTitle,
+                                     systemImage: vm.isStreaming ? "sparkles" : "point.3.connected.trianglepath.dotted",
+                                     tint: vm.isStreaming ? .accentColor : .secondary,
+                                     filled: vm.isStreaming)
+                    if !routeText.isEmpty {
+                        Text(routeText)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    if let context = vm.activeContextSummaryText {
+                        SnapAIStatusPill(title: context,
+                                         systemImage: "text.book.closed",
+                                         tint: .secondary)
+                            .help("当前请求会合并这个上下文包")
+                    }
+                    Spacer(minLength: 0)
                 }
-                if let note = vm.routeNote, !note.isEmpty {
+                if let explanation = vm.routeExplanationText, !explanation.isEmpty {
+                    Text(explanation)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(.secondary)
+                } else if let note = vm.routeNote, !note.isEmpty {
                     Text(note)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
             }
             .font(.caption2)
             .padding(.horizontal, 14)

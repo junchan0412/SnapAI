@@ -409,6 +409,40 @@ struct AIRequestDiagnostics: Equatable {
         return routeIssueSummary(for: route)
     }
 
+    var visibleRouteExplanation: String {
+        if candidateCount <= 0 {
+            let recovery = candidateUnavailabilityRecoverySuggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+            return recovery.isEmpty ? "没有可用模型,请检查供应商、API Key 和模型启用状态" : recovery
+        }
+
+        var parts: [String] = []
+        if let route = firstRequestRoute {
+            let routeName = "\(route.diagnosticProviderName) / \(route.diagnosticModelName)"
+            parts.append("\(autoRouteEnabled ? "将优先使用" : "将使用") \(routeName)")
+            parts.append(route.diagnosticReason)
+        }
+        parts.append(autoRouteEnabled ? "自动路由: \(routingPreference.rawValue)" : "固定当前模型")
+        if fallbackEnabled { parts.append("失败时可 fallback") }
+        if context.activeContextCharacterCount > 0 {
+            parts.append("已合并上下文 \(context.activeContextCharacterCount) 字")
+        }
+        if payload.estimatedTextTokens > 0 {
+            parts.append("约 \(payload.estimatedTextTokens) tokens")
+        }
+        if hasImage { parts.append("包含图片输入") }
+        let skippedCount = preflightSkippedRoutes.count
+        if skippedCount > 0 {
+            parts.append("预检跳过 \(skippedCount) 个不适配模型")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var visibleRouteStatusTitle: String {
+        if candidateCount <= 0 { return "无可用模型" }
+        if !autoRouteEnabled { return "固定模型" }
+        return fallbackEnabled ? "自动路由 + Fallback" : "自动路由"
+    }
+
     var preflightSkippedRouteSummary: String {
         preflightSkippedRouteSummary(limit: Self.preflightSkippedRouteDisplayLimit)
     }

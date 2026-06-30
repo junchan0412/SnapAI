@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
-![SnapAI 1.4.3 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.4.4 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.4.3 版本重点
+## 1.4.4 版本重点
 
-- 修复设置窗口置顶按钮点击后图标不立即变化的问题,置顶状态改由可观察状态源驱动。
-- 重新设计 AI 模型页顶部区域,把“当前使用”和“路由策略”合并为双列概览卡片,消除 AI 路由右侧大面积留白。
-- 路由状态改为顶部胶囊摘要,自动路由、固定模型和 fallback 状态一眼可见。
-- 优化设置页卡片宽度与对齐,供应商、动作和顶部概览的横向行为更一致。
-- 保留 1.4.2 的置顶窗口层级刷新、菜单同步和辅助功能状态说明。
+- 结果面板新增用户可读的路由解释,展示将使用的供应商/模型、选择原因、自动路由偏好、fallback、上下文和图片输入状态。
+- AI 模型设置页新增路由预览,配置自动路由、fallback 或上下文后可以立即看到下一次请求会优先尝试的模型。
+- 路由状态标题从“模型”升级为“固定模型 / 自动路由 / 自动路由 + Fallback / 无可用模型”,结果面板更容易扫读。
+- 请求诊断继续保留完整机器可读信息,同时新增适合 UI 展示的摘要,为后续项目记忆和知识库能力打基础。
+- 保留 1.4.3 的置顶即时反馈、AI 顶部双列概览和设置页宽度优化。
 
-详细发布说明见 [SnapAI 1.4.3 Release Notes](docs/RELEASE_NOTES_1.4.3.md),阶段性复盘和后续路线见 [SnapAI 1.4.3 Iteration Report](docs/ITERATION_REPORT_1.4.3.md)。
+详细发布说明见 [SnapAI 1.4.4 Release Notes](docs/RELEASE_NOTES_1.4.4.md),阶段性复盘和后续路线见 [SnapAI 1.4.4 Iteration Report](docs/ITERATION_REPORT_1.4.4.md)。
 
 ## 快速安装
 
