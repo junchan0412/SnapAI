@@ -174,13 +174,15 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var navigation: SettingsNavigationModel
     var onChange: () -> Void   // 设置变更后回调(用于重注册快捷键 + 保存)
-    @Binding var isPinned: Bool
+    @ObservedObject var pinState: SettingsWindowPinState
+    var onPinChange: (Bool) -> Void
 
     @StateObject private var perm = PermissionState()
     @StateObject private var modelLoader = ModelLoader()
     @StateObject private var ui = AISettingsUI()
     @StateObject private var tester = ConnectionTester()
     private let aiLabelWidth: CGFloat = 76
+    private var isPinned: Bool { pinState.isPinned }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -203,9 +205,11 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Button {
+                    let newValue = !pinState.isPinned
                     withAnimation(.easeInOut(duration: 0.16)) {
-                        isPinned = !isPinned
+                        pinState.isPinned = newValue
                     }
+                    onPinChange(newValue)
                 } label: {
                     Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
                         .font(.system(size: 15, weight: .semibold))
@@ -275,8 +279,7 @@ struct SettingsView: View {
     private var aiTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                currentSelectionCard
-                routeCard
+                aiOverviewCard
                 Divider()
                 HStack {
                     Text("供应商").font(.headline)
@@ -295,92 +298,146 @@ struct SettingsView: View {
 
     // MARK: 当前使用
 
-    private var currentSelectionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("当前使用").font(.headline)
-            HStack(spacing: 8) {
-                // 供应商选择
-                Menu {
-                    ForEach(settings.providers.filter { $0.isEnabled }) { p in
-                        Button {
-                            let m = p.enabledModelNames.first ?? ""
-                            settings.activate(providerID: p.id, model: m)
-                            onChange()
-                        } label: {
-                            if p.id == settings.activeProvider?.id {
-                                Label(p.name, systemImage: "checkmark")
-                            } else { Text(p.name) }
-                        }
-                    }
-                } label: {
-                    menuLabel(settings.activeProvider?.name ?? "未选择", icon: "server.rack")
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(.bordered)
-                .clipped()
-
-                // 模型选择(当前供应商下启用的模型)
-                Menu {
-                    let names = settings.activeProvider?.enabledModelNames ?? []
-                    if names.isEmpty {
-                        Text("无可用模型").foregroundStyle(.secondary)
-                    }
-                    ForEach(names, id: \.self) { m in
-                        Button {
-                            settings.activeModel = m
-                            commit()
-                        } label: {
-                            if m == settings.model {
-                                Label(m, systemImage: "checkmark")
-                            } else { Text(m) }
-                        }
-                    }
-                } label: {
-                    menuLabel(settings.modelSelectionTitle, icon: "cpu")
-                }
-                .frame(maxWidth: .infinity)
-                .buttonStyle(.bordered)
-                .clipped()
+    private var aiOverviewCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("AI 配置").font(.headline)
+                Spacer()
+                SnapAIStatusPill(title: settings.autoRouteEnabled ? "自动路由" : "固定模型",
+                                 systemImage: settings.autoRouteEnabled ? "point.3.connected.trianglepath.dotted" : "cpu",
+                                 tint: settings.autoRouteEnabled ? .accentColor : .secondary,
+                                 filled: settings.autoRouteEnabled)
+                SnapAIStatusPill(title: settings.fallbackEnabled ? "Fallback 开启" : "Fallback 关闭",
+                                 systemImage: settings.fallbackEnabled ? "arrow.triangle.2.circlepath" : "arrow.triangle.2.circlepath.circle",
+                                 tint: settings.fallbackEnabled ? .green : .secondary,
+                                 filled: settings.fallbackEnabled)
             }
+
+            HStack(alignment: .top, spacing: 14) {
+                currentSelectionColumn
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                Divider()
+                    .frame(height: 128)
+                routeSettingsColumn
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
+    }
+
+    private var currentSelectionColumn: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            settingsMiniHeader("当前使用", systemImage: "server.rack")
+            HStack(spacing: 8) {
+                providerMenu
+                modelMenu
+            }
+            .frame(maxWidth: .infinity)
             if settings.switchableEntries.isEmpty {
                 Text("还没有可用的「供应商 + 模型」。请在下方添加供应商、填好 Key 并获取模型。")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(settings.activeProvider?.baseURL.isEmpty == false ? (settings.activeProvider?.baseURL ?? "") : "当前供应商未设置端点")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .frame(minHeight: 112, alignment: .topLeading)
     }
 
-    private var routeCard: some View {
+    private var providerMenu: some View {
+        Menu {
+            ForEach(settings.providers.filter { $0.isEnabled }) { p in
+                Button {
+                    let m = p.enabledModelNames.first ?? ""
+                    settings.activate(providerID: p.id, model: m)
+                    onChange()
+                } label: {
+                    if p.id == settings.activeProvider?.id {
+                        Label(p.name, systemImage: "checkmark")
+                    } else {
+                        Text(p.name)
+                    }
+                }
+            }
+        } label: {
+            menuLabel(settings.activeProvider?.name ?? "未选择", icon: "server.rack")
+        }
+        .frame(maxWidth: .infinity)
+        .buttonStyle(.bordered)
+        .clipped()
+    }
+
+    private var modelMenu: some View {
+        Menu {
+            let names = settings.activeProvider?.enabledModelNames ?? []
+            if names.isEmpty {
+                Text("无可用模型").foregroundStyle(.secondary)
+            }
+            ForEach(names, id: \.self) { m in
+                Button {
+                    settings.activeModel = m
+                    commit()
+                } label: {
+                    if m == settings.model {
+                        Label(m, systemImage: "checkmark")
+                    } else {
+                        Text(m)
+                    }
+                }
+            }
+        } label: {
+            menuLabel(settings.modelSelectionTitle, icon: "cpu")
+        }
+        .frame(maxWidth: .infinity)
+        .buttonStyle(.bordered)
+        .clipped()
+    }
+
+    private var routeSettingsColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("AI 路由").font(.headline)
-            Toggle("自动按动作、文本长度和图片输入选择模型", isOn: $settings.autoRouteEnabled)
+            settingsMiniHeader("路由策略", systemImage: "point.3.connected.trianglepath.dotted")
+            Toggle("自动选择模型", isOn: $settings.autoRouteEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 .onChange(of: settings.autoRouteEnabled) { commit() }
-            HStack(spacing: 10) {
-                Text("路由偏好")
-                    .font(.callout.weight(.medium))
+            HStack(spacing: 8) {
+                Text("偏好")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .leading)
                 Picker("", selection: $settings.routingPreference) {
                     ForEach(AIRoutingPreference.allCases) { preference in
                         Text(preference.rawValue).tag(preference)
                     }
                 }
                 .pickerStyle(.segmented)
+                .controlSize(.small)
                 .onChange(of: settings.routingPreference) { commit() }
             }
-            Text(settings.routingPreference.description)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Toggle("请求失败时自动切换备用供应商/模型", isOn: $settings.fallbackEnabled)
+            .frame(maxWidth: .infinity)
+            Toggle("失败时切换备用模型", isOn: $settings.fallbackEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
                 .onChange(of: settings.fallbackEnabled) { commit() }
-            Text("动作专属供应商仍然优先。若已产生部分输出,失败后不会自动重发,避免重复内容。")
+            Text(settings.routingPreference.description)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .frame(minHeight: 112, alignment: .topLeading)
+    }
+
+    private func settingsMiniHeader(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
     }
 
     private func menuLabel(_ text: String, icon: String) -> some View {
@@ -481,6 +538,7 @@ struct SettingsView: View {
         .snapAISurface(padding: 9,
                        fillOpacity: SnapAIUI.quietFillOpacity,
                        isSelected: provider.id == settings.activeProviderID)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -952,6 +1010,7 @@ struct SettingsView: View {
             }
         }
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

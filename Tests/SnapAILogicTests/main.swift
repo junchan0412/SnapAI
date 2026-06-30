@@ -6926,6 +6926,11 @@ func testSettingsToggleCommandResolvesAliasesAndSetsState() {
 }
 
 func testSettingsWindowPinCommandReflectsCurrentState() {
+    let state = SettingsWindowPinState()
+    expect(!state.isPinned, "settings window pin state defaults to unpinned")
+    state.isPinned = true
+    expect(state.isPinned, "settings window pin state updates immediately for SwiftUI")
+
     expect(SettingsWindowPinCommand.title(isPinned: false) == "置顶设置窗口",
            "unpinned settings window command pins the window")
     expect(SettingsWindowPinCommand.subtitle(isPinned: false).contains("保持在其他窗口上方"),

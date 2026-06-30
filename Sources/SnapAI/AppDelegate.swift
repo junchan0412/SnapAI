@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var permissionHealth: PermissionHealthController!
     private var settingsWindow: NSWindow?
     private var settingsWindowPinned = false
+    private let settingsWindowPinState = SettingsWindowPinState()
     private let settingsNavigation = SettingsNavigationModel()
     private var onboardingWindow: NSWindow?
     private var appearanceObserver: NSObjectProtocol?
@@ -1929,12 +1930,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             onChange: { [weak self] in
                 self?.reloadAfterSettingsChange()
             },
-            isPinned: Binding(
-                get: { [weak self] in self?.settingsWindowPinned ?? false },
-                set: { [weak self] newValue in
-                    self?.setSettingsWindowPinned(newValue)
-                }
-            )
+            pinState: settingsWindowPinState,
+            onPinChange: { [weak self] newValue in
+                self?.setSettingsWindowPinned(newValue)
+            }
         )
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
@@ -1950,6 +1949,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func setSettingsWindowPinned(_ pinned: Bool) {
         settingsWindowPinned = pinned
+        settingsWindowPinState.isPinned = pinned
         if let settingsWindow {
             applySettingsWindowPinnedState(to: settingsWindow)
             settingsWindow.makeKeyAndOrderFront(nil)
