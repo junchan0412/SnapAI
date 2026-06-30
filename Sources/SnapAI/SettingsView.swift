@@ -204,10 +204,10 @@ struct SettingsView: View {
                 Spacer()
                 Button {
                     withAnimation(.easeInOut(duration: 0.16)) {
-                        isPinned.toggle()
+                        isPinned = !isPinned
                     }
                 } label: {
-                    Image(systemName: isPinned ? "pin.fill" : "pin.slash")
+                    Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
                         .font(.system(size: 15, weight: .semibold))
                         .symbolRenderingMode(.hierarchical)
                         .scaleEffect(isPinned ? 1.04 : 0.96)
@@ -226,6 +226,7 @@ struct SettingsView: View {
                 }
                 .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
                 .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
+                .accessibilityValue(SettingsWindowPinCommand.accessibilityValue(isPinned: isPinned))
             }
         }
         .frame(maxWidth: .infinity)
@@ -348,6 +349,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
@@ -377,6 +379,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
