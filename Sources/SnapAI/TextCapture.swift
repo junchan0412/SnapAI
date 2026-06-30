@@ -73,6 +73,32 @@ struct PasteboardSnapshotLimits: Equatable {
     var maxTotalByteCount: Int = 64 * 1024 * 1024
 }
 
+enum TextCaptureMethod: String, Equatable {
+    case accessibility = "accessibility"
+    case clipboard = "clipboard"
+}
+
+enum TextCaptureFailureReason: String, Equatable {
+    case accessibilityEmptySelection = "accessibility-empty-selection"
+    case pasteboardSnapshotUnsafe = "pasteboard-snapshot-unsafe"
+    case clipboardUnchanged = "clipboard-unchanged"
+    case clipboardEmpty = "clipboard-empty"
+}
+
+struct TextCaptureOutcome: Equatable {
+    var text: String?
+    var method: TextCaptureMethod?
+    var accessibilityAttempted: Bool
+    var clipboardAttempted: Bool
+    var failureReason: TextCaptureFailureReason?
+    var pasteboardReasonCode: String?
+    var clipboardWaitAttempts: Int
+
+    var usableText: String? {
+        TextCapture.usableCapturedText(text)
+    }
+}
+
 /// 取词模块。
 /// 策略:优先用 Accessibility API 直接读取焦点元素的 kAXSelectedTextAttribute(无感、不污染剪贴板);
 /// 失败时回退到模拟 ⌘C 复制再读剪贴板。
@@ -88,17 +114,44 @@ enum TextCapture {
 
     /// 异步获取选中文字。结果在主线程(MainActor)回调。
     static func capture(preferAX: Bool, completion: @escaping @MainActor (String?) -> Void) {
+        captureDetailed(preferAX: preferAX) { outcome in
+            completion(outcome.usableText)
+        }
+    }
+
+    static func captureDetailed(preferAX: Bool, completion: @escaping @MainActor (TextCaptureOutcome) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
-            var result: String? = nil
+            var outcome = TextCaptureOutcome(text: nil,
+                                             method: nil,
+                                             accessibilityAttempted: preferAX,
+                                             clipboardAttempted: false,
+                                             failureReason: nil,
+                                             pasteboardReasonCode: nil,
+                                             clipboardWaitAttempts: 0)
             if preferAX {
-                result = captureViaAX()
+                let result = captureViaAX()
+                if usableCapturedText(result) != nil {
+                    outcome.text = result
+                    outcome.method = .accessibility
+                } else {
+                    outcome.failureReason = .accessibilityEmptySelection
+                }
             }
-            if result == nil || result?.isEmpty == true {
-                result = captureViaCopy()
+            if outcome.usableText == nil {
+                outcome.clipboardAttempted = true
+                let copyResult = captureViaCopyDetailed()
+                outcome.text = copyResult.text
+                outcome.clipboardWaitAttempts = copyResult.waitAttempts
+                outcome.pasteboardReasonCode = copyResult.pasteboardReasonCode
+                if usableCapturedText(copyResult.text) != nil {
+                    outcome.method = .clipboard
+                    outcome.failureReason = nil
+                } else {
+                    outcome.failureReason = copyResult.failureReason
+                }
             }
-            let final = usableCapturedText(result)
             Task { @MainActor in
-                completion(final)
+                completion(outcome)
             }
         }
     }
@@ -195,11 +248,18 @@ enum TextCapture {
     // MARK: - 模拟复制兜底
 
     private static func captureViaCopy() -> String? {
+        captureViaCopyDetailed().text
+    }
+
+    private static func captureViaCopyDetailed() -> (text: String?,
+                                                     failureReason: TextCaptureFailureReason?,
+                                                     pasteboardReasonCode: String?,
+                                                     waitAttempts: Int) {
         clearSelectionSnapshot()
         let pasteboard = NSPasteboard.general
         let previousSnapshot = snapshotPasteboard(pasteboard)
         guard previousSnapshot.canRestore else {
-            return nil
+            return (nil, .pasteboardSnapshotUnsafe, previousSnapshot.reasonCode, 0)
         }
         let previousChangeCount = pasteboard.changeCount
 
@@ -213,7 +273,7 @@ enum TextCapture {
         }
 
         guard pasteboard.changeCount != previousChangeCount else {
-            return nil
+            return (nil, .clipboardUnchanged, nil, attempts)
         }
 
         let capturedChangeCount = pasteboard.changeCount
@@ -224,7 +284,10 @@ enum TextCapture {
                                      snapshot: previousSnapshot,
                                      expectedChangeCount: capturedChangeCount)
 
-        return captured
+        if usableCapturedText(captured) == nil {
+            return (captured, .clipboardEmpty, nil, attempts)
+        }
+        return (captured, nil, nil, attempts)
     }
 
     private static func sendCmdC() {

@@ -1177,12 +1177,20 @@ func testActionPipelineDiagnostic() {
     action.modelOverride = nil
     action.saveHistory = true
     let localFirst = ActionPipelineDiagnostic.make(action: action,
-                                                  settings: settings,
-                                                  hasImage: false)
+                                                   settings: settings,
+                                                   hasImage: false)
     expect(localFirst.modelPolicy == "auto-route-local-first",
            "pipeline diagnostic records privacy-mode local-first routing")
     expect(localFirst.privacyPolicy.contains("history-metadata-only"),
            "pipeline diagnostic records metadata-only history")
+
+    let capturedInput = ActionPipelineDiagnostic.make(action: action,
+                                                      settings: settings,
+                                                      hasImage: false,
+                                                      captureMethod: .accessibility,
+                                                      sourceKind: .codeEditor)
+    expect(capturedInput.inputPolicy == "text+capture-accessibility+source-code-editor",
+           "pipeline diagnostic records selected-text capture method")
 }
 
 func testAIActionSanitizesImportedConfiguration() {
@@ -1673,6 +1681,15 @@ func testWriteBackCommandFactoryReflectsUndoAvailability() {
 func testCapturedTextPreservesSelectionWhitespace() {
     expect(TextCapture.usableCapturedText("  hello\n") == "  hello\n", "preserves selected whitespace for exact replacement")
     expect(TextCapture.usableCapturedText(" \n\t") == nil, "rejects whitespace-only captures")
+
+    let outcome = TextCaptureOutcome(text: "  hello\n",
+                                     method: .clipboard,
+                                     accessibilityAttempted: true,
+                                     clipboardAttempted: true,
+                                     failureReason: nil,
+                                     pasteboardReasonCode: nil,
+                                     clipboardWaitAttempts: 3)
+    expect(outcome.usableText == "  hello\n", "capture outcome preserves usable selection whitespace")
 }
 
 func testTextCaptureRecoveryGuidePointsToActionablePermissionHelp() {
@@ -1732,6 +1749,29 @@ func testTextCaptureDiagnosticSummarizesStateWithoutContent() {
     expect(!failed.diagnosticSummary.contains("sk-live-secret-value-1234567890"),
            "text capture diagnostics redact sensitive app metadata")
 
+    let clipboardCaptured = TextCaptureDiagnostic.captured(accessibilityGranted: true,
+                                                           preferAX: true,
+                                                           frontmostAppName: "Pages",
+                                                           characterCount: 12,
+                                                           method: .clipboard,
+                                                           clipboardWaitAttempts: 4)
+    expect(clipboardCaptured.diagnosticSummary.contains("method=clipboard"),
+           "text capture diagnostics report clipboard fallback success")
+    expect(clipboardCaptured.diagnosticSummary.contains("clipboardWaitAttempts=4"),
+           "text capture diagnostics report clipboard wait attempts")
+
+    let unsafePasteboard = TextCaptureDiagnostic.noSelection(accessibilityGranted: true,
+                                                             preferAX: true,
+                                                             frontmostAppName: "Pages",
+                                                             failureReason: .pasteboardSnapshotUnsafe,
+                                                             pasteboardReasonCode: "too-large")
+    expect(unsafePasteboard.diagnosticSummary.contains("failure=pasteboard-snapshot-unsafe"),
+           "text capture diagnostics report unsafe pasteboard fallback")
+    expect(unsafePasteboard.diagnosticSummary.contains("pasteboard=too-large"),
+           "text capture diagnostics include pasteboard protection reason")
+    expect(unsafePasteboard.recoverySuggestion.contains("保护剪贴板"),
+           "unsafe pasteboard text capture recovery explains clipboard protection")
+
     let axNoSelection = TextCaptureDiagnostic.noSelection(accessibilityGranted: true,
                                                           preferAX: true,
                                                           frontmostAppName: "Pages")
@@ -1743,6 +1783,26 @@ func testTextCaptureDiagnosticSummarizesStateWithoutContent() {
                                                                     frontmostAppName: "Pages")
     expect(copyFallbackNoSelection.recoverySuggestion == "重新选中文字后重试; 确认目标应用允许复制,也可打开快捷提问",
            "clipboard fallback text capture diagnostics explain copy recovery")
+}
+
+func testSelectionSourceContextClassifiesAppsSafely() {
+    expect(SelectionSourceContext.classify(appName: "Xcode") == .codeEditor,
+           "selection source context recognizes code editors")
+    expect(SelectionSourceContext.classify(appName: "Ghostty") == .terminal,
+           "selection source context recognizes terminals")
+    expect(SelectionSourceContext.classify(appName: "Google Chrome") == .browser,
+           "selection source context recognizes browsers")
+    expect(SelectionSourceContext.classify(appName: "WeChat") == .messaging,
+           "selection source context recognizes messaging apps")
+
+    let context = SelectionSourceContext.make(appName: "Secret sk-live-secret-value-1234567890")
+    expect(context.kind == .unknown, "unknown apps stay generic")
+    expect(!context.diagnosticLine.contains("sk-live-secret-value-1234567890"),
+           "selection source diagnostics redact sensitive app metadata")
+    expect(context.promptPrefix.contains("来源类型: 未知应用"),
+           "selection source prompt includes coarse source type")
+    expect(!context.promptPrefix.contains("Secret"),
+           "selection source prompt does not send raw app names")
 }
 
 func testSystemPrivacySettingsBuildsStablePaneURLs() {
@@ -8908,6 +8968,7 @@ testWriteBackCommandFactoryReflectsUndoAvailability()
 testCapturedTextPreservesSelectionWhitespace()
 testTextCaptureRecoveryGuidePointsToActionablePermissionHelp()
 testTextCaptureDiagnosticSummarizesStateWithoutContent()
+testSelectionSourceContextClassifiesAppsSafely()
 testSystemPrivacySettingsBuildsStablePaneURLs()
 testPasteboardRestoreDecisionProtectsUserChanges()
 testTextCaptureValidatesAXCoreFoundationTypes()

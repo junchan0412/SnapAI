@@ -22,8 +22,20 @@ struct ActionPipelineDiagnostic: Equatable {
 
     static func make(action: AIAction,
                      settings: AppSettings,
-                     hasImage: Bool) -> ActionPipelineDiagnostic {
-        let input = hasImage ? "text+image" : "text"
+                     hasImage: Bool,
+                     captureMethod: TextCaptureMethod? = nil,
+                     sourceKind: SelectionSourceKind? = nil) -> ActionPipelineDiagnostic {
+        var inputParts = ["text"]
+        if hasImage {
+            inputParts.append("image")
+        }
+        if let captureMethod {
+            inputParts.append("capture-\(captureMethod.rawValue)")
+        }
+        if let sourceKind {
+            inputParts.append("source-\(sourceKind.rawValue)")
+        }
+        let input = inputParts.joined(separator: "+")
 
         var privacyParts: [String] = []
         if settings.privacyPreviewEnabled {
