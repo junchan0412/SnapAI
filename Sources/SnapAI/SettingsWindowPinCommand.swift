@@ -13,5 +13,13 @@ enum SettingsWindowPinCommand {
         isPinned ? "pin.slash" : "pin.fill"
     }
 
+    static func statusSystemImage(isPinned: Bool) -> String {
+        isPinned ? "pin.fill" : "pin"
+    }
+
+    static func accessibilityValue(isPinned: Bool) -> String {
+        isPinned ? "已置顶" : "未置顶"
+    }
+
     static let keywords = "settings pin window floating top preferences 设置 置顶 窗口 固定"
 }

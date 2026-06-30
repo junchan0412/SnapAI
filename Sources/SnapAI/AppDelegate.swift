@@ -1952,7 +1952,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindowPinned = pinned
         if let settingsWindow {
             applySettingsWindowPinnedState(to: settingsWindow)
+            settingsWindow.makeKeyAndOrderFront(nil)
+            if pinned {
+                settingsWindow.orderFrontRegardless()
+            }
         }
+        installMainMenu()
     }
 
     private func applySettingsWindowPinnedState(to window: NSWindow) {

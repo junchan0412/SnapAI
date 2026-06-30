@@ -6932,6 +6932,10 @@ func testSettingsWindowPinCommandReflectsCurrentState() {
            "unpinned settings window subtitle explains pin behavior")
     expect(SettingsWindowPinCommand.systemImage(isPinned: false) == "pin.fill",
            "unpinned settings window command uses filled pin")
+    expect(SettingsWindowPinCommand.statusSystemImage(isPinned: false) == "pin",
+           "unpinned settings window status uses outline pin")
+    expect(SettingsWindowPinCommand.accessibilityValue(isPinned: false) == "未置顶",
+           "unpinned settings window status has an explicit accessibility value")
 
     expect(SettingsWindowPinCommand.title(isPinned: true) == "取消置顶设置窗口",
            "pinned settings window command unpins the window")
@@ -6939,6 +6943,10 @@ func testSettingsWindowPinCommandReflectsCurrentState() {
            "pinned settings window subtitle explains current state")
     expect(SettingsWindowPinCommand.systemImage(isPinned: true) == "pin.slash",
            "pinned settings window command uses slash pin")
+    expect(SettingsWindowPinCommand.statusSystemImage(isPinned: true) == "pin.fill",
+           "pinned settings window status uses filled pin")
+    expect(SettingsWindowPinCommand.accessibilityValue(isPinned: true) == "已置顶",
+           "pinned settings window status has an explicit accessibility value")
     expect(SettingsWindowPinCommand.keywords.contains("置顶"), "pin command is searchable in Chinese")
 }
 
