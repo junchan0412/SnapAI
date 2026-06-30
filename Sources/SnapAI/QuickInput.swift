@@ -69,7 +69,7 @@ struct QuickInputView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: currentAction?.icon.isEmpty == false ? currentAction!.icon : "wand.and.stars")
+                        Image(systemName: currentActionIcon)
                         Text(currentAction?.name ?? "动作")
                             .lineLimit(1)
                         Image(systemName: "chevron.down")
@@ -136,6 +136,13 @@ struct QuickInputView: View {
             ?? model.settings.enabledActions.first
     }
 
+    private var currentActionIcon: String {
+        guard let icon = currentAction?.icon, !icon.isEmpty else {
+            return "wand.and.stars"
+        }
+        return icon
+    }
+
     private var canSubmit: Bool {
         !model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil
     }
@@ -184,6 +191,11 @@ final class QuickInputController: NSObject, NSWindowDelegate {
 
     /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
     private func captureScreen() {
+        guard ScreenCapturePermission.isGranted() else {
+            finishScreenCapture(.failure(ScreenCaptureFailureDiagnostic.missingPermission()),
+                                visibleWindows: [])
+            return
+        }
         let visible = NSApp.windows.filter { $0.isVisible }
         visible.forEach { $0.orderOut(nil) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -192,11 +204,11 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
 
     private func runScreenCapture(visibleWindows: [NSWindow]) {
-        let tmpPath = "/tmp/snapai_ss_\(Int(Date().timeIntervalSince1970)).png"
+        let tmpURL = ScreenCaptureTemporaryFile.makeURL()
         captureQueue.async { [weak self] in
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            proc.arguments = ["-x", tmpPath]   // -x 静音
+            proc.arguments = ["-x", tmpURL.path]   // -x 静音
             let timeout = DispatchWorkItem {
                 if proc.isRunning {
                     proc.terminate()
@@ -209,21 +221,42 @@ final class QuickInputController: NSObject, NSWindowDelegate {
                 try proc.run()
                 proc.waitUntilExit()
                 timeout.cancel()
+                let output = ScreenCaptureOutputSnapshot.make(fileURL: tmpURL)
                 guard proc.terminationStatus == 0 else {
-                    throw ScreenCaptureError.failed(proc.terminationStatus)
+                    throw ScreenCaptureFailureDiagnostic(reason: .commandFailed(proc.terminationStatus),
+                                                         permissionGranted: true,
+                                                         output: output)
                 }
-                let url = URL(fileURLWithPath: tmpPath)
-                let data = try Data(contentsOf: url)
+                guard output.exists else {
+                    throw ScreenCaptureFailureDiagnostic(reason: .outputMissing,
+                                                         permissionGranted: true,
+                                                         output: output)
+                }
+                guard (output.byteCount ?? 0) > 0 else {
+                    throw ScreenCaptureFailureDiagnostic(reason: .outputEmpty,
+                                                         permissionGranted: true,
+                                                         output: output)
+                }
+                let data: Data
+                do {
+                    data = try Data(contentsOf: tmpURL)
+                } catch {
+                    throw ScreenCaptureFailureDiagnostic(reason: .unreadableOutput,
+                                                         permissionGranted: true,
+                                                         output: output)
+                }
                 guard let image = NSImage(data: data),
                       let payload = image.snapAIOptimizedData() else {
-                    throw ScreenCaptureError.invalidImage
+                    throw ScreenCaptureFailureDiagnostic(reason: .invalidImage,
+                                                         permissionGranted: true,
+                                                         output: output)
                 }
                 result = .success(payload)
             } catch {
                 timeout.cancel()
                 result = .failure(error)
             }
-            try? FileManager.default.removeItem(atPath: tmpPath)
+            try? FileManager.default.removeItem(at: tmpURL)
 
             DispatchQueue.main.async {
                 self?.finishScreenCapture(result, visibleWindows: visibleWindows)
@@ -238,13 +271,37 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             model.imageData = payload.data
             model.imageMimeType = payload.mimeType
         case .failure(let error):
-            let alert = NSAlert()
-            alert.messageText = "截图失败"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .warning
-            alert.runModal()
+            presentScreenCaptureFailure(error)
         }
         show()
+    }
+
+    private func presentScreenCaptureFailure(_ error: Error) {
+        let diagnostic = error as? ScreenCaptureFailureDiagnostic
+            ?? ScreenCaptureFailureDiagnostic(reason: .unreadableOutput,
+                                              permissionGranted: ScreenCapturePermission.isGranted(),
+                                              output: .missing)
+        let alert = NSAlert()
+        alert.messageText = "截图失败"
+        alert.informativeText = diagnostic.userMessage
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "好")
+        alert.addButton(withTitle: "打开屏幕录制设置")
+        alert.addButton(withTitle: "复制诊断")
+
+        switch alert.runModal() {
+        case .alertSecondButtonReturn:
+            openScreenRecordingSettings()
+        case .alertThirdButtonReturn:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(diagnostic.shareableText, forType: .string)
+        default:
+            break
+        }
+    }
+
+    private func openScreenRecordingSettings() {
+        NSWorkspace.shared.open(SystemPrivacySettings.screenCaptureURL)
     }
 
     private var escMonitor: Any?
@@ -257,20 +314,6 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
     private func removeEscMonitor() {
         if let m = escMonitor { NSEvent.removeMonitor(m); escMonitor = nil }
-    }
-}
-
-private enum ScreenCaptureError: LocalizedError {
-    case failed(Int32)
-    case invalidImage
-
-    var errorDescription: String? {
-        switch self {
-        case .failed(let status):
-            return "screencapture 退出码 \(status)。请确认屏幕录制权限可用后重试。"
-        case .invalidImage:
-            return "截图文件无法解析。"
-        }
     }
 }
 

@@ -7,19 +7,63 @@ struct CommandPaletteItem: Identifiable {
     var subtitle: String
     var systemImage: String
     var keywords: String
+    var shortcutText: String? = nil
     var perform: () -> Void
 
+    var searchableKeywords: String {
+        MarkdownExportSafety.keywords([
+            keywords,
+            CommandPaletteMatcher.shortcutSearchKeywords(shortcutText)
+        ], maxLength: 1_600)
+    }
+
     func matches(_ query: String) -> Bool {
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return true }
-        return title.lowercased().contains(q)
-            || subtitle.lowercased().contains(q)
-            || keywords.lowercased().contains(q)
+        CommandPaletteMatcher.matches(title: title,
+                                      subtitle: subtitle,
+                                      keywords: searchableKeywords,
+                                      query: query)
+    }
+
+    static func uniqued(_ items: [CommandPaletteItem]) -> [CommandPaletteItem] {
+        let ids = CommandIdentifier.uniqued(items.map(\.id))
+        return zip(items, ids).map { item, id in
+            var copy = item
+            copy.id = id
+            return copy
+        }
     }
 }
 
 final class CommandPaletteModel: ObservableObject {
-    @Published var query: String = ""
+    @Published var query: String = "" {
+        didSet {
+            if query != oldValue {
+                selectedIndex = 0
+            }
+        }
+    }
+    @Published var selectedIndex: Int = 0
+
+    func filteredItems(from items: [CommandPaletteItem]) -> [CommandPaletteItem] {
+        Array(CommandPaletteMatcher.ranked(items, query: query) { item in
+            (title: item.title, subtitle: item.subtitle, keywords: item.searchableKeywords)
+        }.prefix(40))
+    }
+
+    func moveSelection(delta: Int, itemCount: Int) {
+        guard itemCount > 0 else {
+            selectedIndex = 0
+            return
+        }
+        selectedIndex = min(max(selectedIndex + delta, 0), itemCount - 1)
+    }
+
+    func selectedItem(from items: [CommandPaletteItem]) -> CommandPaletteItem? {
+        let filtered = filteredItems(from: items)
+        guard !filtered.isEmpty else { return nil }
+        let index = min(max(selectedIndex, 0), filtered.count - 1)
+        return filtered[index]
+    }
 }
 
 @MainActor
@@ -28,6 +72,7 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     private let itemProvider: () -> [CommandPaletteItem]
     private let model = CommandPaletteModel()
     private var escMonitor: Any?
+    private var currentItems: [CommandPaletteItem] = []
 
     init(itemProvider: @escaping () -> [CommandPaletteItem]) {
         self.itemProvider = itemProvider
@@ -35,20 +80,23 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        let wrapped = itemProvider().map { item in
+        let wrapped = CommandPaletteItem.uniqued(itemProvider()).map { item in
             CommandPaletteItem(
                 id: item.id,
                 title: item.title,
                 subtitle: item.subtitle,
                 systemImage: item.systemImage,
                 keywords: item.keywords,
+                shortcutText: item.shortcutText,
                 perform: { [weak self] in
                     self?.hide()
                     item.perform()
                 }
             )
         }
+        currentItems = wrapped
         model.query = ""
+        model.selectedIndex = 0
         let view = CommandPaletteView(items: wrapped,
                                       model: model,
                                       onClose: { [weak self] in self?.hide() })
@@ -77,6 +125,7 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
 
     func hide() {
         removeEscMonitor()
+        currentItems = []
         panel?.orderOut(nil)
     }
 
@@ -88,7 +137,25 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     private func installEscMonitor() {
         removeEscMonitor()
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            if event.keyCode == 53 { self?.hide(); return nil }   // esc
+            guard let self else { return event }
+            switch event.keyCode {
+            case 53: // esc
+                self.hide()
+                return nil
+            case 125: // down
+                self.model.moveSelection(delta: 1,
+                                         itemCount: self.model.filteredItems(from: self.currentItems).count)
+                return nil
+            case 126: // up
+                self.model.moveSelection(delta: -1,
+                                         itemCount: self.model.filteredItems(from: self.currentItems).count)
+                return nil
+            case 36, 76: // return / keypad return
+                self.model.selectedItem(from: self.currentItems)?.perform()
+                return nil
+            default:
+                break
+            }
             return event
         }
     }
@@ -116,7 +183,12 @@ struct CommandPaletteView: View {
     var onClose: () -> Void
 
     private var filteredItems: [CommandPaletteItem] {
-        Array(items.filter { $0.matches(model.query) }.prefix(40))
+        model.filteredItems(from: items)
+    }
+
+    private var selectedIndex: Int {
+        guard !filteredItems.isEmpty else { return 0 }
+        return min(max(model.selectedIndex, 0), filteredItems.count - 1)
     }
 
     var body: some View {
@@ -128,7 +200,7 @@ struct CommandPaletteView: View {
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .onSubmit {
-                        filteredItems.first?.perform()
+                        model.selectedItem(from: items)?.perform()
                     }
                 Button {
                     onClose()
@@ -153,39 +225,74 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(filteredItems) { item in
-                            Button {
-                                item.perform()
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: item.systemImage)
-                                        .frame(width: 24)
-                                        .foregroundStyle(.tint)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.title)
-                                            .font(.callout.weight(.medium))
-                                            .lineLimit(1)
-                                        Text(item.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 4) {
+                            ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
+                                Button {
+                                    item.perform()
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: item.systemImage)
+                                            .frame(width: 24)
+                                            .foregroundStyle(.tint)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.title)
+                                                .font(.callout.weight(.medium))
+                                                .lineLimit(1)
+                                            Text(item.subtitle)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                        if let shortcutText = item.shortcutText, !shortcutText.isEmpty {
+                                            Text(shortcutText)
+                                                .font(.caption.monospaced())
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background {
+                                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                                        .fill(Color.secondary.opacity(0.12))
+                                                }
+                                                .accessibilityLabel("快捷键 \(shortcutText)")
+                                        }
                                     }
-                                    Spacer()
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                    .background {
+                                        if index == selectedIndex {
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .fill(Color.accentColor.opacity(0.16))
+                                        }
+                                    }
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .contentShape(Rectangle())
+                                .buttonStyle(.plain)
+                                .id(item.id)
                             }
-                            .buttonStyle(.plain)
                         }
+                        .padding(8)
                     }
-                    .padding(8)
+                    .onChange(of: selectedIndex) {
+                        scrollToSelection(with: proxy)
+                    }
+                    .onChange(of: model.query) {
+                        scrollToSelection(with: proxy)
+                    }
                 }
             }
         }
         .frame(width: 560, height: 420)
         .background(.ultraThinMaterial)
+    }
+
+    private func scrollToSelection(with proxy: ScrollViewProxy) {
+        guard filteredItems.indices.contains(selectedIndex) else { return }
+        withAnimation(.easeOut(duration: 0.12)) {
+            proxy.scrollTo(filteredItems[selectedIndex].id, anchor: .center)
+        }
     }
 }

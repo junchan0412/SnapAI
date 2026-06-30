@@ -44,6 +44,7 @@ final class AIClient {
         case missingProvider
         case missingModel
         case badResponse(Int, String)
+        case streamError(String)
         case insecureHTTPHost(String)
         case invalidURL
         case imageTooLarge(Int)
@@ -53,6 +54,7 @@ final class AIClient {
             case .missingProvider: return "没有可用的 AI 供应商,请在设置中启用至少一个供应商。"
             case .missingModel: return "未选择可用模型,请在设置中启用或添加模型。"
             case .badResponse(let code, let body): return "请求失败 (HTTP \(code)): \(body)"
+            case .streamError(let body): return "流式响应错误: \(body)"
             case .insecureHTTPHost(let host): return "HTTP 明文端点仅允许用于本机地址。当前主机 \(host) 不安全,请改用 HTTPS。"
             case .invalidURL: return "Base URL 无效。"
             case .imageTooLarge(let bytes): return "图片过大(\(bytes / 1024 / 1024) MB),请压缩后重试。"
@@ -61,6 +63,9 @@ final class AIClient {
     }
 
     private static let maxImageBytes = 5_000_000
+    static let defaultMaxTokens = 2048
+    static let defaultRequestTimeout: Double = 60
+    static let thinkingOutputTokenMargin = 1_024
     private let settings: AppSettings
     private var task: Task<Void, Never>?
 
@@ -76,17 +81,142 @@ final class AIClient {
 
     /// 实际使用的 temperature
     private var effectiveTemperature: Double {
-        settings.activeProvider?.temperature ?? settings.temperature
+        Self.effectiveTemperature(settings: settings)
     }
 
     /// 实际使用的 max_tokens
     private var effectiveMaxTokens: Int {
-        settings.activeProvider?.maxTokens ?? 2048
+        Self.effectiveMaxTokens(settings: settings)
     }
 
     /// 实际超时(秒),优先用供应商配置(#13)
     private var effectiveTimeout: Double {
-        settings.activeProvider?.requestTimeout ?? 60
+        Self.effectiveTimeout(settings: settings)
+    }
+
+    static func effectiveTemperature(settings: AppSettings) -> Double {
+        let raw = settings.activeProvider?.temperature ?? settings.temperature
+        return AppSettings.clampedTemperature(raw)
+    }
+
+    static func effectiveMaxTokens(settings: AppSettings, minimum: Int? = nil) -> Int {
+        let configured = AppSettings.sanitizedImportedMaxTokens(settings.activeProvider?.maxTokens) ?? defaultMaxTokens
+        guard let minimum else { return configured }
+        return min(max(configured, minimum), AppSettings.importedMaxTokensRange.upperBound)
+    }
+
+    static func effectiveTimeout(settings: AppSettings) -> Double {
+        AppSettings.sanitizedImportedRequestTimeout(settings.activeProvider?.requestTimeout) ?? defaultRequestTimeout
+    }
+
+    static func effectiveThinkingBudget(action: AIAction) -> Int {
+        AIAction.sanitizedThinkingBudget(action.thinkingBudget)
+    }
+
+    static func sanitizedResponseBody(_ body: String,
+                                      limit: Int = 500,
+                                      fallback: String = "响应体为空") -> String {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        if let structured = structuredResponseErrorMessage(from: trimmed,
+                                                           limit: limit,
+                                                           fallback: fallback) {
+            return structured
+        }
+        let sanitized = SensitiveTextSanitizer.sanitizedMessage(body, limit: limit)
+        return sanitized.isEmpty ? fallback : sanitized
+    }
+
+    static func openAIStreamErrorMessage(from json: [String: Any]) -> String? {
+        guard let error = json["error"], !(error is NSNull) else { return nil }
+        return streamErrorMessage(from: error, envelope: json, fallback: "OpenAI 兼容服务返回了流式错误")
+    }
+
+    static func anthropicStreamErrorMessage(from json: [String: Any]) -> String? {
+        if let error = json["error"], !(error is NSNull) {
+            return streamErrorMessage(from: error, envelope: json, fallback: "Anthropic 返回了流式错误")
+        }
+        guard (json["type"] as? String) == "error" else { return nil }
+        return streamErrorMessage(from: json, envelope: json, fallback: "Anthropic 返回了流式错误")
+    }
+
+    private static func structuredResponseErrorMessage(from body: String,
+                                                       limit: Int,
+                                                       fallback: String) -> String? {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) else {
+            return nil
+        }
+
+        if let dict = json as? [String: Any] {
+            let payload = (dict["error"].map { $0 is NSNull ? dict : $0 }) ?? dict
+            return streamErrorMessage(from: payload,
+                                      envelope: dict,
+                                      fallback: fallback,
+                                      limit: limit)
+        }
+
+        if let array = json as? [Any],
+           let serialized = compactJSONString(array) {
+            return SensitiveTextSanitizer.sanitizedMessage(serialized, limit: limit)
+        }
+
+        return nil
+    }
+
+    private static func streamErrorMessage(from payload: Any,
+                                           envelope: [String: Any],
+                                           fallback: String,
+                                           limit: Int = 300) -> String {
+        var message = ""
+        var metadata: [String] = []
+
+        if let dict = payload as? [String: Any] {
+            message = firstString(in: dict, keys: ["message", "error", "detail", "details"])
+            metadata = ["type", "code", "param"]
+                .compactMap { key in
+                    guard let value = dict[key] as? String,
+                          !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        return nil
+                    }
+                    return value
+                }
+        } else if let string = payload as? String {
+            message = string
+        }
+
+        if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            message = firstString(in: envelope, keys: ["message", "error", "detail", "details"])
+        }
+        if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let serialized = compactJSONString(payload) {
+            message = serialized
+        }
+        if message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            message = fallback
+        }
+
+        let prefix = metadata.isEmpty ? "" : metadata.joined(separator: ", ") + ": "
+        return SensitiveTextSanitizer.sanitizedMessage(prefix + message, limit: limit)
+    }
+
+    private static func firstString(in dict: [String: Any], keys: [String]) -> String {
+        for key in keys {
+            if let value = dict[key] as? String,
+               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return value
+            }
+        }
+        return ""
+    }
+
+    private static func compactJSONString(_ object: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return text
     }
 
     // MARK: - URL 规范化
@@ -198,7 +328,7 @@ final class AIClient {
         }
         if !(200...299).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? ""
-            throw AIError.badResponse(http.statusCode, String(body.prefix(300)))
+            throw AIError.badResponse(http.statusCode, Self.sanitizedResponseBody(body, limit: 300))
         }
     }
 
@@ -224,7 +354,7 @@ final class AIClient {
         let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? ""
-            throw AIError.badResponse(http.statusCode, String(body.prefix(500)))
+            throw AIError.badResponse(http.statusCode, Self.sanitizedResponseBody(body, limit: 500))
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -309,8 +439,11 @@ final class AIClient {
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             if payload == "[DONE]" { break }
             guard let data = payload.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let choices = json["choices"] as? [[String: Any]],
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            if let errorMessage = Self.openAIStreamErrorMessage(from: json) {
+                throw AIError.streamError(errorMessage)
+            }
+            guard let choices = json["choices"] as? [[String: Any]],
                   let delta = choices.first?["delta"] as? [String: Any],
                   let content = delta["content"] as? String else { continue }
             await MainActor.run { onToken(content) }
@@ -338,17 +471,27 @@ final class AIClient {
         let systemText = messages.filter { $0.role == .system }.map { $0.content }.joined(separator: "\n")
         let convo = messages.filter { $0.role != .system }.map { anthropicMessageDict($0) }
 
+        let thinkingBudget: Int?
+        if let action, action.thinkingMode {
+            thinkingBudget = Self.effectiveThinkingBudget(action: action)
+        } else {
+            thinkingBudget = nil
+        }
+        let maxTokens = thinkingBudget.map {
+            Self.effectiveMaxTokens(settings: settings, minimum: $0 + Self.thinkingOutputTokenMargin)
+        } ?? effectiveMaxTokens
+
         var body: [String: Any] = [
             "model": settings.model,
-            "max_tokens": effectiveMaxTokens,
+            "max_tokens": maxTokens,
             "temperature": effectiveTemperature,
             "stream": true,
             "messages": convo
         ]
         if !systemText.isEmpty { body["system"] = systemText }
         // #2 Anthropic extended thinking
-        if let act = action, act.thinkingMode {
-            body["thinking"] = ["type": "enabled", "budget_tokens": act.thinkingBudget]
+        if let thinkingBudget {
+            body["thinking"] = ["type": "enabled", "budget_tokens": thinkingBudget]
             body.removeValue(forKey: "temperature")   // thinking 模式不支持 temperature
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -362,6 +505,9 @@ final class AIClient {
             let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
             guard let data = payload.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            if let errorMessage = Self.anthropicStreamErrorMessage(from: json) {
+                throw AIError.streamError(errorMessage)
+            }
             let evtType = json["type"] as? String
             if evtType == "content_block_delta",
                let delta = json["delta"] as? [String: Any] {
@@ -388,6 +534,6 @@ final class AIClient {
             errBody += line
             if errBody.count > 800 { break }
         }
-        throw AIError.badResponse(http.statusCode, errBody)
+        throw AIError.badResponse(http.statusCode, Self.sanitizedResponseBody(errBody, limit: 800))
     }
 }

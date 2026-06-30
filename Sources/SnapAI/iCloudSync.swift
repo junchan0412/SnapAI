@@ -70,7 +70,7 @@ final class iCloudSync {
     }
 }
 
-private struct CloudSettingsPayload: Codable {
+struct CloudSettingsPayload: Codable {
     var providers: [AIProvider]
     var activeProviderID: String
     var activeModel: String
@@ -87,34 +87,53 @@ private struct CloudSettingsPayload: Codable {
     var typewriterSpeed: TypewriterSpeed
     var autoRouteEnabled: Bool
     var fallbackEnabled: Bool
+    var routingPreference: AIRoutingPreference
+    var workModePreset: WorkModePreset
     var privacyPreviewEnabled: Bool
     var redactionEnabled: Bool
     var redactionRules: [PrivacyRedactionRule]
+    var historyContentStorage: HistoryContentStorage
     var contextProfiles: [ContextProfile]
     var activeContextProfileID: String
 
     init(settings: AppSettings) {
-        providers = settings.providers
-        activeProviderID = settings.activeProviderID
-        activeModel = settings.activeModel
-        temperature = settings.temperature
+        let providerConfig = AppSettings.importedProviderConfiguration(settings.providers,
+                                                                       activeProviderID: settings.activeProviderID,
+                                                                       activeModel: settings.activeModel) { _ in "" }
+        providers = providerConfig.providers
+        activeProviderID = providerConfig.activeProviderID
+        activeModel = providerConfig.activeModel
+        temperature = AppSettings.clampedTemperature(settings.temperature)
         askHotKey = settings.askHotKey
         translateHotKey = settings.translateHotKey
         quickPanelHotKey = settings.quickPanelHotKey
-        actions = settings.actions
-        askPrompt = settings.askPrompt
-        translatePrompt = settings.translatePrompt
-        systemPrompt = settings.systemPrompt
+        actions = AppSettings.sanitizedImportedActions(settings.actions,
+                                                       originalProviders: settings.providers,
+                                                       sanitizedProviders: providers)
+        askPrompt = AppSettings.sanitizedPrompt(settings.askPrompt,
+                                                fallback: AppSettings.defaultAskPrompt)
+        translatePrompt = AppSettings.sanitizedPrompt(settings.translatePrompt,
+                                                      fallback: AppSettings.defaultTranslatePrompt,
+                                                      migrateOldTranslateDefault: true)
+        systemPrompt = AppSettings.sanitizedPrompt(settings.systemPrompt,
+                                                   fallback: AppSettings.defaultSystemPrompt,
+                                                   allowEmpty: true,
+                                                   maxLength: AppSettings.importedSystemPromptLimit)
         useAXFirst = settings.useAXFirst
         showDockIcon = settings.showDockIcon
         typewriterSpeed = settings.typewriterSpeed
         autoRouteEnabled = settings.autoRouteEnabled
         fallbackEnabled = settings.fallbackEnabled
+        routingPreference = settings.routingPreference
+        workModePreset = settings.workModePreset
         privacyPreviewEnabled = settings.privacyPreviewEnabled
         redactionEnabled = settings.redactionEnabled
-        redactionRules = settings.redactionRules
-        contextProfiles = settings.contextProfiles
-        activeContextProfileID = settings.activeContextProfileID
+        redactionRules = AppSettings.sanitizedImportedRedactionRules(settings.redactionRules)
+        historyContentStorage = settings.historyContentStorage
+        let context = AppSettings.sanitizedImportedContextProfiles(settings.contextProfiles,
+                                                                   activeID: settings.activeContextProfileID)
+        contextProfiles = context.profiles
+        activeContextProfileID = context.activeID
     }
 
     enum CodingKeys: String, CodingKey {
@@ -122,61 +141,95 @@ private struct CloudSettingsPayload: Codable {
         case askHotKey, translateHotKey, quickPanelHotKey
         case actions, askPrompt, translatePrompt, systemPrompt
         case useAXFirst, showDockIcon, typewriterSpeed
-        case autoRouteEnabled, fallbackEnabled
+        case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
+        case historyContentStorage
         case contextProfiles, activeContextProfileID
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        providers = (try? c.decode([AIProvider].self, forKey: .providers)) ?? []
-        activeProviderID = (try? c.decode(String.self, forKey: .activeProviderID)) ?? ""
-        activeModel = (try? c.decode(String.self, forKey: .activeModel)) ?? ""
-        temperature = (try? c.decode(Double.self, forKey: .temperature)) ?? 0.3
+        let decodedProviders = (try? c.decode([AIProvider].self, forKey: .providers)) ?? []
+        let decodedActiveProviderID = (try? c.decode(String.self, forKey: .activeProviderID)) ?? ""
+        let decodedActiveModel = (try? c.decode(String.self, forKey: .activeModel)) ?? ""
+        let providerConfig = AppSettings.importedProviderConfiguration(decodedProviders,
+                                                                       activeProviderID: decodedActiveProviderID,
+                                                                       activeModel: decodedActiveModel)
+        providers = providerConfig.providers
+        activeProviderID = providerConfig.activeProviderID
+        activeModel = providerConfig.activeModel
+        temperature = AppSettings.clampedTemperature((try? c.decode(Double.self, forKey: .temperature)) ?? 0.3)
         askHotKey = (try? c.decode(HotKeyCombo.self, forKey: .askHotKey)) ?? .askDefault
         translateHotKey = (try? c.decode(HotKeyCombo.self, forKey: .translateHotKey)) ?? .translateDefault
         quickPanelHotKey = (try? c.decode(HotKeyCombo.self, forKey: .quickPanelHotKey)) ?? .quickPanelDefault
-        actions = (try? c.decode([AIAction].self, forKey: .actions)) ?? AIAction.defaults()
-        askPrompt = (try? c.decode(String.self, forKey: .askPrompt)) ?? AppSettings.defaultAskPrompt
-        translatePrompt = (try? c.decode(String.self, forKey: .translatePrompt)) ?? AppSettings.defaultTranslatePrompt
-        systemPrompt = (try? c.decode(String.self, forKey: .systemPrompt)) ?? AppSettings.defaultSystemPrompt
+        actions = AppSettings.sanitizedImportedActions((try? c.decode([AIAction].self, forKey: .actions)) ?? AIAction.defaults(),
+                                                       originalProviders: decodedProviders,
+                                                       sanitizedProviders: providers)
+        askPrompt = AppSettings.sanitizedPrompt(try? c.decode(String.self, forKey: .askPrompt),
+                                                fallback: AppSettings.defaultAskPrompt)
+        translatePrompt = AppSettings.sanitizedPrompt(try? c.decode(String.self, forKey: .translatePrompt),
+                                                      fallback: AppSettings.defaultTranslatePrompt,
+                                                      migrateOldTranslateDefault: true)
+        systemPrompt = AppSettings.sanitizedPrompt(try? c.decode(String.self, forKey: .systemPrompt),
+                                                   fallback: AppSettings.defaultSystemPrompt,
+                                                   allowEmpty: true,
+                                                   maxLength: AppSettings.importedSystemPromptLimit)
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
         autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
         fallbackEnabled = (try? c.decode(Bool.self, forKey: .fallbackEnabled)) ?? true
+        routingPreference = (try? c.decode(AIRoutingPreference.self, forKey: .routingPreference)) ?? .balanced
+        workModePreset = (try? c.decode(WorkModePreset.self, forKey: .workModePreset)) ?? .standard
         privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
         redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
-        redactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
-        contextProfiles = (try? c.decode([ContextProfile].self, forKey: .contextProfiles)) ?? ContextProfile.defaults()
-        activeContextProfileID = (try? c.decode(String.self, forKey: .activeContextProfileID)) ?? ""
+        redactionRules = AppSettings.sanitizedImportedRedactionRules(
+            (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
+        )
+        historyContentStorage = (try? c.decode(HistoryContentStorage.self, forKey: .historyContentStorage)) ?? .full
+        let decodedActiveContextProfileID = (try? c.decode(String.self, forKey: .activeContextProfileID)) ?? ""
+        let context = AppSettings.sanitizedImportedContextProfiles(
+            (try? c.decode([ContextProfile].self, forKey: .contextProfiles)) ?? ContextProfile.defaults(),
+            activeID: decodedActiveContextProfileID
+        )
+        contextProfiles = context.profiles
+        activeContextProfileID = context.activeID
     }
 
     func apply(to settings: AppSettings) {
-        var mergedProviders = providers
-        for i in mergedProviders.indices where mergedProviders[i].apiKey.isEmpty {
-            mergedProviders[i].apiKey = Keychain.apiKey(for: mergedProviders[i].id)
-        }
-
-        settings.providers = mergedProviders
-        settings.activeProviderID = activeProviderID
-        settings.activeModel = activeModel
+        let providerConfig = AppSettings.importedProviderConfiguration(providers,
+                                                                       activeProviderID: activeProviderID,
+                                                                       activeModel: activeModel)
+        settings.providers = providerConfig.providers
+        settings.activeProviderID = providerConfig.activeProviderID
+        settings.activeModel = providerConfig.activeModel
         settings.temperature = temperature
         settings.askHotKey = askHotKey
         settings.translateHotKey = translateHotKey
         settings.quickPanelHotKey = quickPanelHotKey
-        settings.actions = actions
-        settings.askPrompt = askPrompt
-        settings.translatePrompt = translatePrompt
-        settings.systemPrompt = systemPrompt
+        settings.actions = AppSettings.sanitizedImportedActions(actions,
+                                                                originalProviders: providers,
+                                                                sanitizedProviders: settings.providers)
+        settings.askPrompt = AppSettings.sanitizedPrompt(askPrompt,
+                                                         fallback: AppSettings.defaultAskPrompt)
+        settings.translatePrompt = AppSettings.sanitizedPrompt(translatePrompt,
+                                                               fallback: AppSettings.defaultTranslatePrompt,
+                                                               migrateOldTranslateDefault: true)
+        settings.systemPrompt = AppSettings.sanitizedPrompt(systemPrompt,
+                                                            fallback: AppSettings.defaultSystemPrompt,
+                                                            allowEmpty: true,
+                                                            maxLength: AppSettings.importedSystemPromptLimit)
         settings.useAXFirst = useAXFirst
         settings.showDockIcon = showDockIcon
         settings.typewriterSpeed = typewriterSpeed
         settings.autoRouteEnabled = autoRouteEnabled
         settings.fallbackEnabled = fallbackEnabled
+        settings.routingPreference = routingPreference
+        settings.workModePreset = workModePreset
         settings.privacyPreviewEnabled = privacyPreviewEnabled
         settings.redactionEnabled = redactionEnabled
         settings.redactionRules = redactionRules
+        settings.historyContentStorage = historyContentStorage
         settings.contextProfiles = contextProfiles
         settings.activeContextProfileID = activeContextProfileID
         settings.normalizeActive()

@@ -18,6 +18,61 @@ struct TextSelectionSnapshot {
     }
 }
 
+struct PasteboardSnapshot: Equatable {
+    static let defaultLimits = PasteboardSnapshotLimits()
+
+    var items: [[String: Data]]
+    var isComplete: Bool
+    var reasonCode: String
+    var totalByteCount: Int
+    var itemCount: Int
+    var typeCount: Int
+
+    var canRestore: Bool {
+        isComplete
+    }
+
+    var recoveryMessage: String {
+        guard !isComplete else { return "剪贴板可安全恢复" }
+        return "当前剪贴板内容过大或格式过多,为避免丢失用户剪贴板,已取消自动粘贴。请手动复制结果后粘贴。"
+    }
+
+    var undoRecoveryMessage: String {
+        guard !isComplete else { return "剪贴板可安全恢复" }
+        return "当前剪贴板内容过大或格式过多,为避免丢失用户剪贴板,已取消自动撤销。请在目标应用中使用系统撤销,或手动恢复。"
+    }
+
+    static func complete(items: [[String: Data]],
+                         totalByteCount: Int,
+                         itemCount: Int,
+                         typeCount: Int) -> PasteboardSnapshot {
+        PasteboardSnapshot(items: items,
+                           isComplete: true,
+                           reasonCode: "complete",
+                           totalByteCount: max(0, totalByteCount),
+                           itemCount: max(0, itemCount),
+                           typeCount: max(0, typeCount))
+    }
+
+    static func incomplete(reasonCode: String,
+                           totalByteCount: Int,
+                           itemCount: Int,
+                           typeCount: Int) -> PasteboardSnapshot {
+        PasteboardSnapshot(items: [],
+                           isComplete: false,
+                           reasonCode: reasonCode,
+                           totalByteCount: max(0, totalByteCount),
+                           itemCount: max(0, itemCount),
+                           typeCount: max(0, typeCount))
+    }
+}
+
+struct PasteboardSnapshotLimits: Equatable {
+    var maxItemCount: Int = 32
+    var maxTypeCount: Int = 128
+    var maxTotalByteCount: Int = 64 * 1024 * 1024
+}
+
 /// 取词模块。
 /// 策略:优先用 Accessibility API 直接读取焦点元素的 kAXSelectedTextAttribute(无感、不污染剪贴板);
 /// 失败时回退到模拟 ⌘C 复制再读剪贴板。
@@ -76,7 +131,8 @@ enum TextCapture {
         guard AXUIElementCopyAttributeValue(systemWide,
                                             kAXFocusedUIElementAttribute as CFString,
                                             &focused) == .success,
-              let element = focused else {
+              let element = focused,
+              isAXUIElementRef(element) else {
             return nil
         }
         let axElement = element as! AXUIElement
@@ -99,7 +155,7 @@ enum TextCapture {
                                             kAXSelectedTextRangeAttribute as CFString,
                                             &rangeValue) == .success,
               let rawValue = rangeValue,
-              CFGetTypeID(rawValue) == AXValueGetTypeID() else {
+              isAXValueRef(rawValue) else {
             clearSelectionSnapshot()
             return
         }
@@ -128,12 +184,23 @@ enum TextCapture {
         }
     }
 
+    static func isAXUIElementRef(_ value: CFTypeRef) -> Bool {
+        CFGetTypeID(value) == AXUIElementGetTypeID()
+    }
+
+    static func isAXValueRef(_ value: CFTypeRef) -> Bool {
+        CFGetTypeID(value) == AXValueGetTypeID()
+    }
+
     // MARK: - 模拟复制兜底
 
     private static func captureViaCopy() -> String? {
         clearSelectionSnapshot()
         let pasteboard = NSPasteboard.general
-        let previousItems = snapshotPasteboard(pasteboard)
+        let previousSnapshot = snapshotPasteboard(pasteboard)
+        guard previousSnapshot.canRestore else {
+            return nil
+        }
         let previousChangeCount = pasteboard.changeCount
 
         sendCmdC()
@@ -149,10 +216,13 @@ enum TextCapture {
             return nil
         }
 
+        let capturedChangeCount = pasteboard.changeCount
         let captured = pasteboard.string(forType: .string)
 
         // 还原剪贴板,避免污染用户原有内容
-        restorePasteboard(pasteboard, items: previousItems)
+        restorePasteboardIfUnchanged(pasteboard,
+                                     snapshot: previousSnapshot,
+                                     expectedChangeCount: capturedChangeCount)
 
         return captured
     }
@@ -206,22 +276,70 @@ enum TextCapture {
         }
     }
 
-    static func snapshotPasteboard(_ pb: NSPasteboard) -> [[String: Data]] {
+    static func pasteboardSnapshotRejectionReason(itemCount: Int,
+                                                  typeCount: Int,
+                                                  totalByteCount: Int,
+                                                  limits: PasteboardSnapshotLimits = PasteboardSnapshot.defaultLimits) -> String? {
+        if itemCount > limits.maxItemCount { return "too-many-items" }
+        if typeCount > limits.maxTypeCount { return "too-many-types" }
+        if totalByteCount > limits.maxTotalByteCount { return "too-large" }
+        return nil
+    }
+
+    static func snapshotPasteboard(_ pb: NSPasteboard,
+                                   limits: PasteboardSnapshotLimits = PasteboardSnapshot.defaultLimits) -> PasteboardSnapshot {
         var snapshot: [[String: Data]] = []
-        for item in pb.pasteboardItems ?? [] {
+        var totalByteCount = 0
+        var typeCount = 0
+        let pasteboardItems = pb.pasteboardItems ?? []
+        if let reason = pasteboardSnapshotRejectionReason(itemCount: pasteboardItems.count,
+                                                          typeCount: 0,
+                                                          totalByteCount: 0,
+                                                          limits: limits) {
+            return .incomplete(reasonCode: reason,
+                               totalByteCount: 0,
+                               itemCount: pasteboardItems.count,
+                               typeCount: 0)
+        }
+        for item in pasteboardItems {
             var dict: [String: Data] = [:]
             for type in item.types {
+                typeCount += 1
+                if let reason = pasteboardSnapshotRejectionReason(itemCount: pasteboardItems.count,
+                                                                  typeCount: typeCount,
+                                                                  totalByteCount: totalByteCount,
+                                                                  limits: limits) {
+                    return .incomplete(reasonCode: reason,
+                                       totalByteCount: totalByteCount,
+                                       itemCount: pasteboardItems.count,
+                                       typeCount: typeCount)
+                }
                 if let data = item.data(forType: type) {
+                    totalByteCount += data.count
+                    if let reason = pasteboardSnapshotRejectionReason(itemCount: pasteboardItems.count,
+                                                                      typeCount: typeCount,
+                                                                      totalByteCount: totalByteCount,
+                                                                      limits: limits) {
+                        return .incomplete(reasonCode: reason,
+                                           totalByteCount: totalByteCount,
+                                           itemCount: pasteboardItems.count,
+                                           typeCount: typeCount)
+                    }
                     dict[type.rawValue] = data
                 }
             }
             snapshot.append(dict)
         }
-        return snapshot
+        return .complete(items: snapshot,
+                         totalByteCount: totalByteCount,
+                         itemCount: pasteboardItems.count,
+                         typeCount: typeCount)
     }
 
-    static func restorePasteboard(_ pb: NSPasteboard, items: [[String: Data]]) {
+    static func restorePasteboard(_ pb: NSPasteboard, snapshot: PasteboardSnapshot) {
+        guard snapshot.canRestore else { return }
         pb.clearContents()
+        let items = snapshot.items
         guard !items.isEmpty else { return }
         var newItems: [NSPasteboardItem] = []
         for dict in items {
@@ -232,5 +350,23 @@ enum TextCapture {
             newItems.append(item)
         }
         pb.writeObjects(newItems)
+    }
+
+    static func shouldRestorePasteboard(expectedChangeCount: Int,
+                                        currentChangeCount: Int) -> Bool {
+        currentChangeCount == expectedChangeCount
+    }
+
+    @discardableResult
+    static func restorePasteboardIfUnchanged(_ pb: NSPasteboard,
+                                             snapshot: PasteboardSnapshot,
+                                             expectedChangeCount: Int) -> Bool {
+        guard snapshot.canRestore else { return false }
+        guard shouldRestorePasteboard(expectedChangeCount: expectedChangeCount,
+                                      currentChangeCount: pb.changeCount) else {
+            return false
+        }
+        restorePasteboard(pb, snapshot: snapshot)
+        return true
     }
 }

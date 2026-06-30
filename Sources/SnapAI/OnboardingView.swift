@@ -35,9 +35,7 @@ struct OnboardingView: View {
                 ) {
                     Button(perm.axGranted ? "已授权" : "去授权") {
                         if !perm.axGranted {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                NSWorkspace.shared.open(url)
-                            }
+                            NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
                             _ = TextCapture.hasAccessibilityPermission(prompt: true)
                         }
                         perm.refresh(prompt: true)
@@ -84,7 +82,7 @@ struct OnboardingView: View {
 
     private var isAIConfigurationReady: Bool {
         guard let provider = settings.activeProvider, !provider.apiKey.isEmpty else { return false }
-        return !settings.activeModel.isEmpty && provider.enabledModelNames.contains(settings.activeModel)
+        return !settings.model.isEmpty && provider.enabledModelNames.contains(settings.model)
     }
 
     @ViewBuilder

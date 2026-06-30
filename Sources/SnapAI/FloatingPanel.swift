@@ -35,18 +35,23 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
     private let vm: ResultViewModel
     private let settings: AppSettings
+    private let onOpenAISettings: () -> Void
     private var localMonitor: Any?
     private var globalMonitor: Any?
 
-    init(vm: ResultViewModel) {
+    init(vm: ResultViewModel,
+         onOpenAISettings: @escaping () -> Void = {}) {
         self.vm = vm
         self.settings = vm.settings
+        self.onOpenAISettings = onOpenAISettings
         super.init()
     }
 
     /// 在鼠标位置附近显示面板
     func show() {
-        let rootView = ResultView(vm: vm, onClose: { [weak self] in self?.hide() })
+        let rootView = ResultView(vm: vm,
+                                  onClose: { [weak self] in self?.hide() },
+                                  onOpenAISettings: onOpenAISettings)
         let hosting = NSHostingView(rootView: rootView)
 
         let panel: FloatingPanel
@@ -54,8 +59,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             panel = existing
             panel.contentView = hosting
         } else {
-            let w = max(320, settings.panelWidth)
-            let h = max(200, settings.panelHeight)
+            let w = AppSettings.clampedPanelWidth(settings.panelWidth)
+            let h = AppSettings.clampedPanelHeight(settings.panelHeight)
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h))
             panel.contentView = hosting
             panel.delegate = self
@@ -77,8 +82,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     /// 窗口尺寸变化时记忆(#8)
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let panel = panel else { return }
-        settings.panelWidth = panel.frame.width
-        settings.panelHeight = panel.frame.height
+        settings.panelWidth = AppSettings.clampedPanelWidth(panel.frame.width)
+        settings.panelHeight = AppSettings.clampedPanelHeight(panel.frame.height)
         settings.save()
     }
 

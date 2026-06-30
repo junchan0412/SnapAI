@@ -54,7 +54,7 @@ final class ModelLoader: ObservableObject {
                     onChange()
                 }
             } catch {
-                self.errors[providerID] = error.localizedDescription
+                self.errors[providerID] = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription)
             }
             self.loadingProviderID = nil
         }
@@ -66,15 +66,23 @@ final class ModelLoader: ObservableObject {
 final class AISettingsUI: ObservableObject {
     @Published var expandedProviderID: String?
     @Published var expandedActionID: String?
-    @Published var selectedSection: SettingsSection = .ai
     @Published var newModelName: String = ""
     @Published var hotKeyError: String?
     @Published var newRedactionName: String = ""
     @Published var newRedactionPattern: String = ""
     @Published var newRedactionReplacement: String = "[已隐藏]"
     @Published var newContextName: String = ""
-    @Published var redactionSample: String = "联系我 test@example.com 或 13800138000"
+    @Published var redactionSample: String = PrivacyFilter.defaultSampleText
     var deferredSaveTask: Task<Void, Never>?
+}
+
+@MainActor
+final class SettingsNavigationModel: ObservableObject {
+    @Published var selectedSection: SettingsSection = .ai
+
+    func select(_ section: SettingsSection) {
+        selectedSection = section
+    }
 }
 
 /// 供应商连接测试状态(#2)
@@ -103,46 +111,6 @@ final class ConnectionTester: ObservableObject {
                 self.results[providerID] = .failure(error)
             }
             self.testingProviderID = nil
-        }
-    }
-}
-
-enum SettingsSection: String, CaseIterable, Identifiable {
-    case ai
-    case actions
-    case history
-    case general
-    case permission
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .ai: return "AI 模型"
-        case .actions: return "动作"
-        case .history: return "历史"
-        case .general: return "通用"
-        case .permission: return "权限"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .ai: return "cpu"
-        case .actions: return "wand.and.stars"
-        case .history: return "clock.arrow.circlepath"
-        case .general: return "slider.horizontal.3"
-        case .permission: return "checkmark.shield"
-        }
-    }
-
-    var tabWidth: CGFloat {
-        switch self {
-        case .ai: return 96
-        case .actions: return 82
-        case .history: return 82
-        case .general: return 82
-        case .permission: return 82
         }
     }
 }
@@ -204,6 +172,7 @@ private struct SettingsSectionPicker: View {
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var navigation: SettingsNavigationModel
     var onChange: () -> Void   // 设置变更后回调(用于重注册快捷键 + 保存)
     @Binding var isPinned: Bool
 
@@ -228,8 +197,8 @@ struct SettingsView: View {
     private var settingsHeader: some View {
         ZStack {
             SettingsSectionPicker(selection: Binding(
-                get: { ui.selectedSection },
-                set: { ui.selectedSection = $0 }
+                get: { navigation.selectedSection },
+                set: { navigation.selectedSection = $0 }
             ))
             HStack {
                 Spacer()
@@ -265,7 +234,7 @@ struct SettingsView: View {
     private var settingsContentSurface: some View {
         ZStack {
             selectedSectionContent
-                .id(ui.selectedSection.id)
+                .id(navigation.selectedSection.id)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .trailing)),
                     removal: .opacity.combined(with: .move(edge: .leading))
@@ -281,12 +250,12 @@ struct SettingsView: View {
                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .animation(.easeInOut(duration: 0.18), value: ui.selectedSection)
+        .animation(.easeInOut(duration: 0.18), value: navigation.selectedSection)
     }
 
     @ViewBuilder
     private var selectedSectionContent: some View {
-        switch ui.selectedSection {
+        switch navigation.selectedSection {
         case .ai:
             aiTab
         case .actions:
@@ -337,7 +306,7 @@ struct SettingsView: View {
                             settings.activate(providerID: p.id, model: m)
                             onChange()
                         } label: {
-                            if p.id == settings.activeProviderID {
+                            if p.id == settings.activeProvider?.id {
                                 Label(p.name, systemImage: "checkmark")
                             } else { Text(p.name) }
                         }
@@ -360,13 +329,13 @@ struct SettingsView: View {
                             settings.activeModel = m
                             commit()
                         } label: {
-                            if m == settings.activeModel {
+                            if m == settings.model {
                                 Label(m, systemImage: "checkmark")
                             } else { Text(m) }
                         }
                     }
                 } label: {
-                    menuLabel(settings.activeModel.isEmpty ? "选择模型" : settings.activeModel, icon: "cpu")
+                    menuLabel(settings.modelSelectionTitle, icon: "cpu")
                 }
                 .frame(maxWidth: .infinity)
                 .buttonStyle(.bordered)
@@ -389,6 +358,20 @@ struct SettingsView: View {
             Text("AI 路由").font(.headline)
             Toggle("自动按动作、文本长度和图片输入选择模型", isOn: $settings.autoRouteEnabled)
                 .onChange(of: settings.autoRouteEnabled) { commit() }
+            HStack(spacing: 10) {
+                Text("路由偏好")
+                    .font(.callout.weight(.medium))
+                Picker("", selection: $settings.routingPreference) {
+                    ForEach(AIRoutingPreference.allCases) { preference in
+                        Text(preference.rawValue).tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: settings.routingPreference) { commit() }
+            }
+            Text(settings.routingPreference.description)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Toggle("请求失败时自动切换备用供应商/模型", isOn: $settings.fallbackEnabled)
                 .onChange(of: settings.fallbackEnabled) { commit() }
             Text("动作专属供应商仍然优先。若已产生部分输出,失败后不会自动重发,避免重复内容。")
@@ -610,7 +593,7 @@ struct SettingsView: View {
                 Label("连接成功", systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
             case .failure(let err):
-                Label(err.localizedDescription, systemImage: "xmark.circle.fill")
+                Label(SensitiveTextSanitizer.sanitizedMessage(err.localizedDescription), systemImage: "xmark.circle.fill")
                     .font(.caption).foregroundStyle(.red)
                     .lineLimit(1).truncationMode(.middle)
             }
@@ -624,7 +607,9 @@ struct SettingsView: View {
             get: { settings.providers.first(where: { $0.id == provider.id })?.temperature ?? -1 },
             set: { newVal in
                 guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
-                settings.providers[idx].temperature = newVal < 0 ? nil : newVal
+                settings.providers[idx].temperature = newVal < 0
+                    ? nil
+                    : AppSettings.sanitizedImportedProviderTemperature(newVal)
                 commit()
             }
         )
@@ -633,7 +618,10 @@ struct SettingsView: View {
             get: { provider.maxTokens.map(String.init) ?? "" },
             set: { str in
                 guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
-                settings.providers[idx].maxTokens = Int(str.trimmingCharacters(in: .whitespaces))
+                let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                settings.providers[idx].maxTokens = trimmed.isEmpty
+                    ? nil
+                    : AppSettings.sanitizedImportedMaxTokens(Int(trimmed))
                 commit()
             }
         )
@@ -642,7 +630,9 @@ struct SettingsView: View {
                 get: { hasTemp },
                 set: { on in
                     guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
-                    settings.providers[idx].temperature = on ? settings.temperature : nil
+                    settings.providers[idx].temperature = on
+                        ? AppSettings.sanitizedImportedProviderTemperature(settings.temperature)
+                        : nil
                     commit()
                 }
             ))
@@ -666,7 +656,10 @@ struct SettingsView: View {
                     get: { provider.requestTimeout.map { "\($0)" } ?? "" },
                     set: { str in
                         guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
-                        settings.providers[idx].requestTimeout = Double(str.trimmingCharacters(in: .whitespaces))
+                        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                        settings.providers[idx].requestTimeout = trimmed.isEmpty
+                            ? nil
+                            : AppSettings.sanitizedImportedRequestTimeout(Double(trimmed))
                         commit()
                     }
                 ))
@@ -717,7 +710,7 @@ struct SettingsView: View {
                 .truncationMode(.middle)
                 .foregroundStyle(entry.enabled ? .primary : .secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if provider.id == settings.activeProviderID && entry.name == settings.activeModel {
+            if provider.id == settings.activeProvider?.id && entry.name == settings.model {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.caption)
@@ -1060,7 +1053,14 @@ struct SettingsView: View {
             if action.thinkingMode {
                 editorRow("思考预算") {
                     HStack {
-                        TextField("tokens", value: bindingForAction(action.id, \.thinkingBudget), formatter: NumberFormatter())
+                        TextField("tokens", value: Binding<Int>(
+                            get: { action.thinkingBudget },
+                            set: { newValue in
+                                guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                                settings.actions[idx].thinkingBudget = AIAction.sanitizedThinkingBudget(newValue)
+                                commit()
+                            }
+                        ), formatter: NumberFormatter())
                             .textFieldStyle(.roundedBorder).frame(width: 80)
                         Text("tokens(Anthropic 专用,建议 4000–16000)")
                             .font(.caption2).foregroundStyle(.secondary)
@@ -1084,6 +1084,9 @@ struct SettingsView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
+            Text("关闭后该动作的结果不会进入历史记录,适合处理隐私敏感内容。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             HStack {
                 Spacer()
@@ -1188,6 +1191,25 @@ struct SettingsView: View {
                 Button("清空") { settings.clearHistory() }
                     .disabled(settings.history.isEmpty)
             }
+            HStack(spacing: 10) {
+                Text("保存内容")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $settings.historyContentStorage) {
+                    ForEach(HistoryContentStorage.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: 190)
+                .onChange(of: settings.historyContentStorage) { commit() }
+                Text(settings.historyContentStorage.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+            }
             if settings.history.isEmpty {
                 Spacer()
                 Text("暂无历史记录").foregroundStyle(.secondary)
@@ -1208,24 +1230,36 @@ struct SettingsView: View {
     private func historyRow(_ entry: HistoryEntry) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(entry.actionName).font(.caption.weight(.semibold))
+                Text(entry.displayActionName).font(.caption.weight(.semibold))
                     .padding(.horizontal, 6).padding(.vertical, 1)
                     .background(Color.accentColor.opacity(0.15)).clipShape(Capsule())
-                Text("\(entry.provider) / \(entry.model)").font(.caption2).foregroundStyle(.secondary)
+                Text(entry.modelDisplayText).font(.caption2).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
                 Spacer()
                 Text(entry.dateString).font(.caption2).foregroundStyle(.secondary)
                 Button {
+                    guard let output = entry.copyableOutputText else { return }
                     let pb = NSPasteboard.general
                     pb.clearContents()
-                    pb.setString(entry.output, forType: .string)
+                    pb.setString(output, forType: .string)
                 } label: { Image(systemName: "doc.on.doc") }
-                    .buttonStyle(.plain).help("复制结果")
+                    .buttonStyle(.plain)
+                    .disabled(entry.copyableOutputText == nil)
+                    .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
             }
-            Text(entry.source).font(.caption).foregroundStyle(.secondary)
-                .lineLimit(2)
-            Text(entry.output).font(.callout)
-                .lineLimit(3)
+            if let source = entry.sourceDisplayText {
+                Text(source).font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            if let output = entry.outputDisplayText {
+                Text(output).font(.callout)
+                    .lineLimit(3)
+            } else if entry.sourceDisplayText == nil {
+                Text(entry.emptyContentPlaceholder)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1254,6 +1288,8 @@ struct SettingsView: View {
     private var generalTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                workModeSection
+
                 settingsSection("启动与显示") {
                     settingsToggleRow(
                         title: "开机启动",
@@ -1338,11 +1374,68 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    private var workModeSection: some View {
+        settingsSection("工作模式") {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: settings.matchingWorkModePreset?.systemImage ?? "slider.horizontal.2.square")
+                    .font(.title3)
+                    .foregroundStyle(.tint)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(settings.workModeStatusTitle)
+                        .font(.callout.weight(.medium))
+                    Text(settings.workModeStatusDetail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+            }
+
+            compactDivider
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 8)], spacing: 8) {
+                ForEach(WorkModePreset.allCases) { mode in
+                    workModeButton(mode)
+                }
+            }
+        }
+    }
+
+    private func workModeButton(_ mode: WorkModePreset) -> some View {
+        let isCurrent = settings.matchingWorkModePreset == mode
+        return Button {
+            settings.applyWorkMode(mode)
+            commit()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isCurrent ? "checkmark.circle.fill" : mode.systemImage)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(mode.shortTitle)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text(mode.summary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(isCurrent ? .accentColor : .secondary)
+        .help(mode.summary)
+    }
+
     private var privacySection: some View {
         settingsSection("隐私") {
             settingsToggleRow(
                 title: "发送前预览",
-                description: "先查看将提交给 AI 的文本和上下文。",
+                description: "发送前查看最终 Prompt、脱敏命中和附件摘要。",
                 isOn: Binding(
                     get: { settings.privacyPreviewEnabled },
                     set: { settings.privacyPreviewEnabled = $0; commit() }
@@ -1490,28 +1583,39 @@ struct SettingsView: View {
     }
 
     private var redactionRulesEditor: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let preview = redactionPreview
+        let newPatternError = newRedactionPatternError
+        return VStack(alignment: .leading, spacing: 6) {
             ForEach(settings.redactionRules) { rule in
-                HStack(spacing: 6) {
-                    Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
-                        .labelsHidden()
-                    TextField("名称", text: bindingForRedactionRule(rule.id, \.name, policy: .deferredSave), onCommit: commit)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 82)
-                    TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern, policy: .deferredSave), onCommit: commit)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement, policy: .deferredSave), onCommit: commit)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 86)
-                    Button {
-                        settings.redactionRules.removeAll { $0.id == rule.id }
-                        commit()
-                    } label: {
-                        Image(systemName: "trash")
+                let report = preview.reports.first { $0.ruleID == rule.id }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
+                            .labelsHidden()
+                        TextField("名称", text: bindingForRedactionRule(rule.id, \.name, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 82)
+                        TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 86)
+                        Button {
+                            settings.redactionRules.removeAll { $0.id == rule.id }
+                            commit()
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .help("删除规则")
                     }
-                    .buttonStyle(.plain)
-                    .help("删除规则")
+                    Label(report?.statusText ?? "未检测", systemImage: report?.isValid == false ? "exclamationmark.triangle.fill" : "checkmark.circle")
+                        .font(.caption2)
+                        .foregroundStyle(report?.isValid == false ? Color.red : Color.secondary)
                 }
+                .padding(6)
+                .background(Color.primary.opacity(0.025))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             HStack(spacing: 6) {
                 TextField("名称", text: $ui.newRedactionName)
@@ -1527,27 +1631,40 @@ struct SettingsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .disabled(ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(!canAddRedactionRule)
                 Button("恢复默认") {
                     settings.redactionRules = PrivacyRedactionRule.defaults()
                     commit()
                 }
                 .font(.caption)
             }
+            if let newPatternError {
+                Label(newPatternError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
             Divider().padding(.vertical, 2)
             VStack(alignment: .leading, spacing: 5) {
-                Text("规则测试").font(.caption.weight(.semibold))
+                HStack {
+                    Text("规则测试").font(.caption.weight(.semibold))
+                    Spacer()
+                    Text("命中 \(preview.totalMatches) 处 · 错误 \(preview.invalidReports.count) 条")
+                        .font(.caption2)
+                        .foregroundStyle(preview.invalidReports.isEmpty ? Color.secondary : Color.red)
+                }
                 TextEditor(text: $ui.redactionSample)
                     .font(.system(size: 12))
-                    .frame(height: 58)
+                    .frame(height: PrivacyFilter.defaultSampleEditorHeight)
                     .scrollContentBackground(.hidden)
                     .padding(5)
                     .background(Color.primary.opacity(0.045))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                Text(PrivacyFilter.apply(to: ui.redactionSample, rules: settings.redactionRules))
+                Text(preview.output)
                     .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity,
+                           minHeight: max(58, PrivacyFilter.defaultSampleEditorHeight - 14),
+                           alignment: .leading)
                     .padding(7)
                     .background(Color.green.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -1557,6 +1674,21 @@ struct SettingsView: View {
         .padding(8)
         .background(Color.primary.opacity(0.035))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var redactionPreview: PrivacyRedactionPreview {
+        PrivacyFilter.preview(text: ui.redactionSample, rules: settings.redactionRules)
+    }
+
+    private var newRedactionPatternError: String? {
+        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pattern.isEmpty else { return nil }
+        return PrivacyFilter.validatePattern(pattern)
+    }
+
+    private var canAddRedactionRule: Bool {
+        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !pattern.isEmpty && newRedactionPatternError == nil
     }
 
     private func bindingForContextProfile<V>(_ id: String,
@@ -1591,7 +1723,7 @@ struct SettingsView: View {
 
     private func addRedactionRule() {
         let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !pattern.isEmpty else { return }
+        guard !pattern.isEmpty, PrivacyFilter.validatePattern(pattern) == nil else { return }
         let name = ui.newRedactionName.trimmingCharacters(in: .whitespacesAndNewlines)
         let replacement = ui.newRedactionReplacement.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.redactionRules.append(PrivacyRedactionRule(
@@ -1618,11 +1750,7 @@ struct SettingsView: View {
     // MARK: 导入/导出(#13)
 
     private func exportConfig() {
-        guard let data = try? JSONEncoder().encode(settings),
-              let exportSettings = try? JSONDecoder().decode(AppSettings.self, from: data) else { return }
-        exportSettings.history = []
-        exportSettings.onboardingDone = true
-        guard let exportData = try? JSONEncoder().encode(exportSettings) else { return }
+        guard let exportData = settings.exportConfigurationData() else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "SnapAI-config.json"
         panel.allowedContentTypes = [.json]
@@ -1638,17 +1766,19 @@ struct SettingsView: View {
         guard panel.runModal() == .OK, let url = panel.url,
               let data = try? Data(contentsOf: url),
               let imported = try? JSONDecoder().decode(AppSettings.self, from: data) else { return }
-        // 把导入的值拷贝到当前 settings(逐字段)。导入不含明文 Key:
+        imported.normalizeImportedConfiguration()
+        // 把导入的值拷贝到当前 settings(逐字段)。始终忽略文件里的明文 Key;
         // 同机重导入时,按 provider id 从 Keychain 回填已存的 Key,避免被清空。
-        var imp = imported.providers
-        for i in imp.indices where imp[i].apiKey.isEmpty {
-            imp[i].apiKey = Keychain.apiKey(for: imp[i].id)
-        }
-        settings.providers = imp
-        settings.activeProviderID = imported.activeProviderID
-        settings.activeModel = imported.activeModel
+        let providerConfig = AppSettings.importedProviderConfiguration(imported.providers,
+                                                                       activeProviderID: imported.activeProviderID,
+                                                                       activeModel: imported.activeModel)
+        settings.providers = providerConfig.providers
+        settings.activeProviderID = providerConfig.activeProviderID
+        settings.activeModel = providerConfig.activeModel
         settings.temperature = imported.temperature
-        settings.actions = imported.actions
+        settings.actions = AppSettings.sanitizedImportedActions(imported.actions,
+                                                                originalProviders: imported.providers,
+                                                                sanitizedProviders: settings.providers)
         settings.askHotKey = imported.askHotKey
         settings.translateHotKey = imported.translateHotKey
         settings.quickPanelHotKey = imported.quickPanelHotKey
@@ -1660,9 +1790,12 @@ struct SettingsView: View {
         settings.typewriterSpeed = imported.typewriterSpeed
         settings.autoRouteEnabled = imported.autoRouteEnabled
         settings.fallbackEnabled = imported.fallbackEnabled
+        settings.routingPreference = imported.routingPreference
+        settings.workModePreset = imported.workModePreset
         settings.privacyPreviewEnabled = imported.privacyPreviewEnabled
         settings.redactionEnabled = imported.redactionEnabled
         settings.redactionRules = imported.redactionRules
+        settings.historyContentStorage = imported.historyContentStorage
         settings.contextProfiles = imported.contextProfiles
         settings.activeContextProfileID = imported.activeContextProfileID
         settings.historyLimit = imported.historyLimit
@@ -1692,9 +1825,7 @@ struct SettingsView: View {
                     compactDivider
                     HStack(spacing: 8) {
                         Button("打开系统设置") {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                                NSWorkspace.shared.open(url)
-                            }
+                            NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
                         }
                         Button("重新检测") {
                             perm.refresh(prompt: true)

@@ -7,15 +7,908 @@ struct AIRequestRoute: Identifiable, Equatable {
     var reason: String
 
     var id: String { "\(providerID)::\(modelName)" }
+
+    var diagnosticProviderName: String {
+        AIRequestDiagnosticText.metadata(providerName,
+                                         fallback: "未知供应商",
+                                         maxLength: 80)
+    }
+
+    var diagnosticModelName: String {
+        AIRequestDiagnosticText.metadata(modelName,
+                                         fallback: "未知模型",
+                                         maxLength: 120)
+    }
+
+    var diagnosticReason: String {
+        AIRequestDiagnosticText.metadata(reason,
+                                         fallback: "未说明",
+                                         maxLength: 80)
+    }
+
+    var displayRouteNote: String {
+        diagnosticReason
+    }
+
+    var fallbackSwitchNote: String {
+        "\(diagnosticProviderName) / \(diagnosticModelName) 失败,正在切换备用模型"
+    }
+}
+
+enum AIRequestAttemptStatus: String, Equatable, Hashable {
+    case running = "running"
+    case succeeded = "succeeded"
+    case failed = "failed"
+    case skipped = "skipped"
+
+    var displayName: String {
+        switch self {
+        case .running: return "进行中"
+        case .succeeded: return "成功"
+        case .failed: return "失败"
+        case .skipped: return "跳过"
+        }
+    }
+}
+
+struct AIRequestAttemptDiagnostic: Equatable {
+    var route: AIRequestRoute
+    var status: AIRequestAttemptStatus
+    var message: String?
+    var elapsedMilliseconds: Int? = nil
+    var outputCharacterCount: Int? = nil
+    var fallbackDecision: AIRequestFallbackDecision? = nil
+
+    var summaryLine: String {
+        summaryLine(includeMessage: true)
+    }
+
+    func summaryLine(includeMessage: Bool) -> String {
+        let duration = elapsedMilliseconds.map { " · 耗时 \(Self.formattedDuration(milliseconds: $0))" } ?? ""
+        let output = outputCharacterCount.map { " · 输出 \(max(0, $0)) 字" } ?? ""
+        let fallback = fallbackDecision.map { " · Fallback \($0.diagnosticCode)" } ?? ""
+        let base = "\(route.diagnosticProviderName) / \(route.diagnosticModelName) (\(route.diagnosticReason)) -> \(status.displayName)\(duration)\(output)\(fallback)"
+        guard includeMessage, let message, !message.isEmpty else { return base }
+        return "\(base): \(Self.sanitizedMessage(message))"
+    }
+
+    static func sanitizedMessage(_ message: String, limit: Int = 180) -> String {
+        SensitiveTextSanitizer.sanitizedMessage(message, limit: limit)
+    }
+
+    static func elapsedMilliseconds(since start: Date,
+                                    now: Date = Date()) -> Int {
+        max(0, Int((now.timeIntervalSince(start) * 1_000).rounded()))
+    }
+
+    static func formattedDuration(milliseconds: Int) -> String {
+        let safe = max(0, milliseconds)
+        if safe < 1_000 {
+            return "\(safe)ms"
+        }
+        let seconds = Double(safe) / 1_000
+        if seconds < 10 {
+            return String(format: "%.1fs", seconds)
+        }
+        return "\(Int(seconds.rounded()))s"
+    }
+}
+
+struct AIRequestFallbackDecision: Equatable {
+    enum Reason: String, Equatable {
+        case willTryNext = "will-try-next"
+        case fallbackDisabled = "disabled"
+        case noNextRoute = "no-next-route"
+        case partialOutput = "partial-output"
+    }
+
+    var reason: Reason
+
+    var shouldTryNext: Bool {
+        reason == .willTryNext
+    }
+
+    var diagnosticCode: String {
+        reason.rawValue
+    }
+
+    var userNote: String? {
+        switch reason {
+        case .willTryNext:
+            return "正在切换备用模型"
+        case .partialOutput:
+            return "已收到部分输出，未自动切换"
+        case .fallbackDisabled, .noNextRoute:
+            return nil
+        }
+    }
+
+    static func decide(fallbackEnabled: Bool,
+                       hasNextRoute: Bool,
+                       outputCharacterCount: Int) -> AIRequestFallbackDecision {
+        guard fallbackEnabled else {
+            return AIRequestFallbackDecision(reason: .fallbackDisabled)
+        }
+        guard hasNextRoute else {
+            return AIRequestFallbackDecision(reason: .noNextRoute)
+        }
+        guard outputCharacterCount <= 0 else {
+            return AIRequestFallbackDecision(reason: .partialOutput)
+        }
+        return AIRequestFallbackDecision(reason: .willTryNext)
+    }
+}
+
+struct AIRequestRecoveryHint: Equatable {
+    var code: String
+    var suggestion: String
+}
+
+struct AIRequestContextDiagnostic: Equatable {
+    var contextProfileCount: Int = 0
+    var usableContextProfileCount: Int = 0
+    var activeContextCharacterCount: Int = 0
+    var globalSystemPromptCharacterCount: Int = 0
+    var effectiveSystemPromptCharacterCount: Int = 0
+
+    var summaryLines: [String] {
+        [
+            "Context Profiles: \(contextProfileCount) (usable \(usableContextProfileCount))",
+            "Active Context: \(activeContextCharacterCount > 0 ? "set" : "none")",
+            "Active Context Characters: \(activeContextCharacterCount)",
+            "Global System Prompt Characters: \(globalSystemPromptCharacterCount)",
+            "Effective System Prompt Characters: \(effectiveSystemPromptCharacterCount)"
+        ]
+    }
+
+    static func make(settings: AppSettings) -> AIRequestContextDiagnostic {
+        let summary = settings.contextStatusSummary
+        return AIRequestContextDiagnostic(
+            contextProfileCount: summary.profileCount,
+            usableContextProfileCount: summary.usableProfileCount,
+            activeContextCharacterCount: summary.activeContextCharacterCount,
+            globalSystemPromptCharacterCount: summary.globalSystemPromptCharacterCount,
+            effectiveSystemPromptCharacterCount: summary.effectiveSystemPromptCharacterCount
+        )
+    }
+}
+
+struct AIRequestPayloadDiagnostic: Equatable {
+    var messageCount: Int = 0
+    var textCharacterCount: Int = 0
+    var estimatedTextTokens: Int = 0
+    var imageAttachmentCount: Int = 0
+
+    var summaryLines: [String] {
+        [
+            "Request Messages: \(messageCount)",
+            "Request Text Characters: \(textCharacterCount)",
+            "Estimated Text Tokens: \(estimatedTextTokens)",
+            "Image Attachments: \(imageAttachmentCount)"
+        ]
+    }
+
+    static func make(messages: [ChatMessage],
+                     explicitHasImage: Bool = false) -> AIRequestPayloadDiagnostic {
+        let textCharacters = messages.reduce(0) { $0 + $1.content.count }
+        let embeddedImageCount = messages.reduce(0) { $0 + ($1.imageData == nil ? 0 : 1) }
+        let imageCount = max(embeddedImageCount, explicitHasImage ? 1 : 0)
+        return AIRequestPayloadDiagnostic(
+            messageCount: messages.count,
+            textCharacterCount: textCharacters,
+            estimatedTextTokens: estimatedTextTokens(forCharacterCount: textCharacters),
+            imageAttachmentCount: imageCount
+        )
+    }
+
+    static func estimatedTextTokens(forCharacterCount characterCount: Int) -> Int {
+        let safeCount = max(0, characterCount)
+        guard safeCount > 0 else { return 0 }
+        return max(1, Int((Double(safeCount) / 4.0).rounded(.up)))
+    }
+
+    func contextFitSummary(for route: AIRequestRoute) -> String {
+        Self.contextFitSummary(estimatedTextTokens: estimatedTextTokens,
+                               modelName: route.modelName,
+                               providerName: route.providerName)
+    }
+
+    func imageFitSummary(for route: AIRequestRoute,
+                         hasImage: Bool) -> String {
+        Self.imageFitSummary(hasImage: hasImage,
+                             modelName: route.modelName,
+                             providerName: route.providerName)
+    }
+
+    func reasoningFitSummary(for route: AIRequestRoute,
+                             requiresReasoning: Bool) -> String {
+        Self.reasoningFitSummary(requiresReasoning: requiresReasoning,
+                                 modelName: route.modelName,
+                                 providerName: route.providerName)
+    }
+
+    static func contextFitSummary(estimatedTextTokens: Int,
+                                  modelName: String,
+                                  providerName: String = "") -> String {
+        let capability = ModelCapabilityRegistry.capability(for: modelName,
+                                                            providerName: providerName)
+        let contextTokens = max(0, capability.contextTokens)
+        guard contextTokens > 0 else { return "context unknown" }
+        let safeEstimate = max(0, estimatedTextTokens)
+        return "context \(safeEstimate)/\(contextTokens) tokens \(contextFitStatus(estimatedTextTokens: safeEstimate, contextTokens: contextTokens))"
+    }
+
+    static func contextFitStatus(estimatedTextTokens: Int,
+                                 contextTokens: Int) -> String {
+        let safeEstimate = max(0, estimatedTextTokens)
+        let safeContext = max(0, contextTokens)
+        guard safeContext > 0 else { return "unknown" }
+        if safeEstimate > safeContext { return "over-limit" }
+        if Double(safeEstimate) >= Double(safeContext) * 0.85 { return "near-limit" }
+        return "ok"
+    }
+
+    static func imageFitSummary(hasImage: Bool,
+                                modelName: String,
+                                providerName: String = "") -> String {
+        guard hasImage else { return "image not-required" }
+        let supportsVision = ModelCapabilityRegistry.capability(for: modelName,
+                                                                providerName: providerName).supportsVision
+        return supportsVision ? "image supported" : "image unsupported"
+    }
+
+    static func reasoningFitSummary(requiresReasoning: Bool,
+                                    modelName: String,
+                                    providerName: String = "") -> String {
+        guard requiresReasoning else { return "reasoning not-required" }
+        let supportsReasoning = ModelCapabilityRegistry.capability(for: modelName,
+                                                                   providerName: providerName).supportsReasoning
+        return supportsReasoning ? "reasoning supported" : "reasoning unsupported"
+    }
+
+    func candidateFitIssueSummary(routes: [AIRequestRoute],
+                                  hasImage: Bool,
+                                  requiresReasoning: Bool) -> String {
+        Self.candidateFitIssueSummary(routes: routes,
+                                      estimatedTextTokens: estimatedTextTokens,
+                                      hasImage: hasImage,
+                                      requiresReasoning: requiresReasoning)
+    }
+
+    static func candidateFitIssueSummary(routes: [AIRequestRoute],
+                                         estimatedTextTokens: Int,
+                                         hasImage: Bool,
+                                         requiresReasoning: Bool) -> String {
+        guard !routes.isEmpty else { return "none" }
+        var contextOverLimit = 0
+        var contextNearLimit = 0
+        var imageUnsupported = 0
+        var reasoningUnsupported = 0
+
+        for route in routes {
+            let capability = ModelCapabilityRegistry.capability(for: route.modelName,
+                                                                providerName: route.providerName)
+            let contextFit = contextFitStatus(estimatedTextTokens: estimatedTextTokens,
+                                              contextTokens: capability.contextTokens)
+            if contextFit == "over-limit" {
+                contextOverLimit += 1
+            } else if contextFit == "near-limit" {
+                contextNearLimit += 1
+            }
+            if hasImage && !capability.supportsVision {
+                imageUnsupported += 1
+            }
+            if requiresReasoning && !capability.supportsReasoning {
+                reasoningUnsupported += 1
+            }
+        }
+
+        let parts = [
+            contextOverLimit > 0 ? "context-over-limit=\(contextOverLimit)" : nil,
+            contextNearLimit > 0 ? "context-near-limit=\(contextNearLimit)" : nil,
+            imageUnsupported > 0 ? "image-unsupported=\(imageUnsupported)" : nil,
+            reasoningUnsupported > 0 ? "reasoning-unsupported=\(reasoningUnsupported)" : nil
+        ].compactMap { $0 }
+        return parts.isEmpty ? "all-ok" : parts.joined(separator: "; ")
+    }
+
+    func candidateHardIssueSummary(routes: [AIRequestRoute],
+                                   hasImage: Bool) -> String {
+        Self.candidateHardIssueSummary(routes: routes,
+                                       estimatedTextTokens: estimatedTextTokens,
+                                       hasImage: hasImage)
+    }
+
+    static func candidateHardIssueSummary(routes: [AIRequestRoute],
+                                          estimatedTextTokens: Int,
+                                          hasImage: Bool) -> String {
+        guard !routes.isEmpty else { return "none" }
+        var contextOverLimit = 0
+        var imageUnsupported = 0
+
+        for route in routes {
+            let capability = ModelCapabilityRegistry.capability(for: route.modelName,
+                                                                providerName: route.providerName)
+            let contextFit = contextFitStatus(estimatedTextTokens: estimatedTextTokens,
+                                              contextTokens: capability.contextTokens)
+            if contextFit == "over-limit" {
+                contextOverLimit += 1
+            }
+            if hasImage && !capability.supportsVision {
+                imageUnsupported += 1
+            }
+        }
+
+        let parts = [
+            contextOverLimit > 0 ? "context-over-limit=\(contextOverLimit)" : nil,
+            imageUnsupported > 0 ? "image-unsupported=\(imageUnsupported)" : nil
+        ].compactMap { $0 }
+        return parts.isEmpty ? "all-ok" : parts.joined(separator: "; ")
+    }
+}
+
+struct AIRequestDiagnostics: Equatable {
+    static let preflightSkippedRouteDisplayLimit = 5
+    static let suppressedVisibleRecoverySuggestions = Set(["无需处理", "等待请求开始", "等待当前模型返回"])
+    static let suppressedVisibleRecoveryCodes = Set(["none", "pending", "waiting-current-route", "fallback-will-try-next"])
+
+    var actionName: String
+    var actionRequiresReasoning: Bool = false
+    var sourceCharacterCount: Int
+    var hasImage: Bool
+    var fallbackEnabled: Bool
+    var autoRouteEnabled: Bool = false
+    var routingPreference: AIRoutingPreference
+    var candidateCount: Int
+    var context: AIRequestContextDiagnostic = AIRequestContextDiagnostic()
+    var payload: AIRequestPayloadDiagnostic = AIRequestPayloadDiagnostic()
+    var submissionPrivacy: PrivacySubmissionDiagnostic? = nil
+    var candidateRoutes: [AIRequestRoute] = []
+    var candidateUnavailabilitySummary: String = "not-checked"
+    var candidateUnavailabilityRecoverySuggestion: String = ""
+    var attempts: [AIRequestAttemptDiagnostic] = []
+
+    var summaryText: String {
+        summaryText(includeAttemptMessages: true)
+    }
+
+    var briefSummaryText: String {
+        summaryText(includeAttemptMessages: false)
+    }
+
+    var recommendedRouteSummary: String {
+        guard let route = candidateRoutes.first else { return "none" }
+        let routeSummary = "\(route.diagnosticProviderName) / \(route.diagnosticModelName)"
+        let fitSummary = candidateFitSummary(for: route)
+        return "\(routeSummary) - \(route.diagnosticReason) · \(fitSummary)"
+    }
+
+    var recommendedRouteIssueSummary: String {
+        guard let route = candidateRoutes.first else { return "none" }
+        return routeIssueSummary(for: route)
+    }
+
+    var firstRequestRouteSummary: String {
+        guard let route = firstRequestRoute else { return "none" }
+        let routeSummary = "\(route.diagnosticProviderName) / \(route.diagnosticModelName)"
+        let fitSummary = candidateFitSummary(for: route)
+        return "\(routeSummary) - \(route.diagnosticReason) · \(fitSummary)"
+    }
+
+    var firstRequestRouteIssueSummary: String {
+        guard let route = firstRequestRoute else { return "none" }
+        return routeIssueSummary(for: route)
+    }
+
+    var preflightSkippedRouteSummary: String {
+        preflightSkippedRouteSummary(limit: Self.preflightSkippedRouteDisplayLimit)
+    }
+
+    var attemptStatusSummary: String {
+        guard !attempts.isEmpty else { return "none" }
+        let counts = Dictionary(grouping: attempts, by: \.status).mapValues(\.count)
+        var parts = ["total=\(attempts.count)"]
+        for status in [AIRequestAttemptStatus.running, .skipped, .failed, .succeeded] {
+            if let count = counts[status], count > 0 {
+                parts.append("\(status.rawValue)=\(count)")
+            }
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    func latestAttemptSummary(includeMessage: Bool = false) -> String {
+        guard let latest = attempts.last else { return "none" }
+        return attemptSummaryLine(latest, includeMessage: includeMessage)
+    }
+
+    var requestOutcomeSummary: String {
+        guard let latest = attempts.last else {
+            return candidateCount <= 0 ? "blocked; no-candidate-routes" : "pending"
+        }
+        switch latest.status {
+        case .running:
+            return "running"
+        case .succeeded:
+            return "succeeded"
+        case .skipped:
+            return "skipped"
+        case .failed:
+            guard let fallbackDecision = latest.fallbackDecision else { return "failed" }
+            return "failed; fallback=\(fallbackDecision.diagnosticCode)"
+        }
+    }
+
+    var requestRecoverySuggestion: String {
+        guard let latest = attempts.last else {
+            if candidateCount <= 0 {
+                let recovery = candidateUnavailabilityRecoverySuggestion.trimmingCharacters(in: .whitespacesAndNewlines)
+                return recovery.isEmpty ? "在 AI 设置中启用供应商、模型并填写 API Key" : recovery
+            }
+            return "等待请求开始"
+        }
+        switch latest.status {
+        case .running:
+            return "等待当前模型返回"
+        case .succeeded:
+            return "无需处理"
+        case .skipped:
+            return skippedAttemptRecoverySuggestion(latest)
+        case .failed:
+            let errorRecovery = Self.recoveryHint(forErrorMessage: latest.message)?.suggestion
+            switch latest.fallbackDecision?.reason {
+            case .willTryNext:
+                return "等待备用模型尝试"
+            case .fallbackDisabled:
+                return errorRecovery ?? "开启 fallback 或切换可用模型后重试"
+            case .noNextRoute:
+                return errorRecovery ?? "启用备用供应商或模型后重试"
+            case .partialOutput:
+                return "已收到部分输出;可复制结果或手动重试"
+            case nil:
+                return errorRecovery ?? "检查 API Key、网络、模型能力或复制完整请求诊断"
+            }
+        }
+    }
+
+    var requestRecoveryCode: String {
+        guard let latest = attempts.last else {
+            return candidateCount <= 0 ? "no-candidate-routes" : "pending"
+        }
+        switch latest.status {
+        case .running:
+            return "waiting-current-route"
+        case .succeeded:
+            return "none"
+        case .skipped:
+            return skippedAttemptRecoveryCode(latest)
+        case .failed:
+            if let hint = Self.recoveryHint(forErrorMessage: latest.message) {
+                return hint.code
+            }
+            switch latest.fallbackDecision?.reason {
+            case .willTryNext:
+                return "fallback-will-try-next"
+            case .fallbackDisabled:
+                return "fallback-disabled"
+            case .noNextRoute:
+                return "fallback-no-next-route"
+            case .partialOutput:
+                return "fallback-partial-output"
+            case nil:
+                return "generic-failure"
+            }
+        }
+    }
+
+    static func visibleErrorRecoverySuggestion(diagnostics: AIRequestDiagnostics?,
+                                               errorMessage: String?) -> String? {
+        guard let visibleError = errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !visibleError.isEmpty else {
+            return nil
+        }
+
+        if let errorRecovery = recoveryHint(forErrorMessage: visibleError)?.suggestion,
+           !suppressedVisibleRecoverySuggestions.contains(errorRecovery) {
+            return errorRecovery
+        }
+
+        guard let suggestion = diagnostics?.requestRecoverySuggestion.trimmingCharacters(in: .whitespacesAndNewlines),
+              !suggestion.isEmpty else {
+            return nil
+        }
+        return suppressedVisibleRecoverySuggestions.contains(suggestion) ? nil : suggestion
+    }
+
+    static func visibleErrorRecoveryCode(diagnostics: AIRequestDiagnostics?,
+                                         errorMessage: String?) -> String? {
+        guard let visibleError = errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !visibleError.isEmpty else {
+            return nil
+        }
+
+        if let code = recoveryHint(forErrorMessage: visibleError)?.code,
+           !suppressedVisibleRecoveryCodes.contains(code) {
+            return code
+        }
+
+        guard let code = diagnostics?.requestRecoveryCode.trimmingCharacters(in: .whitespacesAndNewlines),
+              !code.isEmpty,
+              !suppressedVisibleRecoveryCodes.contains(code) else {
+            return nil
+        }
+        return code
+    }
+
+    static func recoverySuggestion(forErrorMessage errorMessage: String?) -> String? {
+        recoveryHint(forErrorMessage: errorMessage)?.suggestion
+    }
+
+    static func recoveryCode(forErrorMessage errorMessage: String?) -> String? {
+        recoveryHint(forErrorMessage: errorMessage)?.code
+    }
+
+    static func recoveryHint(forErrorMessage errorMessage: String?) -> AIRequestRecoveryHint? {
+        guard let raw = errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return nil
+        }
+
+        let text = raw.lowercased()
+        func containsAny(_ needles: [String]) -> Bool {
+            needles.contains { text.contains($0) }
+        }
+
+        if containsAny(["未配置 api key", "invalid_api_key", "incorrect api key", "invalid api key", "unauthorized", "authentication", "auth error"]) ||
+            (text.contains("401") && containsAny(["http", "api key", "token", "unauthorized", "auth"])) {
+            return AIRequestRecoveryHint(code: "api-key",
+                                         suggestion: "在 AI 设置中重新填写 API Key,并确认供应商账号可用")
+        }
+
+        if containsAny(["没有可用的 ai 供应商", "没有可用供应商", "missing provider", "no available provider", "no enabled provider"]) {
+            return AIRequestRecoveryHint(code: "missing-provider",
+                                         suggestion: "在 AI 设置中添加或启用供应商")
+        }
+
+        if containsAny(["未选择可用模型", "未选择模型", "missing model", "no available model", "no enabled model"]) {
+            return AIRequestRecoveryHint(code: "missing-model",
+                                         suggestion: "在 AI 设置中启用或添加模型,并选择当前模型")
+        }
+
+        if containsAny(["insufficient_quota", "quota", "billing", "credit", "balance", "payment required", "额度", "余额", "账单", "欠费"]) {
+            return AIRequestRecoveryHint(code: "quota",
+                                         suggestion: "检查供应商账户额度、账单或充值状态,也可切换备用供应商")
+        }
+
+        if containsAny(["rate limit", "rate_limit", "too many requests", "429", "限速", "频率", "请求过多"]) {
+            return AIRequestRecoveryHint(code: "rate-limit",
+                                         suggestion: "触发限速;稍后重试、降低频率或切换备用供应商")
+        }
+
+        if containsAny(["context_length", "context length", "maximum context", "token limit", "too long", "exceeds", "input is too long", "上下文", "文本过长", "超过限制"]) {
+            return AIRequestRecoveryHint(code: "context-limit",
+                                         suggestion: "文本超过模型上下文限制;缩短内容或切换长上下文模型")
+        }
+
+        if containsAny(["image too large", "图片过大", "payload too large", "413"]) {
+            return AIRequestRecoveryHint(code: "payload-too-large",
+                                         suggestion: "图片或请求体过大;压缩图片、减少内容后重试")
+        }
+
+        if containsAny(["base url", "invalid url", "unsupported url", "url 无效", "明文端点", "insecure http", "not a valid url"]) {
+            return AIRequestRecoveryHint(code: "base-url",
+                                         suggestion: "检查 Base URL 配置;远程端点请使用 HTTPS")
+        }
+
+        if containsAny(["model_not_found", "model not found", "model does not exist", "not found", "404", "模型不存在", "未找到模型"]) {
+            return AIRequestRecoveryHint(code: "model-not-found",
+                                         suggestion: "检查模型名称和 Base URL 是否匹配该供应商")
+        }
+
+        if containsAny(["forbidden", "permission", "access denied", "not allowed", "403", "无权限", "权限不足", "禁止访问"]) {
+            return AIRequestRecoveryHint(code: "permission",
+                                         suggestion: "确认账号有该模型或端点权限,必要时切换模型或供应商")
+        }
+
+        if containsAny(["timed out", "timeout", "超时", "not connected", "internet connection", "cannot connect", "network", "offline", "dns", "proxy", "代理", "网络"]) {
+            return AIRequestRecoveryHint(code: "network",
+                                         suggestion: "检查网络、代理和 Base URL 连通性,必要时切换供应商")
+        }
+
+        if containsAny(["500", "502", "503", "504", "server error", "bad gateway", "service unavailable", "gateway timeout", "服务器错误", "服务不可用"]) {
+            return AIRequestRecoveryHint(code: "provider-service",
+                                         suggestion: "供应商服务暂时异常;稍后重试或切换备用供应商")
+        }
+
+        if containsAny(["cancelled", "canceled", "已取消"]) {
+            return AIRequestRecoveryHint(code: "cancelled",
+                                         suggestion: "请求已取消;确认网络稳定后重新发送")
+        }
+
+        if containsAny(["http 400", "http 422", "bad request", "invalid request", "unprocessable", "请求失败 (http 400)", "请求失败 (http 422)"]) {
+            return AIRequestRecoveryHint(code: "invalid-request",
+                                         suggestion: "检查模型能力、请求内容和 Base URL;必要时复制完整请求诊断")
+        }
+
+        return nil
+    }
+
+    static func noCandidateRouteReasonSummary(providers: [AIProvider]) -> String {
+        guard !providers.isEmpty else { return "no-providers=1" }
+        let readinesses = providers.map { AIRequestRouter.providerReadiness($0) }
+        let readyCount = readinesses.filter(\.isReady).count
+        if readyCount > 0 {
+            return "ready-providers=\(readyCount); no-selected-route=1"
+        }
+        let counts = Dictionary(grouping: readinesses, by: { $0 }).mapValues(\.count)
+        let parts = providerReadinessIssueOrder.compactMap { readiness -> String? in
+            guard let count = counts[readiness], count > 0 else { return nil }
+            return "\(readiness.diagnosticCode)=\(count)"
+        }
+        return parts.isEmpty ? "unknown=1" : parts.joined(separator: "; ")
+    }
+
+    static func noCandidateRouteRecoverySuggestion(providers: [AIProvider]) -> String {
+        guard !providers.isEmpty else { return "在 AI 设置中添加并启用供应商" }
+        let readinesses = providers.map { AIRequestRouter.providerReadiness($0) }
+        let readyCount = readinesses.filter(\.isReady).count
+        if readyCount > 0 {
+            return "在 AI 设置中选择当前模型,或开启自动路由/fallback"
+        }
+        let counts = Dictionary(grouping: readinesses, by: { $0 }).mapValues(\.count)
+        let parts = providerReadinessIssueOrder.compactMap { readiness -> String? in
+            guard let count = counts[readiness], count > 0 else { return nil }
+            return "\(readiness.diagnosticCode)=\(count): \(readiness.recoverySuggestion)"
+        }
+        return parts.isEmpty ? "检查 AI 供应商、模型、API Key 和 Base URL 配置" : parts.joined(separator: "; ")
+    }
+
+    func preflightSkippedRouteSummary(limit: Int) -> String {
+        guard autoRouteEnabled else { return "disabled" }
+        let skippedRoutes = preflightSkippedRoutes
+        guard !skippedRoutes.isEmpty else { return "none" }
+        let displayLimit = max(1, limit)
+        let displayedRoutes = Array(skippedRoutes.prefix(displayLimit))
+        var parts = displayedRoutes.enumerated()
+            .map { index, route in
+                let routeSummary = "\(route.diagnosticProviderName) / \(route.diagnosticModelName)"
+                return "\(index + 1). \(routeSummary) - \(routeHardIssueSummary(for: route))"
+            }
+        let hiddenCount = skippedRoutes.count - displayedRoutes.count
+        if hiddenCount > 0 {
+            parts.append("+\(hiddenCount) more")
+        }
+        return parts.joined(separator: " | ")
+    }
+
+    var firstRequestRoute: AIRequestRoute? {
+        guard !candidateRoutes.isEmpty else { return nil }
+        for (index, route) in candidateRoutes.enumerated() {
+            let hasNextRoute = candidateRoutes.indices.contains(index + 1)
+            if shouldSkipRouteBeforeRequest(route,
+                                            autoRouteEnabled: autoRouteEnabled,
+                                            hasNextRoute: hasNextRoute) {
+                continue
+            }
+            return route
+        }
+        return candidateRoutes.last
+    }
+
+    var preflightSkippedRoutes: [AIRequestRoute] {
+        guard autoRouteEnabled else { return [] }
+        return candidateRoutes.enumerated().compactMap { index, route in
+            let hasNextRoute = candidateRoutes.indices.contains(index + 1)
+            return shouldSkipRouteBeforeRequest(route,
+                                                autoRouteEnabled: true,
+                                                hasNextRoute: hasNextRoute) ? route : nil
+        }
+    }
+
+    func routeIssueSummary(for route: AIRequestRoute) -> String {
+        payload.candidateFitIssueSummary(routes: [route],
+                                         hasImage: hasImage,
+                                         requiresReasoning: actionRequiresReasoning)
+    }
+
+    func routeHardIssueSummary(for route: AIRequestRoute) -> String {
+        payload.candidateHardIssueSummary(routes: [route],
+                                          hasImage: hasImage)
+    }
+
+    func shouldSkipRouteBeforeRequest(_ route: AIRequestRoute,
+                                      autoRouteEnabled: Bool,
+                                      hasNextRoute: Bool) -> Bool {
+        guard autoRouteEnabled, hasNextRoute else { return false }
+        let hardIssues = routeHardIssueSummary(for: route)
+        return hardIssues != "all-ok" && hardIssues != "none"
+    }
+
+    func routeSkipMessage(for route: AIRequestRoute) -> String {
+        "跳过明显不适配路由: \(routeHardIssueSummary(for: route))"
+    }
+
+    func skippedAttemptRecoveryCode(_ attempt: AIRequestAttemptDiagnostic) -> String {
+        if Self.isRouteConfigurationSkipMessage(attempt.message) {
+            return "route-unavailable"
+        }
+        return routeSkipRecoveryCode(for: attempt.route)
+    }
+
+    func skippedAttemptRecoverySuggestion(_ attempt: AIRequestAttemptDiagnostic) -> String {
+        if Self.isRouteConfigurationSkipMessage(attempt.message) {
+            return "在 AI 设置中重新启用供应商或模型,或切换当前模型"
+        }
+        return routeSkipRecoverySuggestion(for: attempt.route)
+    }
+
+    static func isRouteConfigurationSkipMessage(_ message: String?) -> Bool {
+        guard let text = message?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return false
+        }
+        return text.contains("路由模型不可用") || text.contains("供应商已禁用")
+    }
+
+    func routeSkipRecoveryCode(for route: AIRequestRoute) -> String {
+        let issues = routeHardIssueSummary(for: route)
+        let hasContextLimit = issues.contains("context-over-limit")
+        let hasImageUnsupported = issues.contains("image-unsupported")
+        if hasContextLimit && hasImageUnsupported {
+            return "preflight-context-limit-image-unsupported"
+        }
+        if hasContextLimit {
+            return "preflight-context-limit"
+        }
+        if hasImageUnsupported {
+            return "preflight-image-unsupported"
+        }
+        return "preflight-skipped"
+    }
+
+    func routeSkipRecoverySuggestion(for route: AIRequestRoute) -> String {
+        switch routeSkipRecoveryCode(for: route) {
+        case "preflight-context-limit-image-unsupported":
+            return "文本超过该模型上下文且模型不支持图片;切换长上下文视觉模型或缩短内容"
+        case "preflight-context-limit":
+            return "文本超过该模型上下文限制;缩短内容或切换长上下文模型"
+        case "preflight-image-unsupported":
+            return "当前模型不支持图片;切换支持视觉的模型或移除图片"
+        default:
+            return "检查自动路由跳过原因;如需强制使用该模型,关闭自动路由"
+        }
+    }
+
+    func routeSkipSwitchNote(for skippedRoute: AIRequestRoute,
+                             nextRoute: AIRequestRoute?) -> String {
+        let skipped = "\(skippedRoute.diagnosticProviderName) / \(skippedRoute.diagnosticModelName)"
+        let issues = routeHardIssueSummary(for: skippedRoute)
+        guard let nextRoute else {
+            return "已跳过 \(skipped): \(issues)"
+        }
+        let next = "\(nextRoute.diagnosticProviderName) / \(nextRoute.diagnosticModelName)"
+        return "已跳过 \(skipped): \(issues)。正在尝试 \(next)"
+    }
+
+    func routeDisplayNote(for route: AIRequestRoute) -> String {
+        let issues = routeIssueSummary(for: route)
+        guard issues != "all-ok", issues != "none" else {
+            return route.displayRouteNote
+        }
+        return "\(route.displayRouteNote) · 适配问题: \(issues)"
+    }
+
+    func summaryText(includeAttemptMessages: Bool) -> String {
+        var lines = [
+            "SnapAI Request Diagnostics",
+            "Action: \(AIRequestDiagnosticText.metadata(actionName, fallback: "未命名动作", maxLength: 80))",
+            "Source Characters: \(sourceCharacterCount)",
+            "Has Image: \(hasImage ? "yes" : "no")",
+            "Fallback Enabled: \(fallbackEnabled ? "yes" : "no")",
+            "Auto Route Enabled: \(autoRouteEnabled ? "yes" : "no")",
+            "Routing Preference: \(routingPreference.rawValue)",
+            "Candidate Routes: \(candidateCount)",
+            "Candidate Unavailability: \(candidateCount <= 0 ? candidateUnavailabilitySummary : "not-needed")",
+            "Candidate Unavailability Recovery: \(candidateCount <= 0 ? candidateUnavailabilityRecoverySuggestion : "not-needed")",
+            "Candidate Fit Issues: \(payload.candidateFitIssueSummary(routes: candidateRoutes, hasImage: hasImage, requiresReasoning: actionRequiresReasoning))",
+            "Recommended Route: \(recommendedRouteSummary)",
+            "Recommended Route Issues: \(recommendedRouteIssueSummary)",
+            "First Request Route: \(firstRequestRouteSummary)",
+            "First Request Route Issues: \(firstRequestRouteIssueSummary)",
+            "Preflight Skipped Routes: \(preflightSkippedRouteSummary)",
+            "Attempt Statuses: \(attemptStatusSummary)",
+            "Latest Attempt: \(latestAttemptSummary(includeMessage: includeAttemptMessages))",
+            "Request Outcome: \(requestOutcomeSummary)",
+            "Request Recovery Code: \(requestRecoveryCode)",
+            "Request Recovery: \(requestRecoverySuggestion)"
+        ]
+        lines.append(contentsOf: context.summaryLines)
+        lines.append(contentsOf: payload.summaryLines)
+        if let submissionPrivacy {
+            lines.append(contentsOf: submissionPrivacy.summaryLines)
+        }
+        if candidateRoutes.isEmpty {
+            lines.append("Candidate Details: none")
+        } else {
+            lines.append("Candidate Details:")
+            for (index, route) in candidateRoutes.enumerated() {
+                let routeSummary = "\(route.diagnosticProviderName) / \(route.diagnosticModelName)"
+                let fitSummary = candidateFitSummary(for: route)
+                lines.append("\(index + 1). \(routeSummary) - \(route.diagnosticReason) · \(fitSummary)")
+            }
+        }
+        if attempts.isEmpty {
+            lines.append("Attempts: none")
+        } else {
+            lines.append("Attempts:")
+            for (index, attempt) in attempts.enumerated() {
+                lines.append("\(index + 1). \(attemptSummaryLine(attempt, includeMessage: includeAttemptMessages))")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func attemptSummaryLine(_ attempt: AIRequestAttemptDiagnostic,
+                                    includeMessage: Bool) -> String {
+        let base = attempt.summaryLine(includeMessage: includeMessage)
+        let issues = routeIssueSummary(for: attempt.route)
+        guard issues != "all-ok", issues != "none" else { return base }
+        return "\(base) · Route Issues \(issues)"
+    }
+
+    private func candidateFitSummary(for route: AIRequestRoute) -> String {
+        [
+            payload.contextFitSummary(for: route),
+            payload.imageFitSummary(for: route, hasImage: hasImage),
+            payload.reasoningFitSummary(for: route, requiresReasoning: actionRequiresReasoning)
+        ].joined(separator: " · ")
+    }
+
+    private static var providerReadinessIssueOrder: [AIRequestRouter.ProviderReadiness] {
+        [.disabled, .missingAPIKey, .noEnabledModels, .invalidBaseURL, .remoteHTTP]
+    }
+
+    mutating func mark(route: AIRequestRoute,
+                       status: AIRequestAttemptStatus,
+                       message: String? = nil,
+                       elapsedMilliseconds: Int? = nil,
+                       outputCharacterCount: Int? = nil,
+                       fallbackDecision: AIRequestFallbackDecision? = nil) {
+        if let index = attempts.lastIndex(where: { $0.route.id == route.id }) {
+            attempts[index].status = status
+            attempts[index].message = message
+            attempts[index].elapsedMilliseconds = elapsedMilliseconds ?? attempts[index].elapsedMilliseconds
+            attempts[index].outputCharacterCount = outputCharacterCount ?? attempts[index].outputCharacterCount
+            attempts[index].fallbackDecision = fallbackDecision ?? attempts[index].fallbackDecision
+        } else {
+            attempts.append(AIRequestAttemptDiagnostic(route: route,
+                                                       status: status,
+                                                       message: message,
+                                                       elapsedMilliseconds: elapsedMilliseconds,
+                                                       outputCharacterCount: outputCharacterCount,
+                                                       fallbackDecision: fallbackDecision))
+        }
+    }
+}
+
+private enum AIRequestDiagnosticText {
+    static func metadata(_ value: String,
+                         fallback: String,
+                         maxLength: Int) -> String {
+        MarkdownExportSafety.metadata(value, fallback: fallback, maxLength: maxLength)
+    }
 }
 
 enum AIRequestRouter {
     static func candidates(settings: AppSettings,
                            action: AIAction,
                            sourceText: String,
-                           hasImage: Bool) -> [AIRequestRoute] {
+                           hasImage: Bool,
+                           routingTextCharacterCount: Int? = nil) -> [AIRequestRoute] {
         let enabledProviders = settings.providers.filter { $0.isEnabled }
         guard !enabledProviders.isEmpty else { return [] }
+        let requestReadyProviders = enabledProviders.filter { isProviderRequestReady($0) }
+        let textLength = routingTextLength(sourceText: sourceText,
+                                           routingTextCharacterCount: routingTextCharacterCount)
 
         var routes: [AIRequestRoute] = []
         var seen = Set<String>()
@@ -31,36 +924,93 @@ enum AIRequestRouter {
                                          reason: reason))
         }
 
-        if let actionProviderID = action.providerID,
-           let provider = enabledProviders.first(where: { $0.id == actionProviderID }) {
-            let names = provider.enabledModelNames
-            if let override = action.modelOverride,
-               names.contains(override) {
-                append(provider: provider, model: override, reason: "动作专属模型")
-            } else if let first = names.first {
-                append(provider: provider, model: first, reason: "动作专属供应商")
-            }
-        }
-
-        if let active = settings.activeProvider {
-            append(provider: active, model: settings.activeModel, reason: "当前模型")
-        }
-
-        let allRoutes = enabledProviders.flatMap { provider in
+        let allRoutes = requestReadyProviders.flatMap { provider in
             provider.enabledModelNames.map { model in
                 AIRequestRoute(providerID: provider.id,
                                providerName: provider.name,
                                modelName: model,
                                reason: routeReason(model: model,
-                                                   textLength: sourceText.count,
+                                                   providerName: provider.name,
+                                                   textLength: textLength,
                                                    hasImage: hasImage,
-                                                   action: action))
+                                                   action: action,
+                                                   preference: settings.routingPreference))
+            }
+        }
+        let hasFittingReadyRoute = allRoutes.contains {
+            contextFitStatus(modelName: $0.modelName,
+                             providerName: $0.providerName,
+                             textLength: textLength) != "over-limit"
+        }
+        let hasVisionReadyRoute = !hasImage || allRoutes.contains {
+            modelSupportsImageInput(modelName: $0.modelName,
+                                    providerName: $0.providerName)
+        }
+        let hasReasoningReadyRoute = !action.thinkingMode || allRoutes.contains {
+            modelSupportsReasoning(modelName: $0.modelName,
+                                   providerName: $0.providerName)
+        }
+
+        func shouldPinExplicit(provider: AIProvider, model: String) -> Bool {
+            guard settings.autoRouteEnabled else {
+                return true
+            }
+            if action.thinkingMode,
+               hasReasoningReadyRoute,
+               !modelSupportsReasoning(modelName: model,
+                                       providerName: provider.name) {
+                return false
+            }
+            if hasImage,
+               hasVisionReadyRoute,
+               !modelSupportsImageInput(modelName: model,
+                                        providerName: provider.name) {
+                return false
+            }
+            if hasFittingReadyRoute,
+               contextFitStatus(modelName: model,
+                                providerName: provider.name,
+                                textLength: textLength) == "over-limit" {
+                return false
+            }
+            return true
+        }
+
+        if let actionProviderID = action.providerID,
+           let provider = enabledProviders.first(where: { $0.id == actionProviderID }) {
+            let names = provider.enabledModelNames
+            if let override = action.modelOverride,
+               names.contains(override) {
+                if shouldPinExplicit(provider: provider, model: override) {
+                    append(provider: provider, model: override, reason: "动作专属模型")
+                }
+            } else if let first = names.first,
+                      shouldPinExplicit(provider: provider, model: first) {
+                append(provider: provider, model: first, reason: "动作专属供应商")
             }
         }
 
+        if let active = settings.activeProvider {
+            let currentModel = settings.model
+            if shouldPinExplicit(provider: active, model: currentModel) {
+                let reason = currentModel == settings.activeModel ? "当前模型" : "当前可用模型"
+                append(provider: active, model: currentModel, reason: reason)
+            }
+        }
+
+        let providerOrder = Dictionary(uniqueKeysWithValues: requestReadyProviders.enumerated().map { ($0.element.id, $0.offset) })
+        let modelOrder = Dictionary(uniqueKeysWithValues: requestReadyProviders.flatMap { provider in
+            provider.enabledModelNames.enumerated().map { ("\(provider.id)::\($0.element)", $0.offset) }
+        })
         let sorted = allRoutes.sorted {
-            score(route: $0, settings: settings, action: action, textLength: sourceText.count, hasImage: hasImage)
-                > score(route: $1, settings: settings, action: action, textLength: sourceText.count, hasImage: hasImage)
+            routePrecedes($0,
+                          $1,
+                          settings: settings,
+                          action: action,
+                          textLength: textLength,
+                          hasImage: hasImage,
+                          providerOrder: providerOrder,
+                          modelOrder: modelOrder)
         }
 
         if settings.autoRouteEnabled {
@@ -71,7 +1021,7 @@ enum AIRequestRouter {
         }
 
         if settings.fallbackEnabled {
-            for route in allRoutes {
+            for route in sorted {
                 guard let provider = enabledProviders.first(where: { $0.id == route.providerID }) else { continue }
                 append(provider: provider, model: route.modelName, reason: route.reason)
             }
@@ -80,8 +1030,112 @@ enum AIRequestRouter {
         return routes
     }
 
+    static func routingTextLength(sourceText: String,
+                                  routingTextCharacterCount: Int?) -> Int {
+        max(0, routingTextCharacterCount ?? sourceText.count)
+    }
+
+    static func contextFitStatus(modelName: String,
+                                 providerName: String,
+                                 textLength: Int) -> String {
+        let capability = ModelCapabilityRegistry.capability(for: modelName,
+                                                            providerName: providerName)
+        let estimatedTokens = AIRequestPayloadDiagnostic.estimatedTextTokens(forCharacterCount: textLength)
+        return AIRequestPayloadDiagnostic.contextFitStatus(estimatedTextTokens: estimatedTokens,
+                                                           contextTokens: capability.contextTokens)
+    }
+
+    static func modelSupportsImageInput(modelName: String,
+                                        providerName: String) -> Bool {
+        ModelCapabilityRegistry.capability(for: modelName,
+                                           providerName: providerName).supportsVision
+    }
+
+    static func modelSupportsReasoning(modelName: String,
+                                       providerName: String) -> Bool {
+        ModelCapabilityRegistry.capability(for: modelName,
+                                           providerName: providerName).supportsReasoning
+    }
+
+    enum ProviderReadiness: Equatable, Hashable {
+        case ready
+        case disabled
+        case missingAPIKey
+        case noEnabledModels
+        case invalidBaseURL
+        case remoteHTTP
+
+        var isReady: Bool { self == .ready }
+
+        var diagnosticCode: String {
+            switch self {
+            case .ready: return "ready"
+            case .disabled: return "disabled"
+            case .missingAPIKey: return "missing-api-key"
+            case .noEnabledModels: return "no-enabled-models"
+            case .invalidBaseURL: return "invalid-base-url"
+            case .remoteHTTP: return "remote-http"
+            }
+        }
+
+        var displayText: String {
+            switch self {
+            case .ready: return "可请求"
+            case .disabled: return "供应商未启用"
+            case .missingAPIKey: return "缺少 API Key"
+            case .noEnabledModels: return "没有启用模型"
+            case .invalidBaseURL: return "Base URL 无效"
+            case .remoteHTTP: return "远程 HTTP 不安全"
+            }
+        }
+
+        var recoverySuggestion: String {
+            switch self {
+            case .ready:
+                return "无需处理"
+            case .disabled:
+                return "在 AI 设置中启用该供应商"
+            case .missingAPIKey:
+                return "在 AI 设置中重新填写 API Key"
+            case .noEnabledModels:
+                return "在 AI 设置中启用至少一个模型"
+            case .invalidBaseURL:
+                return "检查 Base URL,例如 https://api.example.com/v1"
+            case .remoteHTTP:
+                return "远程端点请改用 HTTPS;HTTP 仅允许 localhost"
+            }
+        }
+    }
+
+    static func providerReadiness(_ provider: AIProvider) -> ProviderReadiness {
+        guard provider.isEnabled else { return .disabled }
+        guard !provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .missingAPIKey
+        }
+        guard !provider.enabledModelNames.isEmpty else { return .noEnabledModels }
+
+        let normalizedBase = AIClient.normalizedBase(provider.baseURL, proto: provider.apiProtocol)
+        guard let url = URL(string: normalizedBase),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host,
+              !host.isEmpty else {
+            return .invalidBaseURL
+        }
+        if scheme == "http" {
+            return isLocalHTTPHost(host) ? .ready : .remoteHTTP
+        }
+        return scheme == "https" ? .ready : .invalidBaseURL
+    }
+
+    static func isProviderRequestReady(_ provider: AIProvider) -> Bool {
+        providerReadiness(provider).isReady
+    }
+
     static func scopedSettings(from settings: AppSettings, route: AIRequestRoute) -> AppSettings? {
         guard let provider = settings.providers.first(where: { $0.id == route.providerID && $0.isEnabled }) else {
+            return nil
+        }
+        guard provider.enabledModelNames.contains(route.modelName) else {
             return nil
         }
         let probe = AppSettings()
@@ -95,13 +1149,25 @@ enum AIRequestRouter {
         return probe
     }
 
-    private static func routeReason(model: String, textLength: Int, hasImage: Bool, action: AIAction) -> String {
-        let capability = ModelCapabilityRegistry.capability(for: model)
+    private static func isLocalHTTPHost(_ host: String) -> Bool {
+        let normalized = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        return normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
+    }
+
+    private static func routeReason(model: String,
+                                    providerName: String,
+                                    textLength: Int,
+                                    hasImage: Bool,
+                                    action: AIAction,
+                                    preference: AIRoutingPreference) -> String {
+        let capability = ModelCapabilityRegistry.capability(for: model, providerName: providerName)
         if hasImage && capability.supportsVision { return "图片输入优先" }
         if textLength > 8_000 && capability.supportsLongContext { return "长文本优先" }
         if action.thinkingMode && capability.supportsReasoning { return "推理任务优先" }
         if isCodeAction(action) && capability.isCodeCapable { return "代码任务优先" }
         if action.isTranslation && capability.isFast { return "翻译/速度优先" }
+        if preference == .fastest && (capability.isFast || capability.isEconomical) { return "速度偏好优先" }
+        if preference == .quality && qualityScore(for: capability) >= 2 { return "质量偏好优先" }
         if capability.isFast || capability.isEconomical { return "速度/成本优先" }
         return "备用模型"
     }
@@ -116,12 +1182,76 @@ enum AIRequestRouter {
         var value = 0
         if route.providerID == action.providerID { value += 500 }
         if route.providerID == settings.activeProviderID && route.modelName == settings.activeModel { value += 200 }
-        if hasImage { value += capability.supportsVision ? 80 : -40 }
+        if hasImage { value += capability.supportsVision ? 120 : -300 }
         if textLength > 8_000 { value += capability.supportsLongContext ? 60 : -20 }
-        if action.thinkingMode { value += capability.supportsReasoning ? 60 : -10 }
+        let fitStatus = AIRequestPayloadDiagnostic.contextFitStatus(
+            estimatedTextTokens: AIRequestPayloadDiagnostic.estimatedTextTokens(forCharacterCount: textLength),
+            contextTokens: capability.contextTokens
+        )
+        if fitStatus == "over-limit" {
+            value -= 1_000
+        } else if fitStatus == "near-limit" {
+            value -= 80
+        }
+        if action.thinkingMode { value += capability.supportsReasoning ? 120 : -240 }
         if isCodeAction(action) { value += capability.isCodeCapable ? 35 : -10 }
         if action.isTranslation { value += capability.isFast ? 20 : 0 }
         if !hasImage && textLength < 2_000 && (capability.isFast || capability.isEconomical) { value += 25 }
+        switch settings.routingPreference {
+        case .fastest:
+            if capability.isFast { value += 70 }
+            if capability.isEconomical { value += 35 }
+            if !capability.isFast && !capability.isEconomical { value -= 20 }
+        case .balanced:
+            break
+        case .quality:
+            value += qualityScore(for: capability) * 30
+            if capability.isFast && capability.isEconomical { value -= 15 }
+        }
+        return value
+    }
+
+    private static func routePrecedes(_ lhs: AIRequestRoute,
+                                      _ rhs: AIRequestRoute,
+                                      settings: AppSettings,
+                                      action: AIAction,
+                                      textLength: Int,
+                                      hasImage: Bool,
+                                      providerOrder: [String: Int],
+                                      modelOrder: [String: Int]) -> Bool {
+        let lhsScore = score(route: lhs,
+                             settings: settings,
+                             action: action,
+                             textLength: textLength,
+                             hasImage: hasImage)
+        let rhsScore = score(route: rhs,
+                             settings: settings,
+                             action: action,
+                             textLength: textLength,
+                             hasImage: hasImage)
+        if lhsScore != rhsScore { return lhsScore > rhsScore }
+
+        let lhsProviderOrder = providerOrder[lhs.providerID] ?? Int.max
+        let rhsProviderOrder = providerOrder[rhs.providerID] ?? Int.max
+        if lhsProviderOrder != rhsProviderOrder {
+            return lhsProviderOrder < rhsProviderOrder
+        }
+
+        let lhsModelOrder = modelOrder[lhs.id] ?? Int.max
+        let rhsModelOrder = modelOrder[rhs.id] ?? Int.max
+        if lhsModelOrder != rhsModelOrder {
+            return lhsModelOrder < rhsModelOrder
+        }
+
+        return lhs.id < rhs.id
+    }
+
+    private static func qualityScore(for capability: ModelCapability) -> Int {
+        var value = 0
+        if capability.supportsLongContext { value += 1 }
+        if capability.supportsReasoning { value += 1 }
+        if capability.isCodeCapable { value += 1 }
+        if capability.contextTokens >= 200_000 { value += 1 }
         return value
     }
 

@@ -30,6 +30,13 @@ enum TargetLanguage: String, Codable, CaseIterable, Identifiable {
 
 /// 一个可自定义的 AI 动作(提问/翻译/润色/总结/解释代码/自定义…)
 struct AIAction: Codable, Identifiable, Equatable {
+    static let defaultThinkingBudget = 8_000
+    static let thinkingBudgetRange = 1_024...64_000
+    static let maxNameLength = 80
+    static let maxIconLength = 80
+    static let maxGroupLength = 80
+    static let maxPromptLength = 20_000
+
     var id: String = UUID().uuidString
     var name: String = "新动作"
     var icon: String = "wand.and.stars"
@@ -43,7 +50,7 @@ struct AIAction: Codable, Identifiable, Equatable {
     var isEnabled: Bool = true
     /// #2 Thinking/推理模式(Anthropic extended thinking 或 DeepSeek R1)
     var thinkingMode: Bool = false
-    var thinkingBudget: Int = 8000   // Anthropic budget_tokens
+    var thinkingBudget: Int = Self.defaultThinkingBudget   // Anthropic budget_tokens
     /// #1 动作专属供应商覆盖(nil = 使用全局激活的供应商)
     var providerID: String? = nil
     var modelOverride: String? = nil
@@ -54,6 +61,10 @@ struct AIAction: Codable, Identifiable, Equatable {
         var p = prompt.replacingOccurrences(of: "{{text}}", with: text)
         p = p.replacingOccurrences(of: "{{lang}}", with: targetLanguage.instruction)
         return p
+    }
+
+    static func sanitizedThinkingBudget(_ value: Int) -> Int {
+        min(max(value, thinkingBudgetRange.lowerBound), thinkingBudgetRange.upperBound)
     }
 
     static func defaults() -> [AIAction] {
@@ -96,7 +107,7 @@ extension AIAction {
         replaceByDefault = (try? c.decode(Bool.self, forKey: .replaceByDefault)) ?? false
         isEnabled = (try? c.decode(Bool.self, forKey: .isEnabled)) ?? true
         thinkingMode = (try? c.decode(Bool.self, forKey: .thinkingMode)) ?? false
-        thinkingBudget = (try? c.decode(Int.self, forKey: .thinkingBudget)) ?? 8000
+        thinkingBudget = Self.sanitizedThinkingBudget((try? c.decode(Int.self, forKey: .thinkingBudget)) ?? Self.defaultThinkingBudget)
         providerID = try? c.decode(String.self, forKey: .providerID)
         modelOverride = try? c.decode(String.self, forKey: .modelOverride)
         saveHistory = (try? c.decode(Bool.self, forKey: .saveHistory)) ?? true

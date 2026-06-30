@@ -14,6 +14,7 @@ struct TypingCursor: View {
 struct ResultView: View {
     @ObservedObject var vm: ResultViewModel
     var onClose: () -> Void
+    var onOpenAISettings: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,7 +53,8 @@ struct ResultView: View {
                     }
                     HStack(spacing: 6) {
                         if vm.isPinned {
-                            Label("已固定", systemImage: "pin.fill")
+                            Label(ResultPinCommand.statusTitle,
+                                  systemImage: ResultPinCommand.statusSystemImage)
                         } else if vm.isStreaming {
                             Label("生成中", systemImage: "sparkles")
                         } else {
@@ -82,17 +84,16 @@ struct ResultView: View {
 
                 Spacer()
                 Button { vm.isPinned.toggle() } label: {
-                    Image(systemName: vm.isPinned ? "pin.fill" : "pin")
+                    Image(systemName: ResultPinCommand.systemImage(isPinned: vm.isPinned))
                         .foregroundStyle(vm.isPinned ? Color.accentColor : .secondary)
-                        .rotationEffect(.degrees(vm.isPinned ? 0 : 45))
                         .frame(width: 24, height: 24)
                         .background(Color.primary.opacity(0.06))
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .help("固定窗口 (⌘⇧P)")
-                .accessibilityLabel(vm.isPinned ? "取消固定窗口" : "固定窗口")
+                .help("\(ResultPinCommand.title(isPinned: vm.isPinned)) (⌘⇧P)")
+                .accessibilityLabel(ResultPinCommand.title(isPinned: vm.isPinned))
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                         .foregroundStyle(.secondary)
@@ -170,11 +171,38 @@ struct ResultView: View {
                             Label(err, systemImage: "exclamationmark.triangle.fill")
                                 .font(.callout).foregroundStyle(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            // #12 重试按钮
-                            Button { vm.retry() } label: {
-                                Label("重试", systemImage: "arrow.clockwise")
+                            if let recovery = vm.errorRecoverySuggestionText {
+                                Label(recovery, systemImage: "wrench.and.screwdriver")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .controlSize(.small)
+                            // #12 重试按钮
+                            HStack(spacing: 8) {
+                                if vm.errorRecoveryPrimaryAction == .settings {
+                                    errorSettingsButton
+                                    errorRetryButton
+                                } else {
+                                    errorRetryButton
+                                    errorSettingsButton
+                                }
+                                Button { vm.copyBriefRequestDiagnostics() } label: {
+                                    Label("精简",
+                                          systemImage: ResultDiagnosticsCommand.systemImage)
+                                }
+                                .controlSize(.small)
+                                .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
+                                .help(ResultDiagnosticsCommand.briefTitle)
+                                Button { vm.copyRequestDiagnostics() } label: {
+                                    Label("完整",
+                                          systemImage: ResultDiagnosticsCommand.systemImage)
+                                }
+                                .controlSize(.small)
+                                .disabled(!resultCommandEnabled(.copyDiagnostics))
+                                .help(ResultDiagnosticsCommand.title)
+                            }
                         }
                     }
 
@@ -235,9 +263,22 @@ struct ResultView: View {
                 HStack(spacing: 10) {
                     if vm.elapsed > 0 { Label(String(format: "%.1fs", vm.elapsed), systemImage: "clock") }
                     if vm.charCount > 0 { Label("\(vm.charCount) 字", systemImage: "textformat") }
+                    if let privacyStatus = vm.privacyProtectionStatusText {
+                        Label(privacyStatus, systemImage: "hand.raised")
+                            .lineLimit(1)
+                            .help(privacyStatus)
+                    }
+                    Button {
+                        vm.copyBriefRequestDiagnostics()
+                    } label: {
+                        Image(systemName: ResultDiagnosticsCommand.systemImage)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
+                    .help(ResultDiagnosticsCommand.briefTitle)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(vm.activeModelName.isEmpty ? vm.settings.activeModel : vm.activeModelName)
+                        Text(vm.activeModelName.isEmpty ? vm.settings.model : vm.activeModelName)
                             .truncationMode(.middle)
                             .lineLimit(1)
                         if let note = vm.routeNote {
@@ -251,98 +292,246 @@ struct ResultView: View {
             HStack(spacing: 8) {
                 FollowUpField(text: $vm.followUp, onSubmit: vm.sendFollowUp,
                               onHistoryUp: vm.followUpHistoryUp,
-                              onHistoryDown: vm.followUpHistoryDown)
+                              onHistoryDown: vm.followUpHistoryDown,
+                              shouldHandleHistoryNavigation: { text, direction in
+                                  vm.shouldHandleFollowUpHistoryNavigation(currentText: text,
+                                                                           direction: direction)
+                              })
                     .disabled(vm.isStreaming)
 
-                Button { vm.copyOutput() } label: { Image(systemName: "doc.on.doc") }
+                Button { vm.copyOutput() } label: { resultCommandImage(.copyOutput) }
                     .controlSize(.small)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .help("复制结果 (⌘⇧C)")
-                    .accessibilityLabel("复制结果")
-                    .disabled(vm.output.isEmpty)
+                    .help(resultCommandHelpText(.copyOutput))
+                    .accessibilityLabel(resultCommandAccessibilityLabel(.copyOutput))
+                    .disabled(!resultCommandEnabled(.copyOutput))
 
-                Button { vm.replaceOriginal() } label: { Image(systemName: "arrow.uturn.left.square") }
+                Button { vm.copyConversationMarkdown() } label: { resultCommandImage(.copyMarkdown) }
+                    .controlSize(.small)
+                    .keyboardShortcut("c", modifiers: [.command, .option])
+                    .help(resultCommandHelpText(.copyMarkdown))
+                    .accessibilityLabel(resultCommandAccessibilityLabel(.copyMarkdown))
+                    .disabled(!resultCommandEnabled(.copyMarkdown))
+
+                Button { vm.replaceOriginal() } label: { resultCommandImage(.replaceOriginal) }
                     .controlSize(.small)
                     .keyboardShortcut(.return, modifiers: [.command])
-                    .help("替换原文 (⌘↩)")
-                    .accessibilityLabel("替换原文")
-                    .disabled(vm.output.isEmpty || vm.isStreaming)
+                    .help(resultCommandHelpText(.replaceOriginal))
+                    .accessibilityLabel(resultCommandAccessibilityLabel(.replaceOriginal))
+                    .disabled(!resultCommandEnabled(.replaceOriginal))
 
-                Button { vm.appendToDocument() } label: { Image(systemName: "text.badge.plus") }
+                Button { vm.appendToDocument() } label: { resultCommandImage(.appendToDocument) }
                     .controlSize(.small)
                     .keyboardShortcut(.return, modifiers: [.command, .shift])
-                    .help("追加到文档 (⌘⇧↩)")
-                    .accessibilityLabel("追加到文档")
-                    .disabled(vm.output.isEmpty || vm.isStreaming)
+                    .help(resultCommandHelpText(.appendToDocument))
+                    .accessibilityLabel(resultCommandAccessibilityLabel(.appendToDocument))
+                    .disabled(!resultCommandEnabled(.appendToDocument))
 
                 // #7 导出
-                Button { vm.exportConversation() } label: { Image(systemName: "square.and.arrow.up") }
+                Button { vm.exportConversation() } label: { resultCommandImage(.exportConversation) }
                     .controlSize(.small)
                     .keyboardShortcut("e", modifiers: [.command])
-                    .help("导出对话 (⌘E)")
-                    .accessibilityLabel("导出对话")
-                    .disabled(vm.output.isEmpty)
+                    .help(resultCommandHelpText(.exportConversation))
+                    .accessibilityLabel(resultCommandAccessibilityLabel(.exportConversation))
+                    .disabled(!resultCommandEnabled(.exportConversation))
 
                 if vm.isStreaming {
-                    Button { vm.cancel() } label: { Image(systemName: "stop.fill") }
+                    Button { vm.cancel() } label: { resultCommandImage(.stop) }
                         .controlSize(.small)
                         .keyboardShortcut(.cancelAction)
-                        .help("停止 (Esc)")
-                        .accessibilityLabel("停止生成")
+                        .help(resultCommandHelpText(.stop))
+                        .accessibilityLabel(resultCommandAccessibilityLabel(.stop))
+                        .disabled(!resultCommandEnabled(.stop))
                 } else {
-                    Button { vm.regenerate() } label: { Image(systemName: "arrow.clockwise") }
+                    Button { vm.regenerate() } label: { resultCommandImage(.regenerate) }
                         .controlSize(.small)
                         .keyboardShortcut("r", modifiers: [.command])
-                        .help("重新生成 (⌘R)")
-                        .accessibilityLabel("重新生成")
-                        .disabled(vm.sourceText.isEmpty)
+                        .help(resultCommandHelpText(.regenerate))
+                        .accessibilityLabel(resultCommandAccessibilityLabel(.regenerate))
+                        .disabled(!resultCommandEnabled(.regenerate))
                 }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
     }
+
+    private func resultCommandImage(_ action: ResultCommandAction) -> Image {
+        Image(systemName: ResultCommandFactory.descriptor(for: action, in: resultCommandState).systemImage)
+    }
+
+    private var errorRetryButton: some View {
+        Button { vm.retry() } label: {
+            Label(vm.errorRecoveryRetryDescriptor.compactTitle,
+                  systemImage: vm.errorRecoveryRetryDescriptor.systemImage)
+        }
+        .controlSize(.small)
+        .help("\(vm.errorRecoveryRetryDescriptor.title): \(vm.errorRecoveryRetryDescriptor.subtitle)")
+    }
+
+    private var errorSettingsButton: some View {
+        Button { onOpenAISettings() } label: {
+            Label(vm.errorRecoverySettingsDescriptor.compactTitle,
+                  systemImage: vm.errorRecoverySettingsDescriptor.systemImage)
+        }
+        .controlSize(.small)
+        .help("\(vm.errorRecoverySettingsDescriptor.title): \(vm.errorRecoverySettingsDescriptor.subtitle)")
+    }
+
+    private var resultCommandState: ResultCommandState {
+        ResultCommandState(resultText: vm.completeText,
+                           diagnosticsText: vm.requestDiagnosticText,
+                           isStreaming: vm.isStreaming,
+                           sourceText: vm.sourceText,
+                           protectsContentExport: vm.contentExportProtectionEnabled,
+                           recoveryCode: vm.errorRecoveryCode)
+    }
+
+    private func resultCommandEnabled(_ action: ResultCommandAction) -> Bool {
+        ResultCommandFactory.isEnabled(action, in: resultCommandState)
+    }
+
+    private func resultCommandHelpText(_ action: ResultCommandAction) -> String {
+        ResultCommandFactory.helpText(for: action, in: resultCommandState)
+    }
+
+    private func resultCommandAccessibilityLabel(_ action: ResultCommandAction) -> String {
+        ResultCommandFactory.accessibilityLabel(for: action, in: resultCommandState)
+    }
 }
 
 // MARK: - 追问框(#5 支持↑/↓浏览历史)
 
-struct FollowUpField: NSViewRepresentable {
+struct FollowUpField: View {
     @Binding var text: String
     var onSubmit: () -> Void
     var onHistoryUp: () -> Void
     var onHistoryDown: () -> Void
+    var shouldHandleHistoryNavigation: (String, FollowUpHistoryNavigationDirection) -> Bool
 
-    func makeNSView(context: Context) -> NSTextField {
-        let f = NSTextField()
-        f.placeholderString = "追问…"
-        f.bezelStyle = .roundedBezel
-        f.delegate = context.coordinator
-        return f
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            FollowUpTextView(text: $text,
+                             onSubmit: onSubmit,
+                             onHistoryUp: onHistoryUp,
+                             onHistoryDown: onHistoryDown,
+                             shouldHandleHistoryNavigation: shouldHandleHistoryNavigation)
+                .frame(minHeight: CGFloat(FollowUpInputBehavior.minHeight),
+                       maxHeight: CGFloat(FollowUpInputBehavior.maxHeight))
+
+            if text.isEmpty {
+                Text(FollowUpInputBehavior.placeholder)
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .allowsHitTesting(false)
+            }
+        }
+        .background(Color.primary.opacity(0.045))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.06), lineWidth: 1))
+        .help(FollowUpInputBehavior.helpText)
+        .accessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
+        .accessibilityHint(FollowUpInputBehavior.helpText)
+    }
+}
+
+private struct FollowUpTextView: NSViewRepresentable {
+    @Binding var text: String
+    var onSubmit: () -> Void
+    var onHistoryUp: () -> Void
+    var onHistoryDown: () -> Void
+    var shouldHandleHistoryNavigation: (String, FollowUpHistoryNavigationDirection) -> Bool
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.toolTip = FollowUpInputBehavior.helpText
+        scrollView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
+        scrollView.setAccessibilityHelp(FollowUpInputBehavior.helpText)
+
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainerInset = NSSize(width: 7, height: 6)
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0,
+                                                       height: CGFloat.greatestFiniteMagnitude)
+        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.string = text
+        textView.toolTip = FollowUpInputBehavior.helpText
+        textView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
+        textView.setAccessibilityHelp(FollowUpInputBehavior.helpText)
+
+        scrollView.documentView = textView
+        return scrollView
     }
 
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text { nsView.stringValue = text }
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+        textView.isEditable = isEnabled
+        textView.textColor = isEnabled ? .labelColor : .disabledControlTextColor
+        textView.toolTip = FollowUpInputBehavior.helpText
+        textView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
+        textView.setAccessibilityHelp(FollowUpInputBehavior.helpText)
+        nsView.toolTip = FollowUpInputBehavior.helpText
+        nsView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
+        nsView.setAccessibilityHelp(FollowUpInputBehavior.helpText)
         context.coordinator.parent = self
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: FollowUpField
-        init(_ parent: FollowUpField) { self.parent = parent }
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: FollowUpTextView
+        init(_ parent: FollowUpTextView) { self.parent = parent }
 
-        func controlTextDidChange(_ obj: Notification) {
-            if let field = obj.object as? NSTextField { parent.text = field.stringValue }
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
         }
 
-        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             if selector == #selector(NSResponder.insertNewline(_:)) {
-                parent.onSubmit(); return true
+                let flags = NSApp.currentEvent?.modifierFlags ?? []
+                let behavior = FollowUpInputBehavior.returnKeyBehavior(
+                    shift: flags.contains(.shift),
+                    option: flags.contains(.option)
+                )
+                if behavior == .insertNewline {
+                    textView.insertText("\n", replacementRange: textView.selectedRange())
+                } else {
+                    parent.onSubmit()
+                }
+                return true
             }
             if selector == #selector(NSResponder.moveUp(_:)) {
-                parent.onHistoryUp(); return true
+                if parent.shouldHandleHistoryNavigation(textView.string, .up) {
+                    parent.onHistoryUp()
+                    return true
+                }
+                return false
             }
             if selector == #selector(NSResponder.moveDown(_:)) {
-                parent.onHistoryDown(); return true
+                if parent.shouldHandleHistoryNavigation(textView.string, .down) {
+                    parent.onHistoryDown()
+                    return true
+                }
+                return false
             }
             return false
         }

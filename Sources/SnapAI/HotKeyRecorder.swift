@@ -24,14 +24,21 @@ struct HotKeyRecorder: NSViewRepresentable {
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+            configure()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            configure()
+        }
+
+        private func configure() {
             bezelStyle = .rounded
             setButtonType(.momentaryPushIn)
             target = self
             action = #selector(startRecording)
             refreshTitle()
         }
-
-        required init?(coder: NSCoder) { fatalError() }
 
         func refreshTitle() {
             title = recording ? "请按下快捷键…" : combo.displayString

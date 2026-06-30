@@ -2,7 +2,20 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
+![SnapAI 1.3.0 UI 总览](docs/snapai-ui-overview.svg)
+
 ![SnapAI 设置界面](docs/snapai-settings.png)
+
+## 1.3.0 版本重点
+
+- 命令面板:按 `Command + K` 搜索动作、模型、上下文包、历史记录和设置项。
+- 结果工作台:复制、替换、追加、继续追问、重新生成等行为都有更完整的快捷键和恢复路径。
+- 历史知识库:独立窗口支持搜索、收藏、删除、筛选、导出和从历史创建上下文包。
+- 隐私与诊断:发送前预览、本地脱敏、高风险强制确认、历史仅元信息、诊断脱敏和权限健康中心。
+- AI 路由与 fallback:按动作、文本长度、图片输入和速度/质量偏好选择模型,失败时自动尝试备用候选。
+- 更新链路:应用内检查 GitHub Release,下载后校验版本、bundle id、签名和 SHA256,替换后尝试自动重启。
+
+详细发布说明见 [SnapAI 1.3.0 Release Notes](docs/RELEASE_NOTES_1.3.0.md),阶段性复盘和后续路线见 [SnapAI 1.3.0 Iteration Report](docs/ITERATION_REPORT_1.3.0.md)。
 
 ## 快速安装
 
@@ -59,10 +72,124 @@ open ~/Applications/SnapAI.app
 
 所有动作、快捷键、Prompt、模型和供应商都可以在设置里自定义。
 
+## macOS 服务菜单
+
+安装后,支持 Services 的 macOS 应用可以从系统服务菜单把选中文本发送给 SnapAI。常见入口通常在:
+
+```text
+应用菜单 -> 服务 -> 用 SnapAI 提问 / 用 SnapAI 翻译 / 用 SnapAI 润色
+```
+
+不同应用对 Services 的支持程度不同。如果菜单中暂时没有显示 SnapAI,请确认应用已经移动到固定位置并重新打开 SnapAI;必要时注销或重启一次 macOS 以刷新系统服务索引。
+
+## 自动化 URL Scheme
+
+SnapAI 支持 `snapai://` URL Scheme,可从 Shortcuts、Raycast、Alfred、脚本或其他应用触发。
+
+常用入口:
+
+| URL | 行为 |
+|-----|------|
+| `snapai://run?action=润色&text=需要处理的文本` | 直接用指定动作处理文本 |
+| `snapai://run/润色?text=需要处理的文本` | 用路径形式指定动作并处理文本 |
+| `snapai://ask?text=解释这段内容` | 使用“提问”动作 |
+| `snapai://translate?text=hello` | 使用“翻译”动作 |
+| `snapai://quick?action=翻译&text=预填内容` | 打开快捷提问面板,预填文本并预选动作 |
+| `snapai://quick/翻译?text=预填内容` | 用路径形式预选动作并打开快捷提问面板 |
+| `snapai://settings?section=privacy` | 打开设置页的指定区域 |
+| `snapai://settings/ai` | 用路径形式打开指定设置区域 |
+| `snapai://settings/section/permission` | 用二段式路径打开指定设置区域 |
+| `snapai://settings/permission/screen-recording` | 用复合路径别名打开权限设置 |
+| `snapai://history` | 打开历史记录窗口 |
+| `snapai://history?export=true` | 复制全部历史记录 Markdown |
+| `snapai://history/export` | 用路径子命令复制全部历史记录 Markdown |
+| `snapai://history?export=true&query=release&favorite=true` | 复制筛选后的历史记录 Markdown |
+| `snapai://history/context?tag=项目A` | 从筛选后的历史创建并启用上下文包 |
+| `snapai://history/context?tag=项目A&name=项目A上下文` | 用指定名称创建或更新历史上下文包 |
+| `snapai://history/context?tag=项目A&limit=5&max_chars=1200` | 控制写入记录数和单段文本长度 |
+| `snapai://history?create_context=true&favorite=true` | 从收藏历史创建并启用上下文包 |
+| `snapai://history?clear=true` | 清空历史记录 |
+| `snapai://history/clear` | 用路径子命令清空历史记录 |
+| `snapai://palette` | 打开命令面板 |
+| `snapai://model?provider=DeepSeek&model=deepseek-chat` | 持久切换当前供应商和模型 |
+| `snapai://model/gpt-4o-mini` | 按模型名切换当前模型 |
+| `snapai://model/OpenAI/gpt-4o-mini` | 用路径形式指定供应商和模型 |
+| `snapai://model/provider/OpenAI/model/gpt-4o-mini` | 用带标签路径指定供应商和模型 |
+| `snapai://context?name=项目A` | 持久切换当前上下文包 |
+| `snapai://context/项目A` | 用路径形式切换当前上下文包 |
+| `snapai://context?copy=true` | 复制当前上下文包 Markdown |
+| `snapai://context/copy/项目A` | 复制指定上下文包 Markdown |
+| `snapai://context/effective?copy=true` | 复制实际生效的 System Prompt |
+| `snapai://prompt?copy=true` | 复制实际生效的 System Prompt |
+| `snapai://context/status?copy=true` | 复制上下文状态摘要,不含正文 |
+| `snapai://context?clear=true` | 清空当前上下文包 |
+| `snapai://context/clear` | 用路径子命令清空当前上下文包 |
+| `snapai://toggle/privacy-preview?enabled=true` | 开启或关闭发送前预览 |
+| `snapai://toggle/privacy-preview/on` | 用路径状态开启发送前预览 |
+| `snapai://toggle/fallback?enabled=false` | 开启或关闭失败自动切换 |
+| `snapai://toggle/history-metadata/on` | 开启历史仅元信息模式 |
+| `snapai://work-mode?mode=privacy` | 切换工作模式 |
+| `snapai://work-mode/quality` | 用路径形式切换工作模式 |
+| `snapai://work-mode/preset/standard` | 用二段式路径切换工作模式 |
+| `snapai://routing?preference=quality` | 持久切换 AI 路由偏好 |
+| `snapai://routing/fastest` | 用路径形式切换 AI 路由偏好 |
+| `snapai://routing/preference/quality` | 用二段式路径切换 AI 路由偏好 |
+| `snapai://typewriter?speed=off` | 切换结果打字机速度 |
+| `snapai://typewriter/speed/normal` | 用二段式路径切换结果打字机速度 |
+| `snapai://dock?enabled=false` | 显示或隐藏 Dock 图标 |
+| `snapai://dock/hide` | 用路径状态隐藏 Dock 图标 |
+| `snapai://login-item?enabled=true` | 开启或关闭开机启动 |
+| `snapai://login-item/enable` | 用路径状态开启开机启动 |
+| `snapai://health` | 打开权限健康中心 |
+| `snapai://diagnostics?summary=true` | 复制精简权限诊断摘要 |
+| `snapai://diagnostics/summary` | 用路径子命令复制精简权限诊断摘要 |
+| `snapai://diagnostics?copy=true` | 复制完整权限与安装诊断信息 |
+| `snapai://diagnostics/copy` | 用路径子命令复制完整权限与安装诊断信息 |
+| `snapai://install-log` | 在 Finder 中显示最近一次安装日志 |
+| `snapai://install-log?copy=true` | 复制最近一次安装日志路径 |
+| `snapai://install-log/copy` | 用路径子命令复制最近一次安装日志路径 |
+| `snapai://update` | 检查更新 |
+
+动作参数既可以传动作名称,也可以传动作 id。URL 中的中文、换行和特殊符号应由调用方按标准 URL 编码。
+自动化查找动作时会匹配已启用动作的名称和 id,并忽略空格、连字符、下划线、斜杠和点号等常见分隔符。
+URL 命令名支持连字符、下划线和编码空格的常见写法,例如 `snapai://command-palette`、`snapai://command_palette` 和 `snapai:///command%20palette` 都会打开命令面板。
+设置页 section 也支持常见别名和分隔符宽容匹配,例如 `api_key` 会打开 AI 模型设置,`screen recording` 会打开权限设置。
+URL 参数名会忽略大小写,并把 camelCase、snake_case 和 kebab-case 视为等价,例如 `providerID`、`provider_id` 和 `provider-id` 都可以识别。
+支持 host 形式和 path-only 形式,例如 `snapai://model/gpt-4o-mini` 与 `snapai:///model/gpt-4o-mini` 等价。模型名或上下文名包含 `/` 时可按标准 URL 编码为 `%2F`,例如 `snapai://model/openrouter%2Fauto`。
+自动化选择供应商、模型或上下文包时,会忽略空格、连字符、下划线、斜杠和点号等常见分隔符,例如 `gpt4omini` 可以匹配 `gpt-4o-mini`。
+路由偏好和打字机速度等枚举值也支持这种宽容匹配,例如 `best_quality` 可匹配 `best-quality`,`standard speed` 可匹配 `normal`。
+翻译目标语言支持常见缩写和英文别名,并兼容分隔符写法,例如 `zh_cn`、`simplified-chinese`、`Japanese`、`korean_language`。
+模型切换 URL 只会选择已经启用的供应商和模型;如果无法匹配,会打开 AI 设置页。
+上下文切换和复制 URL 只会选择已经启用且内容非空的上下文包;如果无法匹配,会打开通用设置页。`copy=true` 会复制当前上下文包 Markdown,也可用 `snapai://context/copy/项目A` 复制指定上下文包。`snapai://context/effective?copy=true` 和 `snapai://prompt?copy=true` 会复制实际生效的 System Prompt,包含全局系统提示和当前上下文包。`snapai://context/status?copy=true` 会复制不含正文的上下文状态摘要,适合排查配置问题。`clear=true` 只会清空当前选择,不会删除上下文包。
+开关 URL 支持 `privacy-preview`、`redaction`、`history-metadata`、`auto-route` 和 `fallback`;不传 `enabled` 时会翻转当前状态。
+工作模式 URL 支持 `standard`、`privacy`、`speed`、`quality`,也支持 `default`、`private`、`fastest`、`best_quality`、`隐私`、`极速`、`质量模式` 等常见别名。
+路由偏好 URL 支持 `fastest`、`balanced`、`quality`,也支持 `fast`、`speed`、`best` 等常见别名。
+布尔参数支持 `true` / `false`、`on` / `off`、`enabled` / `disabled`、`enable` / `disable`、`是` / `否`、`真` / `假`,也支持 `?copy`、`?export`、`?clear`、`?enabled` 这种只写参数名的 flag 形式。打字机速度 URL 支持 `off`、`slow`、`normal`、`fast`。同一布尔意图出现重复或同义参数时,显式 `false` / `off` 会优先生效;复制、导出、清空等路径子命令遇到对应的显式 `false` / `off` 参数时会被抑制,避免自动化误触副作用。历史清空必须显式传 `clear=true` 或 `clear` flag,普通 `snapai://history` 只会打开历史窗口。
+历史导出和历史上下文 URL 支持 `query` / `q` / `search`、`action`、`model`、`tag` 和 `favorite=true` 筛选,筛选逻辑与历史窗口一致。路径子命令同样支持筛选,例如 `snapai://history/export?search=release&favorite` 或 `snapai://history/context?tag=项目A`。从历史创建上下文包时,可用 `name` / `profileName` 指定上下文包名称,用 `limit` / `maxEntries` 控制写入记录数,用 `maxChars` / `maxFieldCharacters` 控制单段原文或结果的最大字符数;会自动跳过空记录和仅元信息记录,并把上下文包设为使用中;如果已存在同名上下文包,会更新原内容而不是重复新增。
+
+`snapai://run`、`snapai://ask`、`snapai://translate`、`snapai://polish`、`snapai://summarize` 和 `snapai://explain` 还支持这些可选参数:
+
+| 参数 | 说明 |
+|------|------|
+| `provider` / `providerID` | 指定一次性使用的供应商名称或 id |
+| `model` / `modelOverride` | 指定一次性使用的模型名 |
+| `language` / `lang` | 指定翻译目标语言,例如 `en`、`zh`、`ja`、`ko`、`fr`、`de`、`es` |
+| `history` / `saveHistory` | `false` 表示本次结果不保存到历史记录 |
+| `replace` / `replaceByDefault` | 覆盖动作的“完成后进入替换确认”标记;出于安全策略,直接 URL 调用没有可信原选区时不会自动写回未知窗口 |
+
+示例:
+
+```text
+snapai://run?action=总结&provider=DeepSeek&model=deepseek-chat&history=false&text=...
+snapai://translate?lang=en&model=gpt-4o-mini&text=...
+```
+
 ## 功能概览
 
 - 自定义动作:内置提问、翻译、润色、总结、解释代码,也可新增动作。
 - 全局快捷键:每个动作都能设置独立快捷键,设置页会阻止冲突快捷键保存。
+- 命令面板:用 `Command + K` 搜索动作、模型、上下文包、路由偏好、历史记录、历史导出、Dock/启动/动效设置。
+- 工作模式:可一键切换标准、隐私、极速和质量模式,联动隐私预览、本地脱敏、历史保存、自动路由和 fallback。
 - 快捷提问面板:无需选中文字,直接输入问题,也支持粘贴图片或截图。
 - 取词策略:优先使用 Accessibility API 读取选中文本,失败后才模拟 `Command + C`。
 - 多供应商与多模型:支持 OpenAI 兼容协议和 Anthropic 原生协议。
@@ -71,11 +198,18 @@ open ~/Applications/SnapAI.app
 - 替换原文:可把生成结果粘贴回原选区,适合翻译和润色。
 - 历史记录:保存最近结果,支持回看、复制和重新发起。
 - 历史知识库:历史窗口支持搜索、收藏、删除、按动作/模型/标签筛选,并可为单条记录添加标签。
+- 历史隐私标注:经过本地脱敏、隐私预览或脱敏规则异常的请求会自动写入历史标签,便于筛选和审计。
+- 历史隐私模式:可选择只保存动作、时间、模型和标签,不保存原文与 AI 输出。
 - 上下文包:可保存项目背景、术语表、写作风格或代码栈偏好,并自动合并进请求上下文。
 - 工作流模板:可一键创建邮件回复、会议纪要、代码审查、中英双语润色、图片理解等动作。
+- macOS 服务菜单:可从支持 Services 的应用中把选中文本直接发送给 SnapAI 提问、翻译或润色。
+- 自动化入口:支持 `snapai://` URL Scheme,可从 Shortcuts、Raycast、Alfred 或脚本触发动作。
 - 替换前预览:替换原文前显示原文/新文 Diff,确认后才写回目标应用。
 - 文本事务保护:替换和追加会保护用户剪贴板,并尽量恢复触发前的焦点应用。
-- 隐私规则测试:脱敏规则可在设置中实时预览替换结果。
+- 隐私规则测试:脱敏规则可在设置中实时预览替换结果;初始请求、编辑重发、动作/语言切换重发和结果面板追问都会走本地脱敏与发送前确认。
+- 默认本地脱敏:内置规则覆盖邮箱、手机号、API Key、访问令牌、URL 参数密钥、JWT 和私钥块;旧版默认规则会在本地升级或导入旧配置时自动迁移到当前规则集。
+- 高风险隐私保护:即使关闭发送前预览,检测到高隐私风险的内容也会强制确认;若保存历史,本条记录会自动降级为仅元信息,并写入可筛选的隐私风险标签。复制或导出对话 Markdown 时也会省略高风险正文。
+- 请求诊断:可复制路由、fallback、脱敏命中、失效规则、历史保存策略等元信息,不包含原始敏感正文。
 - iCloud 配置同步:可同步供应商结构、动作和快捷键,不包含 API Key 和历史内容。
 - 应用内更新:检查 GitHub Release,下载新版 zip,原地替换应用并重启。
 - 开机自启:可在设置中开启,基于 `SMAppService`。
@@ -164,11 +298,22 @@ SnapAI.app
 如果你要打包 Release:
 
 ```bash
-./build.sh
-scripts/package-release.sh
+scripts/preflight-release.sh
 ```
 
-`scripts/package-release.sh` 会生成干净的 zip 和 `snapai-manifest-vX.X.X.json`,并写入 zip 的 SHA256。若设置 `SNAPAI_MANIFEST_PRIVATE_KEY`,脚本还会额外生成 manifest 签名文件。
+`scripts/preflight-release.sh` 会依次运行空白检查、逻辑测试、`swift build`、`./build.sh`、签名校验、版本一致性检查、Release zip/manifest 打包、manifest 校验,并解压 zip 验证其中的 `SnapAI.app` 结构、版本和签名。真正发布前建议使用:
+
+```bash
+scripts/preflight-release.sh --require-clean
+```
+
+日常开发只想快速确认构建和测试,可以跳过打包:
+
+```bash
+scripts/preflight-release.sh --skip-package
+```
+
+`scripts/package-release.sh` 会生成干净的 zip 和 `snapai-manifest-vX.X.X.json`,并写入 zip 的 SHA256。脚本会校验 manifest 的版本、资产名和 SHA256 是否匹配当前 zip,也会解压 zip 验证 `SnapAI.app` 的版本和签名。若设置 `SNAPAI_MANIFEST_PRIVATE_KEY`,脚本还会额外生成 manifest 签名文件。
 
 ## 常见问题
 

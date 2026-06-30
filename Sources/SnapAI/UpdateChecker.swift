@@ -22,17 +22,32 @@ enum UpdateChecker {
         }
 
         var appZipAsset: Asset? {
-            assets.first { asset in
-                let lower = asset.name.lowercased()
-                return lower.hasSuffix(".zip") && lower.contains("snapai")
-            }
+            uniqueAsset(named: expectedAppZipAssetName)
         }
 
         var manifestAsset: Asset? {
-            assets.first { asset in
-                let lower = asset.name.lowercased()
-                return lower.hasSuffix(".json") && lower.contains("manifest")
-            }
+            uniqueAsset(named: expectedManifestAssetName)
+        }
+
+        var expectedAppZipAssetName: String {
+            "SnapAI-\(versionedTag).zip"
+        }
+
+        var expectedManifestAssetName: String {
+            "snapai-manifest-\(versionedTag).json"
+        }
+
+        private var versionedTag: String {
+            UpdateChecker.versionedReleaseTag(tagName)
+        }
+
+        func assets(named name: String) -> [Asset] {
+            assets.filter { $0.name == name }
+        }
+
+        private func uniqueAsset(named name: String) -> Asset? {
+            let matches = assets(named: name)
+            return matches.count == 1 ? matches[0] : nil
         }
     }
 
@@ -58,6 +73,59 @@ enum UpdateChecker {
         let assets: [ManifestAsset]
     }
 
+    enum InstallLogStatus: Equatable {
+        case noRecord
+        case untrustedLocation(String)
+        case missing(String)
+        case available(URL)
+
+        var diagnosticCode: String {
+            switch self {
+            case .noRecord:
+                return "no-record"
+            case .untrustedLocation:
+                return "untrusted-location"
+            case .missing:
+                return "missing"
+            case .available:
+                return "available"
+            }
+        }
+
+        var diagnosticPath: String {
+            switch self {
+            case .noRecord:
+                return "none"
+            case .untrustedLocation(let path), .missing(let path):
+                return path
+            case .available(let url):
+                return url.path
+            }
+        }
+
+        var recoverySuggestion: String {
+            switch self {
+            case .noRecord:
+                return "暂无自动更新日志;如更新失败,请重新检查更新后再复制诊断"
+            case .untrustedLocation:
+                return "已忽略不受信任的日志路径;请重新检查更新以生成新的 SnapAI 安装日志"
+            case .missing:
+                return "临时安装日志已不存在;请重新检查更新复现问题并复制新的安装日志"
+            case .available:
+                return "可通过命令面板或权限健康中心显示安装日志"
+            }
+        }
+
+        var url: URL? {
+            switch self {
+            case .available(let url):
+                return url
+            case .noRecord, .untrustedLocation, .missing:
+                return nil
+            }
+        }
+    }
+
     enum UpdateError: LocalizedError {
         case noInstallAsset
         case downloadFailed(Int)
@@ -67,6 +135,7 @@ enum UpdateChecker {
         case releaseLookupFailed(primary: Error, fallback: Error)
         case checksumMismatch(expected: String, actual: String)
         case invalidManifest(String)
+        case invalidReleaseMetadata(String)
         case signingIdentityChanged(current: String, incoming: String)
         case signingRequirementUnavailable(String)
 
@@ -86,13 +155,15 @@ enum UpdateChecker {
                 return """
                 GitHub Releases 暂不可用。
 
-                API 检查失败: \(primary.localizedDescription)
-                备用网页检查失败: \(fallback.localizedDescription)
+                API 检查失败: \(SensitiveTextSanitizer.sanitizedMessage(primary.localizedDescription))
+                备用网页检查失败: \(SensitiveTextSanitizer.sanitizedMessage(fallback.localizedDescription))
                 """
             case .checksumMismatch(let expected, let actual):
                 return "更新包 SHA256 校验失败。\n期望: \(expected)\n实际: \(actual)"
             case .invalidManifest(let message):
-                return "Release manifest 无法验证:\n\(message)"
+                return "Release manifest 无法验证:\n\(SensitiveTextSanitizer.sanitizedMessage(message))"
+            case .invalidReleaseMetadata(let message):
+                return "Release 元数据无法验证:\n\(SensitiveTextSanitizer.sanitizedMessage(message))"
             case .signingIdentityChanged(let current, let incoming):
                 return """
                 更新包的签名身份与当前 SnapAI 不一致,已取消自动安装。
@@ -177,20 +248,7 @@ enum UpdateChecker {
             )
         }
 
-        let htmlURL = releaseTagURL(tagName)
-        let assetName = "SnapAI-\(tagName).zip"
-        return Release(
-            tagName: tagName,
-            name: nil,
-            htmlURL: htmlURL,
-            assets: [
-                Asset(
-                    name: assetName,
-                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: assetName),
-                    digest: nil
-                )
-            ]
-        )
+        return webFallbackRelease(tagName: tagName)
     }
 
     private static func presentResult(_ release: Release) {
@@ -198,7 +256,13 @@ enum UpdateChecker {
         let latest = normalizedVersion(release.tagName)
         let currentDisplay = displayVersion(current)
         let latestDisplay = displayVersion(release.tagName)
-        let hasUpdate = compareVersions(latest, current) == .orderedDescending
+        let hasUpdate: Bool
+        do {
+            hasUpdate = try compareOfficialVersions(latest, current) == .orderedDescending
+        } catch {
+            presentError(error)
+            return
+        }
 
         let alert = NSAlert()
         alert.messageText = hasUpdate ? "发现新版本 \(latestDisplay)" : "SnapAI 已是最新版本"
@@ -241,8 +305,7 @@ enum UpdateChecker {
     }
 
     private static func installAsset(from release: Release) throws -> Asset {
-        guard let asset = release.appZipAsset else { throw UpdateError.noInstallAsset }
-        return asset
+        try requiredAppZipAsset(for: release)
     }
 
     private static func download(_ asset: Asset) async throws -> URL {
@@ -263,18 +326,18 @@ enum UpdateChecker {
 
     private static func verifyDownload(zipURL: URL, asset: Asset, release: Release) async throws {
         let actual = try sha256Hex(for: zipURL)
-        if let expected = sha256FromGitHubDigest(asset.digest) {
+        if let expected = try validatedGitHubDigestSHA256(asset.digest) {
             guard actual == expected else {
                 throw UpdateError.checksumMismatch(expected: expected, actual: actual)
             }
             return
         }
 
-        guard let manifestAsset = release.manifestAsset else { return }
+        let manifestAsset = try requiredManifestAsset(for: release, assetName: asset.name)
         let manifest = try await downloadManifest(manifestAsset)
-        guard let expected = manifest.assets.first(where: { $0.name == asset.name })?.sha256.lowercased() else {
-            throw UpdateError.invalidManifest("manifest 中未找到 \(asset.name) 的 sha256。")
-        }
+        let expected = try validatedManifestSHA256(from: manifest,
+                                                   releaseTag: release.tagName,
+                                                   assetName: asset.name)
         guard actual == expected else {
             throw UpdateError.checksumMismatch(expected: expected, actual: actual)
         }
@@ -294,13 +357,112 @@ enum UpdateChecker {
         }
     }
 
-    private static func sha256FromGitHubDigest(_ digest: String?) -> String? {
-        guard let digest else { return nil }
-        let lower = digest.lowercased()
-        if lower.hasPrefix("sha256:") {
-            return String(lower.dropFirst("sha256:".count))
+    static func webFallbackRelease(tagName: String) -> Release {
+        let htmlURL = releaseTagURL(tagName)
+        let versionedTag = versionedReleaseTag(tagName)
+        let appAssetName = "SnapAI-\(versionedTag).zip"
+        let manifestAssetName = "snapai-manifest-\(versionedTag).json"
+        return Release(
+            tagName: tagName,
+            name: nil,
+            htmlURL: htmlURL,
+            assets: [
+                Asset(
+                    name: appAssetName,
+                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: appAssetName),
+                    digest: nil
+                ),
+                Asset(
+                    name: manifestAssetName,
+                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: manifestAssetName),
+                    digest: nil
+                )
+            ]
+        )
+    }
+
+    static func requiredManifestAsset(for release: Release, assetName: String) throws -> Asset {
+        let matches = release.assets(named: release.expectedManifestAssetName)
+        guard matches.count == 1, let manifestAsset = matches.first else {
+            if matches.isEmpty {
+                throw UpdateError.invalidReleaseMetadata(
+                    "\(assetName) 缺少 GitHub digest,且 Release 中没有 \(release.expectedManifestAssetName)。"
+                )
+            }
+            throw UpdateError.invalidReleaseMetadata(
+                "Release 中存在重复资产 \(release.expectedManifestAssetName),已取消自动安装。"
+            )
         }
-        return nil
+        return manifestAsset
+    }
+
+    static func requiredAppZipAsset(for release: Release) throws -> Asset {
+        let matches = release.assets(named: release.expectedAppZipAssetName)
+        guard matches.count == 1, let asset = matches.first else {
+            if matches.isEmpty {
+                throw UpdateError.noInstallAsset
+            }
+            throw UpdateError.invalidReleaseMetadata(
+                "Release 中存在重复资产 \(release.expectedAppZipAssetName),已取消自动安装。"
+            )
+        }
+        return asset
+    }
+
+    static func validatedGitHubDigestSHA256(_ digest: String?) throws -> String? {
+        guard let digest else { return nil }
+        let trimmed = digest.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        guard !lower.isEmpty else {
+            throw UpdateError.invalidReleaseMetadata("GitHub asset digest 为空。")
+        }
+        guard let separator = lower.firstIndex(of: ":") else {
+            throw UpdateError.invalidReleaseMetadata("GitHub asset digest 格式无效。")
+        }
+        let algorithm = String(lower[..<separator])
+        let value = String(lower[lower.index(after: separator)...])
+        guard algorithm == "sha256" else {
+            throw UpdateError.invalidReleaseMetadata("GitHub asset digest 算法不受支持: \(algorithm)。")
+        }
+        guard let sha256 = normalizedSHA256(value) else {
+            throw UpdateError.invalidReleaseMetadata("GitHub asset digest 的 sha256 格式无效。")
+        }
+        return sha256
+    }
+
+    static func validatedManifestSHA256(from manifest: ReleaseManifest,
+                                        releaseTag: String,
+                                        assetName: String) throws -> String {
+        guard let manifestVersion = manifest.version?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !manifestVersion.isEmpty else {
+            throw UpdateError.invalidManifest("manifest 缺少版本号。")
+        }
+        let expectedVersion = normalizedVersion(releaseTag)
+        guard normalizedVersion(manifestVersion) == expectedVersion else {
+            throw UpdateError.invalidManifest("manifest 版本 \(manifestVersion) 与 Release \(releaseTag) 不一致。")
+        }
+
+        let matches = manifest.assets.filter { $0.name == assetName }
+        guard matches.count == 1, let match = matches.first else {
+            if matches.isEmpty {
+                throw UpdateError.invalidManifest("manifest 中未找到 \(assetName) 的 sha256。")
+            }
+            throw UpdateError.invalidManifest("manifest 中存在重复资产 \(assetName)。")
+        }
+        guard let sha256 = normalizedSHA256(match.sha256) else {
+            throw UpdateError.invalidManifest("manifest 中 \(assetName) 的 sha256 格式无效。")
+        }
+        return sha256
+    }
+
+    static func normalizedSHA256(_ value: String) -> String? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hexCharacters = CharacterSet(charactersIn: "0123456789abcdef")
+        guard normalized.count == 64,
+              normalized.unicodeScalars.allSatisfy({ hexCharacters.contains($0) }) else {
+            return nil
+        }
+        return normalized
     }
 
     static func sha256Hex(for url: URL) throws -> String {
@@ -349,6 +511,10 @@ enum UpdateChecker {
             .appendingPathComponent("download")
             .appendingPathComponent(tagName)
             .appendingPathComponent(assetName)
+    }
+
+    static func versionedReleaseTag(_ tagName: String) -> String {
+        "v\(normalizedVersion(tagName))"
     }
 
     private static func uncachedLatestReleasePageURL() -> URL {
@@ -569,7 +735,7 @@ enum UpdateChecker {
     private static func presentInstallError(_ error: Error, release: Release) {
         let alert = NSAlert(error: error)
         alert.messageText = "自动安装更新失败"
-        alert.informativeText = "\(error.localizedDescription)\n\n你仍可打开 GitHub Release 页面手动下载。"
+        alert.informativeText = "\(SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription))\n\n你仍可打开 GitHub Release 页面手动下载。"
         alert.addButton(withTitle: "打开下载页")
         if latestInstallLogURL() != nil {
             alert.addButton(withTitle: "打开安装日志")
@@ -586,7 +752,7 @@ enum UpdateChecker {
     private static func presentError(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.messageText = "检查更新失败"
-        alert.informativeText = error.localizedDescription
+        alert.informativeText = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription)
         run(alert)
     }
 
@@ -624,9 +790,46 @@ enum UpdateChecker {
     }
 
     static func latestInstallLogURL() -> URL? {
-        guard let path = UserDefaults.standard.string(forKey: latestInstallLogKey),
-              FileManager.default.fileExists(atPath: path) else { return nil }
-        return URL(fileURLWithPath: path)
+        latestInstallLogStatus().url
+    }
+
+    static func latestInstallLogURL(storedPath: String?,
+                                    fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+                                    trustedTemporaryDirectory: URL = FileManager.default.temporaryDirectory) -> URL? {
+        latestInstallLogStatus(storedPath: storedPath,
+                               fileExists: fileExists,
+                               trustedTemporaryDirectory: trustedTemporaryDirectory).url
+    }
+
+    static func latestInstallLogStatus() -> InstallLogStatus {
+        latestInstallLogStatus(storedPath: UserDefaults.standard.string(forKey: latestInstallLogKey))
+    }
+
+    static func latestInstallLogStatus(storedPath: String?,
+                                       fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+                                       trustedTemporaryDirectory: URL = FileManager.default.temporaryDirectory) -> InstallLogStatus {
+        guard let path = storedPath?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty else {
+            return .noRecord
+        }
+        guard isTrustedInstallLogPath(path,
+                                      trustedTemporaryDirectory: trustedTemporaryDirectory) else {
+            return .untrustedLocation(path)
+        }
+        guard fileExists(path) else {
+            return .missing(path)
+        }
+        return .available(URL(fileURLWithPath: path))
+    }
+
+    private static func isTrustedInstallLogPath(_ path: String,
+                                                trustedTemporaryDirectory: URL) -> Bool {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard url.lastPathComponent == "install.log" else { return false }
+        let updateDirectory = url.deletingLastPathComponent()
+        guard updateDirectory.lastPathComponent.hasPrefix("SnapAIUpdate-") else { return false }
+        let trustedRoot = trustedTemporaryDirectory.standardizedFileURL
+        return updateDirectory.deletingLastPathComponent().path == trustedRoot.path
     }
 
     private static var currentVersion: String {
@@ -642,7 +845,10 @@ enum UpdateChecker {
     }
 
     static func normalizedVersion(_ version: String) -> String {
-        version.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first,
+              first == "v" || first == "V" else { return trimmed }
+        return String(trimmed.dropFirst())
     }
 
     private static func displayVersion(_ version: String) -> String {
@@ -650,8 +856,40 @@ enum UpdateChecker {
     }
 
     static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
-        let left = lhs.split(separator: ".").map { Int($0) ?? 0 }
-        let right = rhs.split(separator: ".").map { Int($0) ?? 0 }
+        let left = officialVersionComponents(lhs) ?? lhs.split(separator: ".").map { Int($0) ?? 0 }
+        let right = officialVersionComponents(rhs) ?? rhs.split(separator: ".").map { Int($0) ?? 0 }
+        return compareVersionComponents(left, right)
+    }
+
+    static func compareOfficialVersions(_ lhs: String, _ rhs: String) throws -> ComparisonResult {
+        guard let left = officialVersionComponents(lhs) else {
+            throw UpdateError.invalidReleaseMetadata("版本号格式无效: \(lhs)。")
+        }
+        guard let right = officialVersionComponents(rhs) else {
+            throw UpdateError.invalidReleaseMetadata("当前版本号格式无效: \(rhs)。")
+        }
+        return compareVersionComponents(left, right)
+    }
+
+    static func officialVersionComponents(_ version: String) -> [Int]? {
+        let normalized = normalizedVersion(version)
+        guard !normalized.isEmpty else { return nil }
+        let parts = normalized.split(separator: ".", omittingEmptySubsequences: false)
+        guard !parts.isEmpty else { return nil }
+        let digits = CharacterSet.decimalDigits
+        var components: [Int] = []
+        for part in parts {
+            guard !part.isEmpty,
+                  part.unicodeScalars.allSatisfy({ digits.contains($0) }),
+                  let value = Int(part) else {
+                return nil
+            }
+            components.append(value)
+        }
+        return components
+    }
+
+    private static func compareVersionComponents(_ left: [Int], _ right: [Int]) -> ComparisonResult {
         let count = max(left.count, right.count)
         for i in 0..<count {
             let l = i < left.count ? left[i] : 0

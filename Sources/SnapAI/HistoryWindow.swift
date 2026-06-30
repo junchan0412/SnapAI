@@ -1,13 +1,30 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 final class HistoryWindowModel: ObservableObject {
     @Published var query = ""
-    @Published var actionFilter = "全部动作"
-    @Published var modelFilter = "全部模型"
-    @Published var tagFilter = "全部标签"
+    @Published var actionFilter = HistoryFilterCriteria.allActions
+    @Published var modelFilter = HistoryFilterCriteria.allModels
+    @Published var tagFilter = HistoryFilterCriteria.allTags
     @Published var favoriteOnly = false
     @Published var tagDrafts: [String: String] = [:]
+
+    func resetFilters() {
+        query = ""
+        actionFilter = HistoryFilterCriteria.allActions
+        modelFilter = HistoryFilterCriteria.allModels
+        tagFilter = HistoryFilterCriteria.allTags
+        favoriteOnly = false
+    }
+
+    var criteria: HistoryFilterCriteria {
+        HistoryFilterCriteria(query: query,
+                              actionFilter: actionFilter,
+                              modelFilter: modelFilter,
+                              tagFilter: tagFilter,
+                              favoriteOnly: favoriteOnly)
+    }
 }
 
 @MainActor
@@ -56,31 +73,24 @@ struct HistoryWindowView: View {
     @FocusState private var focusedTagID: String?
 
     private var actionNames: [String] {
-        ["全部动作"] + Array(Set(settings.history.map(\.actionName))).sorted()
+        [HistoryFilterCriteria.allActions] + HistoryFilterCriteria.facetValues(settings.history.map(\.displayActionName))
     }
 
     private var modelNames: [String] {
-        ["全部模型"] + Array(Set(settings.history.map(\.model))).sorted()
+        [HistoryFilterCriteria.allModels] + HistoryFilterCriteria.facetValues(settings.history.map(\.displayModelFilterName))
     }
 
     private var tagNames: [String] {
-        ["全部标签"] + Array(Set(settings.history.flatMap(\.tags))).sorted()
+        [HistoryFilterCriteria.allTags] + HistoryFilterCriteria.facetValues(settings.history.flatMap(\.displayTags))
     }
 
     private var filtered: [HistoryEntry] {
-        settings.history.filter { entry in
-            if model.favoriteOnly && !entry.isFavorite { return false }
-            if model.actionFilter != "全部动作" && entry.actionName != model.actionFilter { return false }
-            if model.modelFilter != "全部模型" && entry.model != model.modelFilter { return false }
-            if model.tagFilter != "全部标签" && !entry.tags.contains(model.tagFilter) { return false }
-            let q = model.query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !q.isEmpty else { return true }
-            return entry.actionName.lowercased().contains(q)
-                || entry.source.lowercased().contains(q)
-                || entry.output.lowercased().contains(q)
-                || entry.model.lowercased().contains(q)
-                || entry.tags.joined(separator: " ").lowercased().contains(q)
-        }
+        model.criteria.apply(to: settings.history)
+    }
+
+    private var contextProfileDraft: HistoryContextProfileDraft? {
+        HistoryContextProfileBuilder.draft(entries: filtered,
+                                           criteria: model.criteria)
     }
 
     var body: some View {
@@ -105,7 +115,57 @@ struct HistoryWindowView: View {
                 }
                 .toggleStyle(.button)
                 .help("只看收藏")
+                Button {
+                    model.resetFilters()
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("清空筛选")
+                Button {
+                    copyFilteredHistory()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .disabled(filtered.isEmpty)
+                .help("复制当前筛选结果")
+                Button {
+                    exportFilteredHistory()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderless)
+                .disabled(filtered.isEmpty)
+                .help("导出当前筛选结果")
+                Button {
+                    createContextProfileFromFilteredHistory()
+                } label: {
+                    Image(systemName: "text.badge.plus")
+                }
+                .buttonStyle(.borderless)
+                .disabled(contextProfileDraft == nil)
+                .help(contextProfileDraft == nil ? "当前筛选没有可写入上下文的历史内容" : "从当前筛选创建上下文包")
             }
+
+            HStack {
+                Text("显示 \(filtered.count) / \(settings.history.count) 条")
+                if model.favoriteOnly {
+                    Text("收藏")
+                }
+                if model.actionFilter != HistoryFilterCriteria.allActions {
+                    Text(model.actionFilter)
+                }
+                if model.modelFilter != HistoryFilterCriteria.allModels {
+                    Text(model.modelFilter)
+                }
+                if model.tagFilter != HistoryFilterCriteria.allTags {
+                    Text("#\(model.tagFilter)")
+                }
+                Spacer()
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
 
             if filtered.isEmpty {
                 VStack(spacing: 8) {
@@ -139,13 +199,13 @@ struct HistoryWindowView: View {
     private func historyCard(_ entry: HistoryEntry) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text(entry.actionName)
+                Text(entry.displayActionName)
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(Color.accentColor.opacity(0.16))
                     .clipShape(Capsule())
-                Text("\(entry.provider) / \(entry.model)")
+                Text(entry.modelDisplayText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -162,19 +222,29 @@ struct HistoryWindowView: View {
                 .buttonStyle(.plain)
                 .help(entry.isFavorite ? "取消收藏" : "收藏")
                 Button {
-                    copy(entry.output)
+                    guard let output = entry.copyableOutputText else { return }
+                    copy(output)
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.plain)
-                .help("复制结果")
+                .disabled(entry.copyableOutputText == nil)
+                .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
+                Button {
+                    copy(entry.markdownExport)
+                } label: {
+                    Image(systemName: "doc.richtext")
+                }
+                .buttonStyle(.plain)
+                .help("复制完整记录")
                 Button {
                     reopen(entry)
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .help("重新发起")
+                .disabled(!entry.canReopen)
+                .help(entry.reopenHelpText)
                 Button(role: .destructive) {
                     settings.deleteHistory(id: entry.id)
                 } label: {
@@ -184,15 +254,25 @@ struct HistoryWindowView: View {
                 .help("删除")
             }
 
-            Text(entry.source)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .textSelection(.enabled)
-            Text(entry.output)
-                .font(.callout)
-                .lineLimit(4)
-                .textSelection(.enabled)
+            if let source = entry.sourceDisplayText {
+                Text(source)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+            if let output = entry.outputDisplayText {
+                Text(output)
+                    .font(.callout)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+            } else if entry.sourceDisplayText == nil {
+                Text(entry.emptyContentPlaceholder)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
             HStack(spacing: 6) {
                 Image(systemName: "tag")
                     .foregroundStyle(.secondary)
@@ -215,6 +295,51 @@ struct HistoryWindowView: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
+    private func copyFilteredHistory() {
+        copy(historyCollectionExport().markdown)
+    }
+
+    private func exportFilteredHistory() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "SnapAI-History-\(Int(Date().timeIntervalSince1970)).md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? historyCollectionExport().markdown.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func createContextProfileFromFilteredHistory() {
+        guard let draft = contextProfileDraft else { return }
+        let willUpdate = settings.hasContextProfile(named: draft.name)
+
+        let alert = NSAlert()
+        alert.messageText = willUpdate ? "更新上下文包?" : "创建上下文包?"
+        alert.informativeText = """
+        将当前筛选中的 \(draft.includedCount) 条历史写入「\(draft.name)」并设为使用中。
+
+        已跳过 \(draft.skippedCount) 条空内容、仅元信息或超出上限的记录。
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: willUpdate ? "更新并启用" : "创建并启用")
+        alert.addButton(withTitle: "取消")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let result = settings.upsertContextProfile(from: draft)
+        iCloudSync.shared.scheduleUpload(settings)
+
+        let done = NSAlert()
+        done.messageText = result.didUpdate ? "上下文包已更新" : "上下文包已创建"
+        done.informativeText = "后续请求会自动合并「\(result.profile.name)」中的历史上下文。你可以在设置页继续编辑。"
+        done.addButton(withTitle: "好")
+        done.runModal()
+    }
+
+    private func historyCollectionExport(date: Date = Date()) -> HistoryCollectionExport {
+        HistoryCollectionExport(entries: filtered,
+                                criteria: model.criteria,
+                                date: date)
+    }
+
     private func parseTags(_ text: String) -> [String] {
         let separators = CharacterSet(charactersIn: ",，;；")
         return text.components(separatedBy: separators)
@@ -224,7 +349,7 @@ struct HistoryWindowView: View {
 
     private func tagBinding(for entry: HistoryEntry) -> Binding<String> {
         Binding(
-            get: { model.tagDrafts[entry.id] ?? entry.tags.joined(separator: ", ") },
+            get: { model.tagDrafts[entry.id] ?? entry.displayTags.joined(separator: ", ") },
             set: { model.tagDrafts[entry.id] = $0 }
         )
     }
