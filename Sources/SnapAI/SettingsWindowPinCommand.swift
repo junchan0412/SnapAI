@@ -1,4 +1,13 @@
+import Combine
 import Foundation
+
+final class SettingsWindowPinState: ObservableObject {
+    @Published var isPinned: Bool
+
+    init(isPinned: Bool = false) {
+        self.isPinned = isPinned
+    }
+}
 
 enum SettingsWindowPinCommand {
     static func title(isPinned: Bool) -> String {
