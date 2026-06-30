@@ -64,6 +64,8 @@ final class ResultViewModel: ObservableObject {
     // #3 图片(来自截图/粘贴)
     private var pendingImageData: Data? = nil
     private var pendingImageMimeType: String = "image/png"
+    private var pendingCaptureMethod: TextCaptureMethod?
+    private var pendingSourceContext: SelectionSourceContext?
 
     var completeText: String { fullText }
     var isTranslation: Bool { action.isTranslation }
@@ -113,13 +115,17 @@ final class ResultViewModel: ObservableObject {
                imageData: Data? = nil,
                imageMimeType: String = "image/png",
                submissionPrivacy: PrivacySubmissionDiagnostic? = nil,
-               autoReplaceEnabled: Bool = false) {
+               autoReplaceEnabled: Bool = false,
+               captureMethod: TextCaptureMethod? = nil,
+               sourceContext: SelectionSourceContext? = nil) {
         self.action = action
         self.targetLanguage = action.targetLanguage
         self.sourceText = text
         self.replacementOriginalText = originalText ?? text
         self.pendingImageData = imageData
         self.pendingImageMimeType = imageMimeType
+        self.pendingCaptureMethod = captureMethod
+        self.pendingSourceContext = sourceContext
         self.submissionPrivacy = submissionPrivacy
         self.autoReplaceEnabled = autoReplaceEnabled
         thinkingText = ""
@@ -174,7 +180,9 @@ final class ResultViewModel: ObservableObject {
     private func sendInitial() {
         var act = action
         act.targetLanguage = targetLanguage
-        let userContent = act.render(text: sourceText)
+        let renderedText = act.render(text: sourceText)
+        let userContent = Self.userContent(renderedText: renderedText,
+                                           sourceContext: pendingSourceContext)
         let hasImage = pendingImageData != nil
 
         var messages: [ChatMessage] = []
@@ -192,6 +200,12 @@ final class ResultViewModel: ObservableObject {
         messages.append(userMsg)
         history = messages
         runStream(hasImage: hasImage)
+    }
+
+    static func userContent(renderedText: String,
+                            sourceContext: SelectionSourceContext?) -> String {
+        guard let sourceContext else { return renderedText }
+        return "\(sourceContext.promptPrefix)\n\n\(renderedText)"
     }
 
     private func preparedSourceSubmission(for text: String,
@@ -389,7 +403,9 @@ final class ResultViewModel: ObservableObject {
                                                                 explicitHasImage: requestHasImage)
         let actionPipeline = ActionPipelineDiagnostic.make(action: action,
                                                            settings: settings,
-                                                           hasImage: requestHasImage)
+                                                           hasImage: requestHasImage,
+                                                           captureMethod: pendingCaptureMethod,
+                                                           sourceKind: pendingSourceContext?.kind)
         let routes = AIRequestRouter.candidates(settings: settings,
                                                 action: action,
                                                 sourceText: sourceText,

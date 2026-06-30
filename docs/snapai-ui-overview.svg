@@ -2,8 +2,8 @@
   <rect width="1400" height="860" rx="36" fill="#F5F7F9"/>
   <rect x="56" y="54" width="1288" height="752" rx="28" fill="#FFFFFF" stroke="#D8DEE6"/>
 
-  <text x="96" y="116" fill="#14213D" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="44" font-weight="700">SnapAI 1.4.1</text>
-  <text x="96" y="156" fill="#5D6778" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20">macOS 菜单栏 AI 工作台: 命令面板、历史知识库、权限健康、隐私保护与自动更新</text>
+  <text x="96" y="116" fill="#14213D" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="44" font-weight="700">SnapAI 1.6.0</text>
+  <text x="96" y="156" fill="#5D6778" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20">macOS 菜单栏 AI 工作台: 任意选中文字、项目记忆、命令面板、知识库与安全写回</text>
 
   <rect x="96" y="204" width="374" height="452" rx="18" fill="#F8FAFC" stroke="#D7DEE8"/>
   <rect x="122" y="230" width="322" height="48" rx="12" fill="#EEF3F8"/>
@@ -30,7 +30,7 @@
   <rect x="544" y="302" width="304" height="28" rx="8" fill="#27364A"/>
   <rect x="544" y="344" width="304" height="28" rx="8" fill="#1E2A3B"/>
   <rect x="544" y="386" width="220" height="10" rx="5" fill="#6ED3FF"/>
-  <text x="566" y="332" fill="#DDE7F3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">搜索动作、模型、历史、设置</text>
+  <text x="566" y="332" fill="#DDE7F3" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15">搜索动作、模型、历史、上下文、模板</text>
 
   <rect x="514" y="442" width="364" height="214" rx="18" fill="#F8FAFC" stroke="#D7DEE8"/>
   <text x="544" y="486" fill="#172033" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="22" font-weight="700">结果工作台</text>
@@ -54,10 +54,10 @@
   <rect x="982" y="518" width="284" height="28" rx="14" fill="#DCFCE7"/>
   <rect x="982" y="562" width="284" height="28" rx="14" fill="#E0F2FE"/>
   <rect x="982" y="606" width="210" height="28" rx="14" fill="#FEF3C7"/>
-  <text x="1004" y="538" fill="#166534" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">辅助功能 / 热键 / 签名诊断</text>
+  <text x="1004" y="538" fill="#166534" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">取词 / 写回 / 热键 / 签名诊断</text>
   <text x="1004" y="582" fill="#075985" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">应用内检查更新与重启</text>
-  <text x="1004" y="626" fill="#92400E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">复制脱敏诊断</text>
+  <text x="1004" y="626" fill="#92400E" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="650">复制脱敏诊断与恢复建议</text>
 
   <rect x="96" y="694" width="1200" height="62" rx="18" fill="#EEF3F8"/>
-  <text x="126" y="733" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19" font-weight="650">1.4.1 聚焦: 更紧凑的设置页、更稳定的结果工具条、更易扫读的历史与健康中心。</text>
+  <text x="126" y="733" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="19" font-weight="650">1.6.0 聚焦: 跨应用选中文字、粗粒度来源上下文、结构化取词诊断与安全写回。</text>
 </svg>

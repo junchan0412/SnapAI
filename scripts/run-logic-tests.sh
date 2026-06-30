@@ -49,6 +49,7 @@ swiftc \
   Sources/SnapAI/ScreenCapturePermission.swift \
   Sources/SnapAI/ScreenCaptureFailureDiagnostic.swift \
   Sources/SnapAI/ScreenCaptureTemporaryFile.swift \
+  Sources/SnapAI/SelectionSourceContext.swift \
   Sources/SnapAI/TextCaptureRecoveryGuide.swift \
   Sources/SnapAI/TextCaptureDiagnostic.swift \
   Sources/SnapAI/TextCapture.swift \

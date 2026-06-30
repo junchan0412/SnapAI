@@ -949,16 +949,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let action = settings.enabledActions.first(where: { $0.id == id }) else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         previousSelectionSnapshot = nil
-        TextCapture.capture(preferAX: settings.useAXFirst) { [weak self] text in
+        TextCapture.captureDetailed(preferAX: settings.useAXFirst) { [weak self] outcome in
             guard let self = self else { return }
+            let text = outcome.usableText
             guard let text = text, !text.isEmpty else {
-                self.recordTextCaptureStatus(state: .noSelection,
-                                             characterCount: 0)
+                self.recordTextCaptureOutcome(outcome)
                 self.notifyNoSelection(action: action)
                 return
             }
-            self.recordTextCaptureStatus(state: .captured,
-                                         characterCount: text.count)
+            self.recordTextCaptureOutcome(outcome)
             self.previousSelectionSnapshot = TextCapture.recentSelectionSnapshot(matching: text)
             guard let prepared = self.prepareTextForSubmission(text,
                                                                action: action,
@@ -967,7 +966,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                 originalText: text,
                                 action: action,
                                 submissionPrivacy: prepared.diagnostic,
-                                autoReplaceEnabled: AutomationWriteBackPolicy.capturedSelection(action: action).autoReplaceEnabled)
+                                autoReplaceEnabled: AutomationWriteBackPolicy.capturedSelection(action: action).autoReplaceEnabled,
+                                captureMethod: outcome.method,
+                                sourceContext: SelectionSourceContext.make(appName: self.previousApp?.localizedName))
             self.panelController.show()
         }
     }
@@ -1206,20 +1207,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                               fallback: lastWriteBackStatusSummary)
     }
 
-    private func recordTextCaptureStatus(state: TextCaptureDiagnosticState,
-                                         characterCount: Int) {
-        let diagnostic: TextCaptureDiagnostic
-        switch state {
-        case .captured:
-            diagnostic = .captured(accessibilityGranted: TextCapture.hasAccessibilityPermission(),
-                                   preferAX: settings.useAXFirst,
-                                   frontmostAppName: previousApp?.localizedName,
-                                   characterCount: characterCount)
-        case .noSelection:
-            diagnostic = .noSelection(accessibilityGranted: TextCapture.hasAccessibilityPermission(),
-                                      preferAX: settings.useAXFirst,
-                                      frontmostAppName: previousApp?.localizedName)
-        }
+    private func recordTextCaptureOutcome(_ outcome: TextCaptureOutcome) {
+        let characterCount = outcome.usableText?.count ?? 0
+        let diagnostic = characterCount > 0
+            ? TextCaptureDiagnostic.captured(accessibilityGranted: TextCapture.hasAccessibilityPermission(),
+                                             preferAX: settings.useAXFirst,
+                                             frontmostAppName: previousApp?.localizedName,
+                                             characterCount: characterCount,
+                                             method: outcome.method,
+                                             clipboardWaitAttempts: outcome.clipboardWaitAttempts)
+            : TextCaptureDiagnostic.noSelection(accessibilityGranted: TextCapture.hasAccessibilityPermission(),
+                                                preferAX: settings.useAXFirst,
+                                                frontmostAppName: previousApp?.localizedName,
+                                                failureReason: outcome.failureReason,
+                                                pasteboardReasonCode: outcome.pasteboardReasonCode,
+                                                clipboardWaitAttempts: outcome.clipboardWaitAttempts)
         lastTextCaptureStatusSummary = diagnostic.diagnosticSummary
     }
 
