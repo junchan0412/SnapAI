@@ -1558,6 +1558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         appendWorkModeCommandPaletteItems(to: &items)
         appendSettingsToggleCommandPaletteItems(to: &items)
         appendDisplayBehaviorCommandPaletteItems(to: &items)
+        appendActionTemplateCommandPaletteItems(to: &items)
         appendHistoryExportCommandPaletteItems(to: &items)
         appendHistoryContextCommandPaletteItems(to: &items)
         items.append(contentsOf: [
@@ -1692,6 +1693,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case .undoLastWriteBack:
             undoLastWriteBack()
         }
+    }
+
+    private func appendActionTemplateCommandPaletteItems(to items: inout [CommandPaletteItem]) {
+        for template in ActionTemplateLibrary.builtIns {
+            items.append(CommandPaletteItem(
+                id: "action-template-\(template.id)",
+                title: "添加动作模板: \(template.title)",
+                subtitle: "\(template.category) · \(template.summary)",
+                systemImage: template.action.icon.isEmpty ? "wand.and.stars" : template.action.icon,
+                keywords: MarkdownExportSafety.keywords([
+                    "action template library market import share prompt add 动作 模板 动作库 市场 分享 添加",
+                    template.title,
+                    template.category,
+                    template.summary,
+                    template.action.prompt
+                ]),
+                perform: { [weak self] in
+                    self?.installActionTemplate(template)
+                }
+            ))
+        }
+    }
+
+    private func installActionTemplate(_ template: ActionTemplate) {
+        let action = ActionTemplateLibrary.installedAction(from: template,
+                                                           existingActions: settings.actions)
+        settings.actions.append(action)
+        settings.save()
+        registerHotKeys()
+        buildMenu()
+        installMainMenu()
     }
 
     private func appendDisplayBehaviorCommandPaletteItems(to items: inout [CommandPaletteItem]) {
