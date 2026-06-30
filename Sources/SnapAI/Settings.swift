@@ -407,6 +407,11 @@ final class AppSettings: ObservableObject, Codable {
         WorkModePreset.allCases.first { $0.behavior == currentWorkModeBehavior }
     }
 
+    var prefersLocalModelRoutes: Bool {
+        matchingWorkModePreset == .privacy ||
+        (privacyPreviewEnabled && redactionEnabled && historyContentStorage == .metadataOnly)
+    }
+
     var workModeStatusTitle: String {
         matchingWorkModePreset?.title ?? "自定义模式"
     }

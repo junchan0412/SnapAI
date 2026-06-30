@@ -624,6 +624,49 @@ func testPermissionDiagnosticsFormatting() {
     expect(healthySnapshot.recoverySuggestionStatusLine == "无需处理",
            "healthy permission health snapshot reports no required action")
 
+    let recentAIRequestSnapshot = PermissionHealthSnapshot(appVersion: "1.2.0",
+                                                           macOSVersion: "macOS 14",
+                                                           bundleID: "com.snapai.app",
+                                                           installPath: "/Applications/SnapAI.app",
+                                                           accessibilityGranted: true,
+                                                           screenCaptureGranted: true,
+                                                           launchAtLogin: true,
+                                                           showDockIcon: true,
+                                                           installDirectoryWritable: true,
+                                                           quarantineStatus: "absent",
+                                                           latestInstallLogPath: "none",
+                                                           latestInstallLogAvailable: false,
+                                                           latestInstallLogStatus: "no-record",
+                                                           signingSummary: "CDHash=abc",
+                                                           hotKeyFailures: [],
+                                                           activeModel: "LM Studio / local-chat",
+                                                           providerCount: 2,
+                                                           enabledProviderCount: 2,
+                                                           requestReadyProviderCount: 2,
+                                                           activeProviderRequestReady: true,
+                                                           activeProviderRequestStatus: "ready",
+                                                           activeProviderRequestStatusText: "可请求",
+                                                           activeProviderRequestRecoverySuggestion: "无需处理",
+                                                           unavailableRequestReasonSummary: "none",
+                                                           unavailableRequestRecoverySummary: "none",
+                                                           recentAIRequestStatus: "outcome=failed; fallback=cloud-confirmation-required, recoveryCode=fallback-cloud-confirmation-required, recovery=本地模型失败;如需改用云端模型请手动选择云端模型后重试, latest=LM Studio / local-chat -> 失败",
+                                                           apiKeyConfiguredProviderCount: 2,
+                                                           enabledProviderMissingAPIKeyCount: 0,
+                                                           textCaptureStatus: "state=captured, recovery=无需处理",
+                                                           writeBackStatus: "state=available",
+                                                           privacyPreviewEnabled: true,
+                                                           redactionEnabled: true,
+                                                           redactionRuleCount: 1,
+                                                           invalidRedactionRuleCount: 0)
+    expect(recentAIRequestSnapshot.diagnosticText.contains("Recent AI Request: outcome=failed"),
+           "permission diagnostics include the recent AI request status")
+    expect(recentAIRequestSnapshot.briefDiagnosticText.contains("Recent AI Request: outcome=failed"),
+           "brief permission diagnostics include the recent AI request status")
+    expect(recentAIRequestSnapshot.recoverySuggestions == [
+        PermissionHealthRecoverySuggestion(title: "最近 AI 请求",
+                                           detail: "本地模型失败;如需改用云端模型请手动选择云端模型后重试")
+    ], "permission health suggestions surface the recent AI request recovery")
+
     let pasteboardRecovery = "当前剪贴板内容过大或格式过多,为避免丢失用户剪贴板,已取消自动粘贴。请手动复制结果后粘贴。"
     let pasteboardProtectedSnapshot = PermissionHealthSnapshot(appVersion: "1.2.0",
                                                                macOSVersion: "macOS 14",
@@ -1108,6 +1151,40 @@ func testPromptRender() {
     expect(action.render(text: "你好") == "翻译: 翻译成自然流畅的英语\n你好", "renders text and language placeholders")
 }
 
+func testActionPipelineDiagnostic() {
+    let settings = AppSettings()
+    settings.applyWorkMode(.privacy)
+    var action = AIAction.defaults()[2]
+    action.saveHistory = false
+    action.providerID = "local-provider"
+    action.modelOverride = "local-chat"
+
+    let diagnostic = ActionPipelineDiagnostic.make(action: action,
+                                                   settings: settings,
+                                                   hasImage: true)
+    expect(diagnostic.inputPolicy == "text+image",
+           "pipeline diagnostic records image input")
+    expect(diagnostic.privacyPolicy == "preview+local-redaction+no-history",
+           "pipeline diagnostic summarizes privacy stages")
+    expect(diagnostic.outputPolicy == "replace-confirmation",
+           "pipeline diagnostic records replacement confirmation output")
+    expect(diagnostic.modelPolicy == "action-override",
+           "pipeline diagnostic records action model overrides")
+    expect(diagnostic.summaryLines.contains("Pipeline Privacy: preview+local-redaction+no-history"),
+           "pipeline diagnostic renders shareable summary lines")
+
+    action.providerID = nil
+    action.modelOverride = nil
+    action.saveHistory = true
+    let localFirst = ActionPipelineDiagnostic.make(action: action,
+                                                  settings: settings,
+                                                  hasImage: false)
+    expect(localFirst.modelPolicy == "auto-route-local-first",
+           "pipeline diagnostic records privacy-mode local-first routing")
+    expect(localFirst.privacyPolicy.contains("history-metadata-only"),
+           "pipeline diagnostic records metadata-only history")
+}
+
 func testAIActionSanitizesImportedConfiguration() {
     var action = AIAction()
     action.id = "duplicate-action"
@@ -1306,6 +1383,15 @@ func testWriteBackUndoRecordAvailability() {
 }
 
 func testWriteBackFallbackDiagnosticSummarizesFailureWithoutContent() {
+    expect(WriteBackCompatibility.profile(for: "Google Chrome")?.displayName == "浏览器",
+           "writeback compatibility identifies browser targets")
+    expect(WriteBackCompatibility.profile(for: "wechat")?.displayName == "微信",
+           "writeback compatibility matches app aliases case-insensitively")
+    expect(WriteBackCompatibility.recoveryHint(for: "Obsidian")?.contains("编辑模式") == true,
+           "writeback compatibility provides app-specific recovery guidance")
+    expect(WriteBackCompatibility.profile(for: "Unknown Notes") == nil,
+           "writeback compatibility returns nil for unknown apps")
+
     let diagnostic = TextWriteBackFallbackDiagnostic(
         operation: .replace,
         targetApp: nil,
@@ -1382,6 +1468,20 @@ func testWriteBackFallbackDiagnosticSummarizesFailureWithoutContent() {
            "writeback fallback summary keeps pasteboard safety recovery searchable")
     expect(protectedPasteboard.noticeMessage.contains("建议: \(pasteboardSafetyRecovery)"),
            "writeback fallback notice explains pasteboard safety cancellation")
+
+    let chrome = TextWriteBackFallbackDiagnostic(
+        operation: .replace,
+        targetApp: nil,
+        reason: "paste failed",
+        copiedToPasteboard: true,
+        originalCharacterCount: 12,
+        payloadCharacterCount: 34,
+        targetNameOverride: "Google Chrome"
+    )
+    expect(chrome.recoverySuggestion.contains("浏览器写回失败"),
+           "writeback fallback diagnostics use browser-specific compatibility recovery")
+    expect(chrome.diagnosticSummary.contains("浏览器写回失败"),
+           "writeback fallback summary includes app-specific compatibility recovery")
 }
 
 func testWriteBackUndoFallbackDiagnosticSummarizesFailureWithoutContent() {
@@ -2973,7 +3073,8 @@ func testAIRequestDiagnosticsSummary() {
     let primary = AIRequestRoute(providerID: "p1",
                                  providerName: "Primary",
                                  modelName: "fast-model",
-                                 reason: "当前模型")
+                                 reason: "当前模型",
+                                 isLocalEndpoint: true)
     let fallback = AIRequestRoute(providerID: "p2",
                                   providerName: "Fallback",
                                   modelName: "safe-model",
@@ -2984,6 +3085,12 @@ func testAIRequestDiagnosticsSummary() {
                                            fallbackEnabled: true,
                                            routingPreference: .quality,
                                            candidateCount: 2,
+                                           actionPipeline: ActionPipelineDiagnostic(
+                                            inputPolicy: "text+image",
+                                            privacyPolicy: "preview+local-redaction+history-metadata-only",
+                                            outputPolicy: "replace-confirmation",
+                                            modelPolicy: "auto-route-local-first"
+                                           ),
                                            context: AIRequestContextDiagnostic(
                                             contextProfileCount: 3,
                                             usableContextProfileCount: 1,
@@ -3025,6 +3132,13 @@ func testAIRequestDiagnosticsSummary() {
     let summary = diagnostics.summaryText
     expect(summary.contains("Action: 润色"), "includes action name")
     expect(summary.contains("Source Characters: 128"), "reports source length instead of source content")
+    expect(summary.contains("Pipeline Input: text+image"), "reports action pipeline input")
+    expect(summary.contains("Pipeline Privacy: preview+local-redaction+history-metadata-only"),
+           "reports action pipeline privacy policy")
+    expect(summary.contains("Pipeline Output: replace-confirmation"), "reports action pipeline output policy")
+    expect(summary.contains("Pipeline Model: auto-route-local-first"), "reports action pipeline model policy")
+    expect(summary.contains("Cloud Fallback Review: confirmation-required; local=1; cloud=1"),
+           "reports cloud fallback review when privacy local-first routing has cloud candidates")
     expect(summary.contains("Fallback Enabled: yes"), "reports fallback state")
     expect(summary.contains("Auto Route Enabled: no"), "reports auto routing state")
     expect(summary.contains("Routing Preference: 最佳质量"), "reports routing preference")
@@ -3852,6 +3966,17 @@ func testAIRequestFallbackDecisionExplainsSkippedFallbacks() {
     expect(eligible.shouldTryNext, "empty failed output can try next fallback route")
     expect(eligible.diagnosticCode == "will-try-next", "eligible fallback has stable diagnostic code")
 
+    let cloudConfirmation = AIRequestFallbackDecision.decide(fallbackEnabled: true,
+                                                             hasNextRoute: true,
+                                                             outputCharacterCount: 0,
+                                                             requiresCloudFallbackConfirmation: true)
+    expect(!cloudConfirmation.shouldTryNext,
+           "privacy cloud fallback confirmation prevents silent fallback")
+    expect(cloudConfirmation.diagnosticCode == "cloud-confirmation-required",
+           "privacy cloud fallback confirmation has stable diagnostic code")
+    expect(cloudConfirmation.userNote == "本地模型失败;改用云端备用模型前需要确认",
+           "privacy cloud fallback confirmation provides a short user note")
+
     let route = AIRequestRoute(providerID: "p1",
                                providerName: "Primary",
                                modelName: "fast-model",
@@ -3915,6 +4040,14 @@ func testAIRequestFallbackDecisionExplainsSkippedFallbacks() {
            "request recovery code exposes pending fallback retry decisions")
     expect(eligibleDiagnostics.requestRecoverySuggestion == "等待备用模型尝试",
            "request recovery explains pending fallback retry decisions")
+
+    let cloudDiagnostics = failedDiagnostics(decision: cloudConfirmation)
+    expect(cloudDiagnostics.requestOutcomeSummary == "failed; fallback=cloud-confirmation-required",
+           "request outcome exposes privacy cloud fallback confirmation")
+    expect(cloudDiagnostics.requestRecoveryCode == "fallback-cloud-confirmation-required",
+           "request recovery code exposes privacy cloud fallback confirmation")
+    expect(cloudDiagnostics.requestRecoverySuggestion.contains("本地模型失败"),
+           "request recovery explains privacy cloud fallback confirmation")
 }
 
 func testVisibleErrorRecoverySuggestionText() {
@@ -4084,6 +4217,11 @@ func testNoCandidateRouteDiagnosticsExplainProviderReadiness() {
            "no-candidate route recovery includes disabled model lists")
     expect(recovery.contains("remote-http=1: 远程端点请改用 HTTPS;HTTP 仅允许 localhost"),
            "no-candidate route recovery includes remote HTTP endpoints")
+
+    var localNoModels = AIProvider.preset(.ollama)
+    localNoModels.models = [AIModelEntry(name: "llama3.1", enabled: false)]
+    expect(AIRequestDiagnostics.noCandidateRouteRecoverySuggestion(providers: [localNoModels]).contains("ollama pull llama3.1"),
+           "no-candidate route recovery gives local model setup guidance for Ollama")
 
     var ready = AIProvider(name: "Ready", apiProtocol: .openAI,
                            baseURL: "https://ready.test/v1",
@@ -4454,6 +4592,31 @@ func testAIRouterProviderRequestReadiness() {
            "provider readiness explains disabled providers")
     expect(AIRequestRouter.providerReadiness(ready).recoverySuggestion.contains("启用该供应商"),
            "provider readiness suggests enabling disabled providers")
+
+    let ollama = AIProvider.preset(.ollama)
+    let lmStudio = AIProvider.preset(.lmStudio)
+    expect(ollama.isLocalEndpoint, "Ollama preset is recognized as a local endpoint")
+    expect(lmStudio.isLocalEndpoint, "LM Studio preset is recognized as a local endpoint")
+    expect(!AIProvider.preset(.openAI).isLocalEndpoint, "OpenAI preset is not treated as local")
+    expect(LocalModelHealth.make(provider: ollama)?.serviceKind == .ollama,
+           "local model health recognizes Ollama providers")
+    expect(LocalModelHealth.make(provider: lmStudio)?.serviceKind == .lmStudio,
+           "local model health recognizes LM Studio providers")
+
+    var localMissingKey = AIProvider.preset(.lmStudio)
+    localMissingKey.apiKey = ""
+    localMissingKey.models = [AIModelEntry(name: "local-chat")]
+    expect(AIRequestRouter.providerReadiness(localMissingKey) == .missingAPIKey,
+           "local providers still require an API key placeholder for the current client")
+    expect(AIRequestRouter.providerRecoverySuggestion(localMissingKey).contains("lm-studio"),
+           "local provider recovery suggests an LM Studio placeholder API key")
+
+    var localNoModels = AIProvider.preset(.ollama)
+    localNoModels.models = [AIModelEntry(name: "llama3.1", enabled: false)]
+    expect(AIRequestRouter.providerReadiness(localNoModels) == .noEnabledModels,
+           "local providers without enabled models report no-enabled-models")
+    expect(AIRequestRouter.providerRecoverySuggestion(localNoModels).contains("ollama pull llama3.1"),
+           "local provider recovery explains how to prepare Ollama models")
 }
 
 func testAIRouterFallbackSkipsProvidersThatCannotRequest() {
@@ -4881,6 +5044,62 @@ func testAIRouterUsesRoutingPreferenceWhenOnlyFallbackIsEnabled() {
                                             hasImage: false)
     expect(routes.first?.modelName == "claude-opus-200k", "keeps current route first without auto routing")
     expect(routes.dropFirst().first?.modelName == "gpt-4o-mini", "orders fallback candidates by routing preference")
+}
+
+func testAIRouterPrefersLocalModelRoutesInPrivacyMode() {
+    let settings = AppSettings()
+    var cloud = AIProvider(name: "OpenAI", apiProtocol: .openAI,
+                           baseURL: "https://api.openai.test/v1",
+                           apiKey: "key",
+                           models: [AIModelEntry(name: "gpt-4o-mini")])
+    var local = AIProvider.preset(.lmStudio)
+    local.models = [AIModelEntry(name: "local-chat")]
+    cloud.isEnabled = true
+    local.isEnabled = true
+    settings.providers = [cloud, local]
+    settings.activeProviderID = cloud.id
+    settings.activeModel = "gpt-4o-mini"
+    settings.applyWorkMode(.privacy)
+
+    let privacyRoutes = AIRequestRouter.candidates(settings: settings,
+                                                   action: AIAction.defaults()[0],
+                                                   sourceText: "需要在本地处理的隐私内容",
+                                                   hasImage: false)
+    expect(privacyRoutes.first?.providerID == local.id,
+           "privacy mode auto routing promotes a local model ahead of the active cloud model")
+    expect(privacyRoutes.first?.reason == "本地隐私优先",
+           "privacy mode explains local-first routing")
+    expect(privacyRoutes.dropFirst().contains { $0.providerID == cloud.id && $0.modelName == "gpt-4o-mini" },
+           "privacy mode keeps the cloud model as a later fallback candidate")
+    expect(privacyRoutes.dropFirst().first { $0.providerID == cloud.id }?.reason == "云端备用模型",
+           "privacy mode labels cloud fallback candidates explicitly")
+
+    let pipeline = ActionPipelineDiagnostic.make(action: AIAction.defaults()[0],
+                                                 settings: settings,
+                                                 hasImage: false)
+    let diagnostics = AIRequestDiagnostics(actionName: "提问",
+                                           sourceCharacterCount: 12,
+                                           hasImage: false,
+                                           fallbackEnabled: settings.fallbackEnabled,
+                                           autoRouteEnabled: settings.autoRouteEnabled,
+                                           routingPreference: settings.routingPreference,
+                                           candidateCount: privacyRoutes.count,
+                                           actionPipeline: pipeline,
+                                           candidateRoutes: privacyRoutes)
+    expect(diagnostics.cloudFallbackReviewSummary == "confirmation-required; local=1; cloud=1",
+           "privacy mode request diagnostics require confirmation before cloud fallback")
+    expect(diagnostics.requiresCloudFallbackConfirmation(from: privacyRoutes[0],
+                                                         to: privacyRoutes.dropFirst().first { !$0.isLocalEndpoint }),
+           "privacy mode blocks silent fallback from local to cloud")
+
+    settings.autoRouteEnabled = false
+    settings.fallbackEnabled = true
+    let manualRoutes = AIRequestRouter.candidates(settings: settings,
+                                                  action: AIAction.defaults()[0],
+                                                  sourceText: "需要在本地处理的隐私内容",
+                                                  hasImage: false)
+    expect(manualRoutes.first?.providerID == cloud.id,
+           "manual routing still honors the explicitly selected cloud model")
 }
 
 func testAIRouterUsesStableConfiguredOrderForEqualScores() {
@@ -8525,6 +8744,7 @@ testAIClientEffectiveRuntimeParametersAreSanitized()
 testAIClientStreamErrorParsing()
 testAIClientResponseErrorBodySanitization()
 testPromptRender()
+testActionPipelineDiagnostic()
 testAIActionSanitizesImportedConfiguration()
 testDefaultPolishActionConfirmsReplacement()
 testTextReplacementSelectionDelay()
@@ -8601,6 +8821,7 @@ testAIRouterPromotesVisionModelForImageRequests()
 testAIRouterPromotesReasoningModelForThinkingActions()
 testAIRouterUsesRoutingPreferenceForFallbackOrder()
 testAIRouterUsesRoutingPreferenceWhenOnlyFallbackIsEnabled()
+testAIRouterPrefersLocalModelRoutesInPrivacyMode()
 testAIRouterUsesStableConfiguredOrderForEqualScores()
 testPrivacyRedactionDefaults()
 testPrivacyRedactionDefaultSampleDemonstratesSensitiveFormats()

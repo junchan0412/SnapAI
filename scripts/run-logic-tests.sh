@@ -7,9 +7,11 @@ OUT="/tmp/SnapAILogicTests"
 
 swiftc \
   Sources/SnapAI/Action.swift \
+  Sources/SnapAI/ActionPipeline.swift \
   Sources/SnapAI/ActionCommand.swift \
   Sources/SnapAI/AutomationURLCommand.swift \
   Sources/SnapAI/Provider.swift \
+  Sources/SnapAI/LocalModelHealth.swift \
   Sources/SnapAI/ModelSwitchCommand.swift \
   Sources/SnapAI/ConversationExport.swift \
   Sources/SnapAI/CommandIdentifier.swift \
@@ -49,6 +51,7 @@ swiftc \
   Sources/SnapAI/TextCaptureRecoveryGuide.swift \
   Sources/SnapAI/TextCaptureDiagnostic.swift \
   Sources/SnapAI/TextCapture.swift \
+  Sources/SnapAI/WriteBackCompatibility.swift \
   Sources/SnapAI/TextEditTransaction.swift \
   Sources/SnapAI/WriteBackCommand.swift \
   Sources/SnapAI/TextDiff.swift \

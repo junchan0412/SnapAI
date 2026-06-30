@@ -5,6 +5,7 @@ struct AIRequestRoute: Identifiable, Equatable {
     var providerName: String
     var modelName: String
     var reason: String
+    var isLocalEndpoint: Bool = false
 
     var id: String { "\(providerID)::\(modelName)" }
 
@@ -100,6 +101,7 @@ struct AIRequestFallbackDecision: Equatable {
         case fallbackDisabled = "disabled"
         case noNextRoute = "no-next-route"
         case partialOutput = "partial-output"
+        case cloudFallbackRequiresConfirmation = "cloud-confirmation-required"
     }
 
     var reason: Reason
@@ -116,6 +118,8 @@ struct AIRequestFallbackDecision: Equatable {
         switch reason {
         case .willTryNext:
             return "正在切换备用模型"
+        case .cloudFallbackRequiresConfirmation:
+            return "本地模型失败;改用云端备用模型前需要确认"
         case .partialOutput:
             return "已收到部分输出，未自动切换"
         case .fallbackDisabled, .noNextRoute:
@@ -125,7 +129,8 @@ struct AIRequestFallbackDecision: Equatable {
 
     static func decide(fallbackEnabled: Bool,
                        hasNextRoute: Bool,
-                       outputCharacterCount: Int) -> AIRequestFallbackDecision {
+                       outputCharacterCount: Int,
+                       requiresCloudFallbackConfirmation: Bool = false) -> AIRequestFallbackDecision {
         guard fallbackEnabled else {
             return AIRequestFallbackDecision(reason: .fallbackDisabled)
         }
@@ -134,6 +139,9 @@ struct AIRequestFallbackDecision: Equatable {
         }
         guard outputCharacterCount <= 0 else {
             return AIRequestFallbackDecision(reason: .partialOutput)
+        }
+        if requiresCloudFallbackConfirmation {
+            return AIRequestFallbackDecision(reason: .cloudFallbackRequiresConfirmation)
         }
         return AIRequestFallbackDecision(reason: .willTryNext)
     }
@@ -360,6 +368,7 @@ struct AIRequestDiagnostics: Equatable {
     var autoRouteEnabled: Bool = false
     var routingPreference: AIRoutingPreference
     var candidateCount: Int
+    var actionPipeline: ActionPipelineDiagnostic = .empty
     var context: AIRequestContextDiagnostic = AIRequestContextDiagnostic()
     var payload: AIRequestPayloadDiagnostic = AIRequestPayloadDiagnostic()
     var submissionPrivacy: PrivacySubmissionDiagnostic? = nil
@@ -458,6 +467,8 @@ struct AIRequestDiagnostics: Equatable {
             switch latest.fallbackDecision?.reason {
             case .willTryNext:
                 return "等待备用模型尝试"
+            case .cloudFallbackRequiresConfirmation:
+                return "本地模型失败;如需改用云端模型,请手动选择云端模型或关闭严格本地优先后重试"
             case .fallbackDisabled:
                 return errorRecovery ?? "开启 fallback 或切换可用模型后重试"
             case .noNextRoute:
@@ -488,6 +499,8 @@ struct AIRequestDiagnostics: Equatable {
             switch latest.fallbackDecision?.reason {
             case .willTryNext:
                 return "fallback-will-try-next"
+            case .cloudFallbackRequiresConfirmation:
+                return "fallback-cloud-confirmation-required"
             case .fallbackDisabled:
                 return "fallback-disabled"
             case .noNextRoute:
@@ -657,9 +670,41 @@ struct AIRequestDiagnostics: Equatable {
         let counts = Dictionary(grouping: readinesses, by: { $0 }).mapValues(\.count)
         let parts = providerReadinessIssueOrder.compactMap { readiness -> String? in
             guard let count = counts[readiness], count > 0 else { return nil }
-            return "\(readiness.diagnosticCode)=\(count): \(readiness.recoverySuggestion)"
+            let suggestion = AIRequestRouter.providerRecoverySuggestion(providers: providers, readiness: readiness)
+            return "\(readiness.diagnosticCode)=\(count): \(suggestion)"
         }
         return parts.isEmpty ? "检查 AI 供应商、模型、API Key 和 Base URL 配置" : parts.joined(separator: "; ")
+    }
+
+    var cloudFallbackReviewSummary: String {
+        let localCount = candidateRoutes.filter(\.isLocalEndpoint).count
+        let cloudCount = candidateRoutes.filter { !$0.isLocalEndpoint }.count
+        guard actionPipeline.modelPolicy == "auto-route-local-first",
+              localCount > 0,
+              cloudCount > 0 else {
+            return "not-needed; local=\(localCount); cloud=\(cloudCount)"
+        }
+        return "confirmation-required; local=\(localCount); cloud=\(cloudCount)"
+    }
+
+    func requiresCloudFallbackConfirmation(from failedRoute: AIRequestRoute,
+                                           to nextRoute: AIRequestRoute?) -> Bool {
+        guard fallbackEnabled,
+              actionPipeline.modelPolicy == "auto-route-local-first",
+              failedRoute.isLocalEndpoint,
+              let nextRoute,
+              !nextRoute.isLocalEndpoint else {
+            return false
+        }
+        return true
+    }
+
+    var healthStatusLine: String {
+        let outcome = Self.diagnosticHealthValue(requestOutcomeSummary, fallback: "pending", limit: 120)
+        let recoveryCode = Self.diagnosticHealthValue(requestRecoveryCode, fallback: "none", limit: 80)
+        let recovery = Self.diagnosticHealthValue(requestRecoverySuggestion, fallback: "none", limit: 180)
+        let latest = Self.diagnosticHealthValue(latestAttemptSummary(includeMessage: false), fallback: "none", limit: 220)
+        return "outcome=\(outcome), recoveryCode=\(recoveryCode), recovery=\(recovery), latest=\(latest)"
     }
 
     func preflightSkippedRouteSummary(limit: Int) -> String {
@@ -803,6 +848,10 @@ struct AIRequestDiagnostics: Equatable {
             "Action: \(AIRequestDiagnosticText.metadata(actionName, fallback: "未命名动作", maxLength: 80))",
             "Source Characters: \(sourceCharacterCount)",
             "Has Image: \(hasImage ? "yes" : "no")",
+            "Pipeline Input: \(actionPipeline.inputPolicy)",
+            "Pipeline Privacy: \(actionPipeline.privacyPolicy)",
+            "Pipeline Output: \(actionPipeline.outputPolicy)",
+            "Pipeline Model: \(actionPipeline.modelPolicy)",
             "Fallback Enabled: \(fallbackEnabled ? "yes" : "no")",
             "Auto Route Enabled: \(autoRouteEnabled ? "yes" : "no")",
             "Routing Preference: \(routingPreference.rawValue)",
@@ -814,6 +863,7 @@ struct AIRequestDiagnostics: Equatable {
             "Recommended Route Issues: \(recommendedRouteIssueSummary)",
             "First Request Route: \(firstRequestRouteSummary)",
             "First Request Route Issues: \(firstRequestRouteIssueSummary)",
+            "Cloud Fallback Review: \(cloudFallbackReviewSummary)",
             "Preflight Skipped Routes: \(preflightSkippedRouteSummary)",
             "Attempt Statuses: \(attemptStatusSummary)",
             "Latest Attempt: \(latestAttemptSummary(includeMessage: includeAttemptMessages))",
@@ -861,6 +911,15 @@ struct AIRequestDiagnostics: Equatable {
             payload.imageFitSummary(for: route, hasImage: hasImage),
             payload.reasoningFitSummary(for: route, requiresReasoning: actionRequiresReasoning)
         ].joined(separator: " · ")
+    }
+
+    private static func diagnosticHealthValue(_ value: String,
+                                              fallback: String,
+                                              limit: Int) -> String {
+        let text = SensitiveTextSanitizer.sanitizedMessage(value, limit: limit)
+            .replacingOccurrences(of: "\n", with: " ")
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
     }
 
     private static var providerReadinessIssueOrder: [AIRequestRouter.ProviderReadiness] {
@@ -921,7 +980,8 @@ enum AIRequestRouter {
             routes.append(AIRequestRoute(providerID: provider.id,
                                          providerName: provider.name,
                                          modelName: model,
-                                         reason: reason))
+                                         reason: reason,
+                                         isLocalEndpoint: provider.isLocalEndpoint))
         }
 
         let allRoutes = requestReadyProviders.flatMap { provider in
@@ -930,11 +990,13 @@ enum AIRequestRouter {
                                providerName: provider.name,
                                modelName: model,
                                reason: routeReason(model: model,
-                                                   providerName: provider.name,
+                                                   provider: provider,
                                                    textLength: textLength,
                                                    hasImage: hasImage,
                                                    action: action,
-                                                   preference: settings.routingPreference))
+                                                   prefersLocalRoutes: settings.prefersLocalModelRoutes,
+                                                   preference: settings.routingPreference),
+                               isLocalEndpoint: provider.isLocalEndpoint)
             }
         }
         let hasFittingReadyRoute = allRoutes.contains {
@@ -950,10 +1012,16 @@ enum AIRequestRouter {
             modelSupportsReasoning(modelName: $0.modelName,
                                    providerName: $0.providerName)
         }
+        let hasLocalReadyRoute = allRoutes.contains { $0.isLocalEndpoint }
 
         func shouldPinExplicit(provider: AIProvider, model: String) -> Bool {
             guard settings.autoRouteEnabled else {
                 return true
+            }
+            if settings.prefersLocalModelRoutes,
+               hasLocalReadyRoute,
+               !provider.isLocalEndpoint {
+                return false
             }
             if action.thinkingMode,
                hasReasoningReadyRoute,
@@ -1127,6 +1195,27 @@ enum AIRequestRouter {
         return scheme == "https" ? .ready : .invalidBaseURL
     }
 
+    static func providerRecoverySuggestion(_ provider: AIProvider) -> String {
+        let readiness = providerReadiness(provider)
+        if let local = LocalModelHealth.make(provider: provider),
+           let suggestion = local.recoverySuggestion(for: readiness) {
+            return suggestion
+        }
+        return readiness.recoverySuggestion
+    }
+
+    static func providerRecoverySuggestion(providers: [AIProvider],
+                                           readiness: ProviderReadiness) -> String {
+        let matchingProviders = providers.filter { providerReadiness($0) == readiness }
+        if let localSuggestion = matchingProviders.compactMap({ provider -> String? in
+            guard LocalModelHealth.make(provider: provider) != nil else { return nil }
+            return providerRecoverySuggestion(provider)
+        }).first {
+            return localSuggestion
+        }
+        return readiness.recoverySuggestion
+    }
+
     static func isProviderRequestReady(_ provider: AIProvider) -> Bool {
         providerReadiness(provider).isReady
     }
@@ -1155,12 +1244,16 @@ enum AIRequestRouter {
     }
 
     private static func routeReason(model: String,
-                                    providerName: String,
+                                    provider: AIProvider,
                                     textLength: Int,
                                     hasImage: Bool,
                                     action: AIAction,
+                                    prefersLocalRoutes: Bool,
                                     preference: AIRoutingPreference) -> String {
-        let capability = ModelCapabilityRegistry.capability(for: model, providerName: providerName)
+        let capability = ModelCapabilityRegistry.capability(for: model, providerName: provider.name)
+        if prefersLocalRoutes {
+            return provider.isLocalEndpoint ? "本地隐私优先" : "云端备用模型"
+        }
         if hasImage && capability.supportsVision { return "图片输入优先" }
         if textLength > 8_000 && capability.supportsLongContext { return "长文本优先" }
         if action.thinkingMode && capability.supportsReasoning { return "推理任务优先" }
@@ -1182,6 +1275,9 @@ enum AIRequestRouter {
         var value = 0
         if route.providerID == action.providerID { value += 500 }
         if route.providerID == settings.activeProviderID && route.modelName == settings.activeModel { value += 200 }
+        if settings.prefersLocalModelRoutes {
+            value += route.isLocalEndpoint ? 180 : -40
+        }
         if hasImage { value += capability.supportsVision ? 120 : -300 }
         if textLength > 8_000 { value += capability.supportsLongContext ? 60 : -20 }
         let fitStatus = AIRequestPayloadDiagnostic.contextFitStatus(

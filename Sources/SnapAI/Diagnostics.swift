@@ -25,6 +25,14 @@ struct PermissionProviderRequestStatus: Equatable {
                   recoverySuggestion: readiness.recoverySuggestion)
     }
 
+    init(provider: AIProvider) {
+        let readiness = AIRequestRouter.providerReadiness(provider)
+        self.init(isReady: readiness.isReady,
+                  diagnosticCode: readiness.diagnosticCode,
+                  displayText: readiness.displayText,
+                  recoverySuggestion: AIRequestRouter.providerRecoverySuggestion(provider))
+    }
+
     static let missingActiveProvider = PermissionProviderRequestStatus(
         isReady: false,
         diagnosticCode: "missing-active-provider",
@@ -142,6 +150,7 @@ struct PermissionHealthSnapshot {
     var activeProviderRequestRecoverySuggestion: String = "在 AI 设置中选择并启用供应商"
     var unavailableRequestReasonSummary: String = "none"
     var unavailableRequestRecoverySummary: String = "none"
+    var recentAIRequestStatus: String = "none"
     var apiKeyConfiguredProviderCount: Int = 0
     var enabledProviderMissingAPIKeyCount: Int = 0
     var textCaptureStatus: String = "none"
@@ -188,6 +197,7 @@ struct PermissionHealthSnapshot {
         Active Provider Request Recovery: \(Self.diagnosticValue(activeProviderRequestRecoverySuggestion))
         Unavailable Request Reasons: \(Self.diagnosticValue(unavailableRequestReasonSummary))
         Unavailable Request Recovery: \(Self.diagnosticValue(unavailableRequestRecoverySummary))
+        Recent AI Request: \(Self.diagnosticValue(recentAIRequestStatus, limit: 500))
         API Keys: \(apiKeyConfiguredProviderCount)/\(providerCount) configured; enabled missing \(enabledProviderMissingAPIKeyCount)
         Text Capture: \(Self.diagnosticValue(textCaptureStatus))
         Write Back: \(Self.diagnosticValue(writeBackStatus))
@@ -226,6 +236,7 @@ struct PermissionHealthSnapshot {
         Active Model: \(Self.diagnosticValue(activeModel, fallback: "未选择"))
         Work Mode: \(Self.diagnosticValue(workModeTitle)) - \(Self.diagnosticValue(workModeDetail, limit: 160))
         AI Request: \(Self.diagnosticValue(requestReadinessStatusLine, limit: 180))
+        Recent AI Request: \(Self.diagnosticValue(recentAIRequestStatus, limit: 240))
         API Key Health: \(Self.diagnosticValue(apiKeyHealthStatusLine, limit: 160))
         Text Capture: \(Self.diagnosticValue(textCaptureStatus, limit: 180))
         Write Back: \(Self.diagnosticValue(writeBackStatus, limit: 180))
@@ -301,6 +312,11 @@ struct PermissionHealthSnapshot {
         if enabledProviderCount > requestReadyProviderCount {
             add("备用供应商", unavailableRequestRecoverySummary)
         }
+        if let outcome = Self.diagnosticField("outcome", in: recentAIRequestStatus),
+           !["none", "pending", "running", "succeeded"].contains(outcome),
+           let recovery = Self.diagnosticField("recovery", in: recentAIRequestStatus) {
+            add("最近 AI 请求", recovery)
+        }
         if invalidRedactionRuleCount > 0 {
             add("脱敏规则", "修正或禁用无效脱敏规则,避免发送前预览遗漏敏感内容")
         }
@@ -368,6 +384,7 @@ struct PermissionHealthSnapshot {
                      hotKeyFailures: [String],
                      textCaptureStatus: String = "none",
                      writeBackStatus: String = "none",
+                     recentAIRequestStatus: String = "none",
                      includeSigningSummary: Bool = true) -> PermissionHealthSnapshot {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -410,6 +427,7 @@ struct PermissionHealthSnapshot {
             activeProviderRequestRecoverySuggestion: requestReadiness.activeProviderRecoverySuggestion,
             unavailableRequestReasonSummary: requestReadiness.unavailableReasonSummary,
             unavailableRequestRecoverySummary: requestReadiness.unavailableRecoverySummary,
+            recentAIRequestStatus: recentAIRequestStatus,
             apiKeyConfiguredProviderCount: apiKeyHealth.configuredProviderCount,
             enabledProviderMissingAPIKeyCount: apiKeyHealth.enabledProviderMissingCount,
             textCaptureStatus: textCaptureStatus,
@@ -443,7 +461,7 @@ struct PermissionHealthSnapshot {
         let readyProviderCount = readinessByProvider.filter(\.isReady).count
         let activeStatus = configuredActiveProviderReadiness(settings: settings)
         let unavailableReasonSummary = requestUnavailableReasonSummary(readinessByProvider)
-        let unavailableRecoverySummary = requestUnavailableRecoverySummary(readinessByProvider)
+        let unavailableRecoverySummary = requestUnavailableRecoverySummary(enabledProviders)
         return PermissionRequestReadinessSummary(
             enabledProviderCount: enabledProviders.count,
             readyProviderCount: readyProviderCount,
@@ -456,13 +474,13 @@ struct PermissionHealthSnapshot {
     private static func configuredActiveProviderReadiness(settings: AppSettings) -> PermissionProviderRequestStatus {
         let configuredID = settings.activeProviderID.trimmingCharacters(in: .whitespacesAndNewlines)
         if let configuredProvider = settings.providers.first(where: { $0.id == configuredID }) {
-            return PermissionProviderRequestStatus(readiness: AIRequestRouter.providerReadiness(configuredProvider))
+            return PermissionProviderRequestStatus(provider: configuredProvider)
         }
         if !configuredID.isEmpty {
             return .missingConfiguredActiveProvider
         }
         if let effectiveProvider = settings.activeProvider {
-            return PermissionProviderRequestStatus(readiness: AIRequestRouter.providerReadiness(effectiveProvider))
+            return PermissionProviderRequestStatus(provider: effectiveProvider)
         }
         return .missingActiveProvider
     }
@@ -474,14 +492,16 @@ struct PermissionHealthSnapshot {
         return counts.keys.sorted().map { "\($0)=\(counts[$0] ?? 0)" }.joined(separator: "; ")
     }
 
-    private static func requestUnavailableRecoverySummary(_ readiness: [AIRequestRouter.ProviderReadiness]) -> String {
-        let grouped = Dictionary(grouping: readiness.filter { !$0.isReady }, by: \.diagnosticCode)
+    private static func requestUnavailableRecoverySummary(_ providers: [AIProvider]) -> String {
+        let unavailable = providers.filter { !AIRequestRouter.providerReadiness($0).isReady }
+        let grouped = Dictionary(grouping: unavailable, by: { AIRequestRouter.providerReadiness($0).diagnosticCode })
         guard !grouped.isEmpty else { return "none" }
         return grouped.keys.sorted().compactMap { code in
             guard let values = grouped[code],
-                  let suggestion = values.first?.recoverySuggestion else {
+                  let first = values.first else {
                 return nil
             }
+            let suggestion = AIRequestRouter.providerRecoverySuggestion(first)
             return "\(code)=\(values.count): \(suggestion)"
         }.joined(separator: "; ")
     }

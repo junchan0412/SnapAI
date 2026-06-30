@@ -90,6 +90,9 @@ final class ResultViewModel: ObservableObject {
     var errorRecoveryPrimaryAction: ResultRecoveryPrimaryAction {
         ResultRecoveryCommand.primaryAction(recoveryCode: errorRecoveryCode)
     }
+    var requestHealthStatusText: String {
+        requestDiagnostics?.healthStatusLine ?? "none"
+    }
 
     // MARK: - 启动
 
@@ -373,6 +376,9 @@ final class ResultViewModel: ObservableObject {
         let requestHasImage = hasImage || history.contains { $0.imageData != nil }
         let payloadDiagnostic = AIRequestPayloadDiagnostic.make(messages: history,
                                                                 explicitHasImage: requestHasImage)
+        let actionPipeline = ActionPipelineDiagnostic.make(action: action,
+                                                           settings: settings,
+                                                           hasImage: requestHasImage)
         let routes = AIRequestRouter.candidates(settings: settings,
                                                 action: action,
                                                 sourceText: sourceText,
@@ -390,6 +396,7 @@ final class ResultViewModel: ObservableObject {
                                                           autoRouteEnabled: settings.autoRouteEnabled,
                                                           routingPreference: settings.routingPreference,
                                                           candidateCount: 0,
+                                                          actionPipeline: actionPipeline,
                                                           context: contextDiagnostic,
                                                           payload: payloadDiagnostic,
                                                           submissionPrivacy: submissionPrivacy,
@@ -406,6 +413,7 @@ final class ResultViewModel: ObservableObject {
                                                autoRouteEnabled: settings.autoRouteEnabled,
                                                routingPreference: settings.routingPreference,
                                                candidateCount: routes.count,
+                                               actionPipeline: actionPipeline,
                                                context: contextDiagnostic,
                                                payload: payloadDiagnostic,
                                                submissionPrivacy: submissionPrivacy,
@@ -508,10 +516,13 @@ final class ResultViewModel: ObservableObject {
             if let error = error {
                 let safeErrorMessage = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription)
                 let outputCharacterCount = self.fullText.count
+                let nextRoute = routes.indices.contains(index + 1) ? routes[index + 1] : nil
                 let fallbackDecision = AIRequestFallbackDecision.decide(
                     fallbackEnabled: self.settings.fallbackEnabled,
-                    hasNextRoute: routes.indices.contains(index + 1),
-                    outputCharacterCount: outputCharacterCount
+                    hasNextRoute: nextRoute != nil,
+                    outputCharacterCount: outputCharacterCount,
+                    requiresCloudFallbackConfirmation: routeDiagnostics.requiresCloudFallbackConfirmation(from: route,
+                                                                                                          to: nextRoute)
                 )
                 var failedDiagnostics = routeDiagnostics
                 failedDiagnostics.mark(route: route,

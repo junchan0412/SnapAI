@@ -85,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             },
             writeBackStatus: { [weak self] in
                 self?.currentWriteBackStatusSummary() ?? "none"
+            },
+            recentAIRequestStatus: { [weak self] in
+                self?.resultVM.requestHealthStatusText ?? "none"
             }
         )
         installServicesProvider()
@@ -1366,6 +1369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             hotKeyFailures: hotKeyRegistrationFailures,
             textCaptureStatus: currentTextCaptureStatusSummary() ?? "none",
             writeBackStatus: currentWriteBackStatusSummary() ?? "none",
+            recentAIRequestStatus: resultVM?.requestHealthStatusText ?? "none",
             includeSigningSummary: includeSigningSummary
         )
     }

@@ -7,26 +7,31 @@ final class PermissionHealthModel: ObservableObject {
     private let hotKeyFailures: () -> [String]
     private let textCaptureStatus: () -> String
     private let writeBackStatus: () -> String
+    private let recentAIRequestStatus: () -> String
 
     init(settings: AppSettings,
          hotKeyFailures: @escaping () -> [String],
          textCaptureStatus: @escaping () -> String,
-         writeBackStatus: @escaping () -> String) {
+         writeBackStatus: @escaping () -> String,
+         recentAIRequestStatus: @escaping () -> String) {
         self.settings = settings
         self.hotKeyFailures = hotKeyFailures
         self.textCaptureStatus = textCaptureStatus
         self.writeBackStatus = writeBackStatus
+        self.recentAIRequestStatus = recentAIRequestStatus
         snapshot = PermissionHealthSnapshot.make(settings: settings,
                                                  hotKeyFailures: hotKeyFailures(),
                                                  textCaptureStatus: textCaptureStatus(),
-                                                 writeBackStatus: writeBackStatus())
+                                                 writeBackStatus: writeBackStatus(),
+                                                 recentAIRequestStatus: recentAIRequestStatus())
     }
 
     func refresh() {
         snapshot = PermissionHealthSnapshot.make(settings: settings,
                                                  hotKeyFailures: hotKeyFailures(),
                                                  textCaptureStatus: textCaptureStatus(),
-                                                 writeBackStatus: writeBackStatus())
+                                                 writeBackStatus: writeBackStatus(),
+                                                 recentAIRequestStatus: recentAIRequestStatus())
     }
 }
 
@@ -37,19 +42,23 @@ final class PermissionHealthController: NSObject, NSWindowDelegate {
     private let hotKeyFailures: () -> [String]
     private let textCaptureStatus: () -> String
     private let writeBackStatus: () -> String
+    private let recentAIRequestStatus: () -> String
     private lazy var model = PermissionHealthModel(settings: settings,
                                                    hotKeyFailures: hotKeyFailures,
                                                    textCaptureStatus: textCaptureStatus,
-                                                   writeBackStatus: writeBackStatus)
+                                                   writeBackStatus: writeBackStatus,
+                                                   recentAIRequestStatus: recentAIRequestStatus)
 
     init(settings: AppSettings,
          hotKeyFailures: @escaping () -> [String],
          textCaptureStatus: @escaping () -> String,
-         writeBackStatus: @escaping () -> String) {
+         writeBackStatus: @escaping () -> String,
+         recentAIRequestStatus: @escaping () -> String) {
         self.settings = settings
         self.hotKeyFailures = hotKeyFailures
         self.textCaptureStatus = textCaptureStatus
         self.writeBackStatus = writeBackStatus
+        self.recentAIRequestStatus = recentAIRequestStatus
         super.init()
     }
 
@@ -130,6 +139,7 @@ struct PermissionHealthView: View {
                         detailLine("当前模型", snapshot.activeModel)
                         detailLine("工作模式", workModeStatusText)
                         detailLine("AI 请求", requestReadinessDetailText)
+                        detailLine("最近请求", snapshot.recentAIRequestStatus)
                         detailLine("API Key", apiKeyDetailText)
                         detailLine("修复建议", snapshot.recoverySuggestionStatusLine)
                         detailLine("上下文", contextStatusText)

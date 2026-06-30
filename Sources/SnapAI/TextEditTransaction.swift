@@ -160,11 +160,12 @@ struct TextWriteBackUndoFallbackDiagnostic: Equatable {
     init(record: TextWriteBackRecord,
          reason: String,
          copiedOriginalToPasteboard: Bool,
-         recoveryOverride: String? = nil) {
+         recoveryOverride: String? = nil,
+         targetNameOverride: String? = nil) {
         self.operation = record.operation
         self.undoState = record.undoState()
         self.targetState = record.targetState
-        self.targetName = record.targetApp?.localizedName
+        self.targetName = targetNameOverride ?? record.targetApp?.localizedName
         self.reason = reason
         self.copiedOriginalToPasteboard = copiedOriginalToPasteboard
         self.originalCharacterCount = max(0, record.originalText.count)
@@ -213,6 +214,9 @@ struct TextWriteBackUndoFallbackDiagnostic: Equatable {
         if copiedOriginalToPasteboard {
             return "替换前的原文已复制到剪贴板; 请回到目标应用手动粘贴恢复"
         }
+        if let hint = WriteBackCompatibility.recoveryHint(for: targetName) {
+            return hint
+        }
         switch operation {
         case .replace:
             return "请在目标应用中使用系统撤销,或从历史记录中找回替换前内容"
@@ -238,10 +242,11 @@ struct TextWriteBackFallbackDiagnostic: Equatable {
          copiedToPasteboard: Bool,
          originalCharacterCount: Int,
          payloadCharacterCount: Int,
-         recoveryOverride: String? = nil) {
+         recoveryOverride: String? = nil,
+         targetNameOverride: String? = nil) {
         self.operation = operation
         self.targetState = Self.targetState(for: targetApp)
-        self.targetName = targetApp?.localizedName
+        self.targetName = targetNameOverride ?? targetApp?.localizedName
         self.reason = reason
         self.copiedToPasteboard = copiedToPasteboard
         self.originalCharacterCount = max(0, originalCharacterCount)
@@ -304,6 +309,9 @@ struct TextWriteBackFallbackDiagnostic: Equatable {
             parts.append("如需替换请重新选中原文")
         case .append:
             parts.append("如需追加请定位到目标位置")
+        }
+        if let hint = WriteBackCompatibility.recoveryHint(for: targetName) {
+            parts.append(hint)
         }
         if !copiedToPasteboard {
             parts.append("若剪贴板未更新请手动复制结果")

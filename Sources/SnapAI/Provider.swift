@@ -27,6 +27,17 @@ struct AIProvider: Codable, Identifiable, Equatable {
         models.filter { $0.enabled }.map { $0.name }
     }
 
+    /// 是否指向本机模型服务。用于隐私模式下优先选择不离开本机的路由。
+    var isLocalEndpoint: Bool {
+        let normalizedBase = AIClient.normalizedBase(baseURL, proto: apiProtocol)
+        guard let url = URL(string: normalizedBase),
+              let host = url.host else {
+            return false
+        }
+        let normalizedHost = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        return normalizedHost == "localhost" || normalizedHost == "127.0.0.1" || normalizedHost == "::1"
+    }
+
     // apiKey 不参与编解码,改由 Keychain 管理
     enum CodingKeys: String, CodingKey {
         case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, requestTimeout
@@ -65,6 +76,9 @@ struct AIProvider: Codable, Identifiable, Equatable {
         case .ollama:
             return AIProvider(name: "Ollama 本地", apiProtocol: .openAI,
                               baseURL: "http://localhost:11434/v1", apiKey: "ollama", models: [])
+        case .lmStudio:
+            return AIProvider(name: "LM Studio 本地", apiProtocol: .openAI,
+                              baseURL: "http://localhost:1234/v1", apiKey: "lm-studio", models: [])
         case .blank:
             return AIProvider()
         }
@@ -75,6 +89,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
         case deepseek = "DeepSeek"
         case anthropic = "Anthropic"
         case ollama = "Ollama 本地"
+        case lmStudio = "LM Studio 本地"
         case blank = "空白"
         var id: String { rawValue }
     }

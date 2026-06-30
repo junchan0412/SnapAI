@@ -2,20 +2,20 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
-![SnapAI 1.3.0 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.4.0 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.3.0 版本重点
+## 1.4.0 版本重点
 
-- 命令面板:按 `Command + K` 搜索动作、模型、上下文包、历史记录和设置项。
-- 结果工作台:复制、替换、追加、继续追问、重新生成等行为都有更完整的快捷键和恢复路径。
-- 历史知识库:独立窗口支持搜索、收藏、删除、筛选、导出和从历史创建上下文包。
-- 隐私与诊断:发送前预览、本地脱敏、高风险强制确认、历史仅元信息、诊断脱敏和权限健康中心。
-- AI 路由与 fallback:按动作、文本长度、图片输入和速度/质量偏好选择模型,失败时自动尝试备用候选。
-- 更新链路:应用内检查 GitHub Release,下载后校验版本、bundle id、签名和 SHA256,替换后尝试自动重启。
+- 隐私模式本地优先:新增 LM Studio 预设,并识别 Ollama、LM Studio 和本地 OpenAI 兼容端点。
+- 云端 fallback 更谨慎:隐私本地优先下,本地模型失败不会静默切到云端备用模型,诊断会提示用户确认或手动切换。
+- 本地模型健康诊断:缺占位 API Key、未加载模型、Base URL 异常时给出 Ollama/LM Studio 相关恢复建议。
+- 写回兼容矩阵:针对 Safari、Chrome、Edge、微信、飞书、Obsidian、Notion、Xcode、Word 提供更具体的失败恢复提示。
+- 动作工作流诊断:请求诊断展示输入、隐私、输出和模型策略,便于理解动作执行路径。
+- 权限健康中心增强:显示最近一次 AI 请求状态,并可复制脱敏后的失败摘要、安装日志和修复建议。
 
-详细发布说明见 [SnapAI 1.3.0 Release Notes](docs/RELEASE_NOTES_1.3.0.md),阶段性复盘和后续路线见 [SnapAI 1.3.0 Iteration Report](docs/ITERATION_REPORT_1.3.0.md)。
+详细发布说明见 [SnapAI 1.4.0 Release Notes](docs/RELEASE_NOTES_1.4.0.md),阶段性复盘和后续路线见 [SnapAI 1.4.0 Iteration Report](docs/ITERATION_REPORT_1.4.0.md)。
 
 ## 快速安装
 
@@ -200,16 +200,18 @@ snapai://translate?lang=en&model=gpt-4o-mini&text=...
 - 历史知识库:历史窗口支持搜索、收藏、删除、按动作/模型/标签筛选,并可为单条记录添加标签。
 - 历史隐私标注:经过本地脱敏、隐私预览或脱敏规则异常的请求会自动写入历史标签,便于筛选和审计。
 - 历史隐私模式:可选择只保存动作、时间、模型和标签,不保存原文与 AI 输出。
+- 隐私模式本地优先:配置 Ollama 或 LM Studio 后,隐私模式会在自动路由中优先使用本地模型,并在缺少模型或占位 API Key 时给出本地服务恢复提示;本地失败后不会静默切到云端备用模型。
 - 上下文包:可保存项目背景、术语表、写作风格或代码栈偏好,并自动合并进请求上下文。
 - 工作流模板:可一键创建邮件回复、会议纪要、代码审查、中英双语润色、图片理解等动作。
 - macOS 服务菜单:可从支持 Services 的应用中把选中文本直接发送给 SnapAI 提问、翻译或润色。
 - 自动化入口:支持 `snapai://` URL Scheme,可从 Shortcuts、Raycast、Alfred 或脚本触发动作。
+- 动作工作流诊断:请求诊断会显示输入、隐私、输出和模型策略,便于排查动作执行路径。
 - 替换前预览:替换原文前显示原文/新文 Diff,确认后才写回目标应用。
 - 文本事务保护:替换和追加会保护用户剪贴板,并尽量恢复触发前的焦点应用。
 - 隐私规则测试:脱敏规则可在设置中实时预览替换结果;初始请求、编辑重发、动作/语言切换重发和结果面板追问都会走本地脱敏与发送前确认。
 - 默认本地脱敏:内置规则覆盖邮箱、手机号、API Key、访问令牌、URL 参数密钥、JWT 和私钥块;旧版默认规则会在本地升级或导入旧配置时自动迁移到当前规则集。
 - 高风险隐私保护:即使关闭发送前预览,检测到高隐私风险的内容也会强制确认;若保存历史,本条记录会自动降级为仅元信息,并写入可筛选的隐私风险标签。复制或导出对话 Markdown 时也会省略高风险正文。
-- 请求诊断:可复制路由、fallback、脱敏命中、失效规则、历史保存策略等元信息,不包含原始敏感正文。
+- 请求诊断:可复制路由、fallback、脱敏命中、失效规则、历史保存策略、动作 pipeline 和云端 fallback 审核等元信息,不包含原始敏感正文。
 - iCloud 配置同步:可同步供应商结构、动作和快捷键,不包含 API Key 和历史内容。
 - 应用内更新:检查 GitHub Release,下载新版 zip,原地替换应用并重启。
 - 开机自启:可在设置中开启,基于 `SMAppService`。
@@ -221,12 +223,15 @@ snapai://translate?lang=en&model=gpt-4o-mini&text=...
 | OpenAI | OpenAI 兼容 | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | DeepSeek | OpenAI 兼容 | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Ollama 本地 | OpenAI 兼容 | `http://localhost:11434/v1` | `llama3.1` |
+| LM Studio 本地 | OpenAI 兼容 | `http://localhost:1234/v1` | `local-model` |
 | Claude | Anthropic 原生 | `https://api.anthropic.com/v1` | `claude-sonnet-4-6` |
 
 安全限制:
 
 - 非本机 HTTP 端点会被拒绝,避免 API Key 通过明文网络发送。
-- 本机 HTTP 仅用于 `localhost`、`127.0.0.1`、`::1`,主要服务 Ollama 等本地模型。
+- 本机 HTTP 仅用于 `localhost`、`127.0.0.1`、`::1`,主要服务 Ollama、LM Studio 等本地模型。
+- 使用隐私模式时,如果已启用可请求的本地模型,自动路由会优先选择本地端点;手动关闭自动路由时仍尊重当前选中的模型。
+- 本地 OpenAI 兼容服务通常仍需要在 SnapAI 中填写一个非空 API Key 占位符。Ollama 可填 `ollama`,LM Studio 可填 `lm-studio`。
 
 ## 更新机制
 
