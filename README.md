@@ -2,20 +2,20 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
-![SnapAI 1.4.0 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.4.1 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.4.0 版本重点
+## 1.4.1 版本重点
 
-- 隐私模式本地优先:新增 LM Studio 预设,并识别 Ollama、LM Studio 和本地 OpenAI 兼容端点。
-- 云端 fallback 更谨慎:隐私本地优先下,本地模型失败不会静默切到云端备用模型,诊断会提示用户确认或手动切换。
-- 本地模型健康诊断:缺占位 API Key、未加载模型、Base URL 异常时给出 Ollama/LM Studio 相关恢复建议。
-- 写回兼容矩阵:针对 Safari、Chrome、Edge、微信、飞书、Obsidian、Notion、Xcode、Word 提供更具体的失败恢复提示。
-- 动作工作流诊断:请求诊断展示输入、隐私、输出和模型策略,便于理解动作执行路径。
-- 权限健康中心增强:显示最近一次 AI 请求状态,并可复制脱敏后的失败摘要、安装日志和修复建议。
+- UI/UX 终极打磨:新增统一的轻量界面样式层,减少卡片厚重感并统一状态胶囊、紧凑按钮和内容面板。
+- 设置页更紧凑:窗口尺寸收敛为 640x500,外层容器更轻,供应商、动作、历史和工作模式卡片密度更稳定。
+- 结果面板更顺手:追问输入独立成行,新增显式发送按钮,结果操作收束为稳定工具条,顶部显示当前模型和路由状态。
+- 历史窗口更易扫读:筛选栏拆成搜索/操作与筛选两行,状态摘要改为胶囊标签,避免宽度不足时挤压变形。
+- 权限健康中心更稳:状态区域改为自适应健康卡片,长诊断行支持多行阅读,复制诊断入口保持可见。
+- 保留 1.4.0 的本地模型隐私优先、云端 fallback 确认、写回兼容矩阵和最近失败诊断能力。
 
-详细发布说明见 [SnapAI 1.4.0 Release Notes](docs/RELEASE_NOTES_1.4.0.md),阶段性复盘和后续路线见 [SnapAI 1.4.0 Iteration Report](docs/ITERATION_REPORT_1.4.0.md)。
+详细发布说明见 [SnapAI 1.4.1 Release Notes](docs/RELEASE_NOTES_1.4.1.md),阶段性复盘和后续路线见 [SnapAI 1.4.1 Iteration Report](docs/ITERATION_REPORT_1.4.1.md)。
 
 ## 快速安装
 

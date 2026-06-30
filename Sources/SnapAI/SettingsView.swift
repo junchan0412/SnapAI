@@ -183,12 +183,12 @@ struct SettingsView: View {
     private let aiLabelWidth: CGFloat = 76
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             settingsHeader
             settingsContentSurface
         }
-        .frame(width: 660, height: 520)
-        .padding(14)
+        .frame(width: 640, height: 500)
+        .padding(12)
         .onDisappear {
             flushDeferredSave()
         }
@@ -243,11 +243,11 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.38))
+                .fill(Color.primary.opacity(0.018))
         }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .animation(.easeInOut(duration: 0.18), value: navigation.selectedSection)
@@ -348,9 +348,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private var routeCard: some View {
@@ -379,9 +377,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func menuLabel(_ text: String, icon: String) -> some View {
@@ -442,9 +438,10 @@ struct SettingsView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 if provider.id == settings.activeProviderID {
-                    Text("使用中").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.2))
-                        .clipShape(Capsule())
+                    SnapAIStatusPill(title: "使用中",
+                                     systemImage: "checkmark.circle.fill",
+                                     tint: .accentColor,
+                                     filled: true)
                 }
                 Spacer()
                 Text("\(provider.enabledModelNames.count)/\(provider.models.count) 模型")
@@ -478,13 +475,9 @@ struct SettingsView: View {
                 providerEditor(provider)
             }
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(provider.id == settings.activeProviderID ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
-        )
+        .snapAISurface(padding: 9,
+                       fillOpacity: SnapAIUI.quietFillOpacity,
+                       isSelected: provider.id == settings.activeProviderID)
     }
 
     @ViewBuilder
@@ -880,9 +873,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(10)
-                .background(Color.primary.opacity(0.035))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
 
                 ForEach(settings.actions) { action in
                     actionCard(action)
@@ -957,9 +948,7 @@ struct SettingsView: View {
                 actionEditor(action)
             }
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     @ViewBuilder
@@ -1179,7 +1168,7 @@ struct SettingsView: View {
                         .font(.caption2).buttonStyle(.plain).foregroundStyle(.secondary)
                     }
                 }
-                .padding(10).background(Color.primary.opacity(0.03)).clipShape(RoundedRectangle(cornerRadius: 8))
+                .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
                 Divider()
             }
 
@@ -1261,10 +1250,8 @@ struct SettingsView: View {
                     .lineLimit(2)
             }
         }
-        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func promptEditor(text: Binding<String>, height: CGFloat) -> some View {
@@ -1394,7 +1381,7 @@ struct SettingsView: View {
 
             compactDivider
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: 8)], spacing: 8) {
                 ForEach(WorkModePreset.allCases) { mode in
                     workModeButton(mode)
                 }
@@ -1423,7 +1410,7 @@ struct SettingsView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
@@ -1544,14 +1531,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 content()
             }
-            .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.primary.opacity(0.035))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-            }
+            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

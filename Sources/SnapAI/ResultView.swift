@@ -25,7 +25,7 @@ struct ResultView: View {
             footer
         }
         .frame(minWidth: 320, maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
-        .background(.ultraThinMaterial)
+        .background(.regularMaterial)
     }
 
     // MARK: - Header
@@ -34,7 +34,7 @@ struct ResultView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
                         .fill(Color.accentColor.opacity(0.16))
                     Image(systemName: vm.action.icon.isEmpty ? "sparkles" : vm.action.icon)
                         .font(.system(size: 15, weight: .semibold))
@@ -86,22 +86,15 @@ struct ResultView: View {
                 Button { vm.isPinned.toggle() } label: {
                     Image(systemName: ResultPinCommand.systemImage(isPinned: vm.isPinned))
                         .foregroundStyle(vm.isPinned ? Color.accentColor : .secondary)
-                        .frame(width: 24, height: 24)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 26))
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .help("\(ResultPinCommand.title(isPinned: vm.isPinned)) (⌘⇧P)")
                 .accessibilityLabel(ResultPinCommand.title(isPinned: vm.isPinned))
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 24, height: 24)
-                        .background(Color.primary.opacity(0.06))
-                        .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 26))
                 .help("关闭")
                 .accessibilityLabel("关闭")
             }
@@ -109,6 +102,7 @@ struct ResultView: View {
 
             // #4 动作切换栏
             actionSwitcher
+            routeStatusBar
         }
     }
 
@@ -127,9 +121,9 @@ struct ResultView: View {
                                 Text(act.name).font(.caption2)
                             }
                             .padding(.horizontal, 9).padding(.vertical, 5)
-                            .background(act.id == vm.action.id ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.055))
+                            .background(act.id == vm.action.id ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(act.id == vm.action.id ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1))
+                            .overlay(Capsule().stroke(act.id == vm.action.id ? Color.accentColor.opacity(0.32) : Color.primary.opacity(0.05), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(act.id == vm.action.id ? Color.accentColor : .primary)
@@ -138,6 +132,36 @@ struct ResultView: View {
                 }
                 .padding(.horizontal, 14).padding(.bottom, 8)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var routeStatusBar: some View {
+        let model = vm.activeModelName.isEmpty ? vm.settings.model : vm.activeModelName
+        let provider = vm.activeProviderName
+        let routeText = [provider, model].filter { !$0.isEmpty }.joined(separator: " / ")
+        if !routeText.isEmpty || vm.routeNote != nil || vm.isStreaming {
+            HStack(spacing: 7) {
+                SnapAIStatusPill(title: vm.isStreaming ? "生成中" : "模型",
+                                 systemImage: vm.isStreaming ? "sparkles" : "server.rack",
+                                 tint: vm.isStreaming ? .accentColor : .secondary,
+                                 filled: vm.isStreaming)
+                if !routeText.isEmpty {
+                    Text(routeText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if let note = vm.routeNote, !note.isEmpty {
+                    Text(note)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
         }
     }
 
@@ -299,6 +323,25 @@ struct ResultView: View {
                               })
                     .disabled(vm.isStreaming)
 
+                Button { vm.sendFollowUp() } label: {
+                    Image(systemName: "paperplane.fill")
+                }
+                .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
+                .keyboardShortcut(.return, modifiers: [.command, .option])
+                .help("发送追问 (⌘⌥↩)")
+                .accessibilityLabel("发送追问")
+                .disabled(!canSendFollowUp)
+            }
+
+            resultActionsToolbar
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+    }
+
+    private var resultActionsToolbar: some View {
+        HStack(spacing: 7) {
+            Spacer(minLength: 0)
+
                 Button { vm.copyOutput() } label: { resultCommandImage(.copyOutput) }
                     .controlSize(.small)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -350,9 +393,11 @@ struct ResultView: View {
                         .accessibilityLabel(resultCommandAccessibilityLabel(.regenerate))
                         .disabled(!resultCommandEnabled(.regenerate))
                 }
-            }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+    }
+
+    private var canSendFollowUp: Bool {
+        !vm.isStreaming && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func resultCommandImage(_ action: ResultCommandAction) -> Image {

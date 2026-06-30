@@ -95,77 +95,8 @@ struct HistoryWindowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                TextField("搜索历史、原文、结果或模型…", text: $model.query)
-                    .textFieldStyle(.roundedBorder)
-                Picker("", selection: $model.actionFilter) {
-                    ForEach(actionNames, id: \.self) { Text($0).tag($0) }
-                }
-                .frame(width: 130)
-                Picker("", selection: $model.modelFilter) {
-                    ForEach(modelNames, id: \.self) { Text($0).tag($0) }
-                }
-                .frame(width: 150)
-                Picker("", selection: $model.tagFilter) {
-                    ForEach(tagNames, id: \.self) { Text($0).tag($0) }
-                }
-                .frame(width: 130)
-                Toggle(isOn: $model.favoriteOnly) {
-                    Image(systemName: "star.fill")
-                }
-                .toggleStyle(.button)
-                .help("只看收藏")
-                Button {
-                    model.resetFilters()
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                }
-                .buttonStyle(.borderless)
-                .help("清空筛选")
-                Button {
-                    copyFilteredHistory()
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .buttonStyle(.borderless)
-                .disabled(filtered.isEmpty)
-                .help("复制当前筛选结果")
-                Button {
-                    exportFilteredHistory()
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderless)
-                .disabled(filtered.isEmpty)
-                .help("导出当前筛选结果")
-                Button {
-                    createContextProfileFromFilteredHistory()
-                } label: {
-                    Image(systemName: "text.badge.plus")
-                }
-                .buttonStyle(.borderless)
-                .disabled(contextProfileDraft == nil)
-                .help(contextProfileDraft == nil ? "当前筛选没有可写入上下文的历史内容" : "从当前筛选创建上下文包")
-            }
-
-            HStack {
-                Text("显示 \(filtered.count) / \(settings.history.count) 条")
-                if model.favoriteOnly {
-                    Text("收藏")
-                }
-                if model.actionFilter != HistoryFilterCriteria.allActions {
-                    Text(model.actionFilter)
-                }
-                if model.modelFilter != HistoryFilterCriteria.allModels {
-                    Text(model.modelFilter)
-                }
-                if model.tagFilter != HistoryFilterCriteria.allTags {
-                    Text("#\(model.tagFilter)")
-                }
-                Spacer()
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
+            historyToolbar
+            filterSummaryBar
 
             if filtered.isEmpty {
                 VStack(spacing: 8) {
@@ -196,15 +127,103 @@ struct HistoryWindowView: View {
         }
     }
 
+    private var historyToolbar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("搜索历史、原文、结果或模型…", text: $model.query)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 220)
+                Toggle(isOn: $model.favoriteOnly) {
+                    Image(systemName: "star.fill")
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .help("只看收藏")
+                Button {
+                    model.resetFilters()
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle")
+                }
+                .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+                .help("清空筛选")
+                Spacer(minLength: 0)
+                historyToolbarActions
+            }
+            HStack(spacing: 8) {
+                Picker("", selection: $model.actionFilter) {
+                    ForEach(actionNames, id: \.self) { Text($0).tag($0) }
+                }
+                .frame(width: 132)
+                Picker("", selection: $model.modelFilter) {
+                    ForEach(modelNames, id: \.self) { Text($0).tag($0) }
+                }
+                .frame(width: 158)
+                Picker("", selection: $model.tagFilter) {
+                    ForEach(tagNames, id: \.self) { Text($0).tag($0) }
+                }
+                .frame(width: 132)
+                Spacer(minLength: 0)
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private var historyToolbarActions: some View {
+        HStack(spacing: 6) {
+            Button {
+                copyFilteredHistory()
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .disabled(filtered.isEmpty)
+            .help("复制当前筛选结果")
+            Button {
+                exportFilteredHistory()
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .disabled(filtered.isEmpty)
+            .help("导出当前筛选结果")
+            Button {
+                createContextProfileFromFilteredHistory()
+            } label: {
+                Image(systemName: "text.badge.plus")
+            }
+            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .disabled(contextProfileDraft == nil)
+            .help(contextProfileDraft == nil ? "当前筛选没有可写入上下文的历史内容" : "从当前筛选创建上下文包")
+        }
+    }
+
+    private var filterSummaryBar: some View {
+        HStack(spacing: 6) {
+            SnapAIStatusPill(title: "\(filtered.count) / \(settings.history.count)",
+                             systemImage: "clock.arrow.circlepath")
+            if model.favoriteOnly {
+                SnapAIStatusPill(title: "收藏", systemImage: "star.fill", tint: .yellow, filled: true)
+            }
+            if model.actionFilter != HistoryFilterCriteria.allActions {
+                SnapAIStatusPill(title: model.actionFilter, systemImage: "wand.and.stars")
+            }
+            if model.modelFilter != HistoryFilterCriteria.allModels {
+                SnapAIStatusPill(title: model.modelFilter, systemImage: "cpu")
+            }
+            if model.tagFilter != HistoryFilterCriteria.allTags {
+                SnapAIStatusPill(title: "#\(model.tagFilter)", systemImage: "tag")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
     private func historyCard(_ entry: HistoryEntry) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text(entry.displayActionName)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Color.accentColor.opacity(0.16))
-                    .clipShape(Capsule())
+                SnapAIStatusPill(title: entry.displayActionName,
+                                 systemImage: "wand.and.stars",
+                                 tint: .accentColor,
+                                 filled: true)
                 Text(entry.modelDisplayText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -219,7 +238,7 @@ struct HistoryWindowView: View {
                 } label: {
                     Image(systemName: entry.isFavorite ? "star.fill" : "star")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .help(entry.isFavorite ? "取消收藏" : "收藏")
                 Button {
                     guard let output = entry.copyableOutputText else { return }
@@ -227,7 +246,7 @@ struct HistoryWindowView: View {
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .disabled(entry.copyableOutputText == nil)
                 .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
                 Button {
@@ -235,14 +254,14 @@ struct HistoryWindowView: View {
                 } label: {
                     Image(systemName: "doc.richtext")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .help("复制完整记录")
                 Button {
                     reopen(entry)
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .disabled(!entry.canReopen)
                 .help(entry.reopenHelpText)
                 Button(role: .destructive) {
@@ -250,7 +269,7 @@ struct HistoryWindowView: View {
                 } label: {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .help("删除")
             }
 
@@ -284,10 +303,8 @@ struct HistoryWindowView: View {
                 .focused($focusedTagID, equals: entry.id)
             }
         }
-        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func copy(_ text: String) {
