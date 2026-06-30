@@ -426,12 +426,32 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .onChange(of: settings.fallbackEnabled) { commit() }
+            Text(routingPreviewText)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Text(settings.routingPreference.description)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(minHeight: 112, alignment: .topLeading)
+    }
+
+    private var routingPreviewText: String {
+        let action = settings.enabledActions.first ?? settings.actions.first ?? AIAction(name: "提问")
+        let sampleText = settings.activeContextProfile?.content ?? ""
+        let routes = AIRequestRouter.candidates(settings: settings,
+                                                action: action,
+                                                sourceText: sampleText,
+                                                hasImage: false,
+                                                routingTextCharacterCount: max(sampleText.count, 1_200))
+        guard let first = routes.first else {
+            return "预览:没有可用路由,请检查供应商、API Key 和模型启用状态。"
+        }
+        let mode = settings.autoRouteEnabled ? "自动路由" : "当前模型"
+        return "预览:\(mode) 会优先尝试 \(first.diagnosticProviderName) / \(first.diagnosticModelName) · \(first.diagnosticReason)"
     }
 
     private func settingsMiniHeader(_ title: String, systemImage: String) -> some View {

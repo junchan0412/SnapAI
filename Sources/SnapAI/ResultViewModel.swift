@@ -93,6 +93,17 @@ final class ResultViewModel: ObservableObject {
     var requestHealthStatusText: String {
         requestDiagnostics?.healthStatusLine ?? "none"
     }
+    var routeExplanationText: String? {
+        requestDiagnostics?.visibleRouteExplanation
+    }
+    var routeStatusTitle: String {
+        requestDiagnostics?.visibleRouteStatusTitle ?? (settings.autoRouteEnabled ? "自动路由" : "固定模型")
+    }
+    var activeContextSummaryText: String? {
+        guard settings.contextStatusSummary.hasActiveContext else { return nil }
+        let summary = settings.contextStatusSummary
+        return "\(summary.activeProfileName) · \(summary.activeContextCharacterCount) 字"
+    }
 
     // MARK: - 启动
 
