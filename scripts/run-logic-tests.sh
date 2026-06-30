@@ -7,6 +7,7 @@ OUT="/tmp/SnapAILogicTests"
 
 swiftc \
   Sources/SnapAI/Action.swift \
+  Sources/SnapAI/ActionTemplateLibrary.swift \
   Sources/SnapAI/ActionPipeline.swift \
   Sources/SnapAI/ActionCommand.swift \
   Sources/SnapAI/AutomationURLCommand.swift \

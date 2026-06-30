@@ -1219,6 +1219,77 @@ func testAIActionSanitizesImportedConfiguration() {
     expect(!AppSettings.sanitizedImportedActions([]).isEmpty, "restores default actions when an import contains none")
 }
 
+func testActionTemplateLibraryBuiltInsAreShareable() {
+    let templates = ActionTemplateLibrary.builtIns
+    expect(templates.count >= 5, "ships a useful built-in action template catalog")
+    expect(templates.contains { $0.title == "代码审查" && $0.category == "代码" },
+           "built-in catalog includes code review")
+    expect(templates.allSatisfy { !$0.action.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
+           "built-in templates include prompts")
+    expect(templates.allSatisfy { $0.action.hotKey == nil },
+           "built-in templates do not reserve global shortcuts")
+}
+
+func testActionTemplateLibraryExportsPortableBundle() {
+    var action = AIAction(name: "团队润色", icon: "wand.and.stars",
+                          group: "写作",
+                          prompt: "请润色:\n\n{{text}}",
+                          hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(optionKey)))
+    action.providerID = "private-provider-id"
+    action.modelOverride = "private-model-name"
+
+    guard let data = try? ActionTemplateLibrary.exportBundleData(actions: [action],
+                                                                 exportedAt: Date(timeIntervalSince1970: 0)),
+          let json = String(data: data, encoding: .utf8) else {
+        expect(false, "exports action template bundle")
+        return
+    }
+    expect(!json.contains("private-provider-id"), "shared action bundle omits provider ids")
+    expect(!json.contains("private-model-name"), "shared action bundle omits model overrides")
+    expect(!json.contains("keyCode"), "shared action bundle omits hotkeys")
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    guard let bundle = try? decoder.decode(ActionTemplateBundle.self, from: data),
+          let exported = bundle.templates.first?.action else {
+        expect(false, "exported action bundle decodes")
+        return
+    }
+    expect(bundle.schemaVersion == ActionTemplateBundle.currentSchemaVersion,
+           "exported action bundle records schema version")
+    expect(exported.hotKey == nil, "exported template clears hotkey")
+    expect(exported.providerID == nil, "exported template clears provider override")
+    expect(exported.modelOverride == nil, "exported template clears model override")
+}
+
+func testActionTemplateLibraryImportsAndInstallsSafely() {
+    var imported = AIAction(name: "润色", icon: "wand.and.stars",
+                            group: "写作",
+                            prompt: "请润色:\n\n{{text}}",
+                            hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(optionKey)))
+    imported.id = "existing-id"
+    imported.providerID = "provider"
+    imported.modelOverride = "model"
+
+    let legacyData = try? JSONEncoder().encode([imported])
+    guard let data = legacyData,
+          let decoded = try? ActionTemplateLibrary.importedActions(from: data),
+          let firstDecoded = decoded.first else {
+        expect(false, "imports legacy action arrays")
+        return
+    }
+    expect(firstDecoded.hotKey == nil, "imported templates clear external hotkeys")
+    expect(firstDecoded.providerID == nil, "imported templates clear provider overrides")
+    expect(firstDecoded.modelOverride == nil, "imported templates clear model overrides")
+
+    var existing = AIAction(name: "润色", icon: "wand.and.stars", prompt: "{{text}}")
+    existing.id = "existing-id"
+    let installed = ActionTemplateLibrary.installedActions(from: decoded,
+                                                           existingActions: [existing])
+    expect(installed.first?.name == "润色 2", "installing templates avoids duplicate action names")
+    expect(installed.first?.id != "existing-id", "installing templates avoids duplicate action ids")
+}
+
 func testDefaultPolishActionConfirmsReplacement() {
     let polish = AIAction.defaults().first { $0.name == "润色" }
     expect(polish?.replaceByDefault == true, "polish action enters replacement confirmation by default")
@@ -8821,6 +8892,9 @@ testAIClientResponseErrorBodySanitization()
 testPromptRender()
 testActionPipelineDiagnostic()
 testAIActionSanitizesImportedConfiguration()
+testActionTemplateLibraryBuiltInsAreShareable()
+testActionTemplateLibraryExportsPortableBundle()
+testActionTemplateLibraryImportsAndInstallsSafely()
 testDefaultPolishActionConfirmsReplacement()
 testTextReplacementSelectionDelay()
 testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath()

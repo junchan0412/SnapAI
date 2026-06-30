@@ -905,15 +905,25 @@ struct SettingsView: View {
                 HStack {
                     Text("动作").font(.headline)
                     Spacer()
+                    Button {
+                        importActionLibrary()
+                    } label: {
+                        Label("导入动作库", systemImage: "square.and.arrow.down")
+                    }
+                    Button {
+                        exportActionLibrary()
+                    } label: {
+                        Label("导出动作库", systemImage: "square.and.arrow.up")
+                    }
                     Menu {
                         Button("空白动作") {
                             addAction(AIAction(name: "新动作", icon: "wand.and.stars",
                                                prompt: "请处理下面的文字:\n\n{{text}}"))
                         }
                         Divider()
-                        ForEach(actionTemplates, id: \.name) { template in
-                            Button(template.name) {
-                                addAction(template)
+                        ForEach(ActionTemplateLibrary.builtIns) { template in
+                            Button(template.title) {
+                                addAction(template.action)
                             }
                         }
                     } label: {
@@ -965,26 +975,6 @@ struct SettingsView: View {
         }
     }
 
-    private var actionTemplates: [AIAction] {
-        [
-            AIAction(name: "邮件回复", icon: "envelope",
-                     group: "写作",
-                     prompt: "请根据下面的内容起草一封自然、礼貌、简洁的邮件回复。保留必要事实,语气专业,最后只输出邮件正文:\n\n{{text}}"),
-            AIAction(name: "会议纪要", icon: "list.clipboard",
-                     group: "总结",
-                     prompt: "请把下面的会议内容整理为会议纪要,包含:背景、关键结论、待办事项、负责人/时间(如原文有)。使用清晰的 Markdown:\n\n{{text}}"),
-            AIAction(name: "代码审查", icon: "checklist",
-                     group: "代码",
-                     prompt: "请审查下面的代码或变更,优先指出 bug、回归风险、边界条件和测试缺口。按严重程度排序,给出可执行修改建议:\n\n{{text}}"),
-            AIAction(name: "中英双语润色", icon: "character.book.closed",
-                     group: "写作",
-                     prompt: "请将下面内容润色为自然、专业的中英双语表达。先给中文优化版,再给英文优化版,保持原意:\n\n{{text}}"),
-            AIAction(name: "图片理解", icon: "photo",
-                     group: "图片",
-                     prompt: "请仔细理解图片和随附文字,提取关键信息、可见问题和下一步建议:\n\n{{text}}")
-        ]
-    }
-
     private func addAction(_ template: AIAction) {
         var action = template
         action.id = UUID().uuidString
@@ -992,6 +982,36 @@ struct SettingsView: View {
         settings.actions.append(action)
         ui.expandedActionID = action.id
         commit()
+    }
+
+    private func importActionLibrary() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.title = "导入 SnapAI 动作库"
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let imported = try? ActionTemplateLibrary.importedActions(from: data) else { return }
+        let installed = ActionTemplateLibrary.installedActions(from: imported,
+                                                               existingActions: settings.actions)
+        guard !installed.isEmpty else { return }
+        settings.actions.append(contentsOf: installed)
+        ui.expandedActionID = installed.first?.id
+        commit()
+    }
+
+    private func exportActionLibrary() {
+        guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "SnapAI-Actions.json"
+        panel.title = "导出 SnapAI 动作库"
+        guard panel.runModal() == .OK,
+              let url = panel.url else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     @ViewBuilder
