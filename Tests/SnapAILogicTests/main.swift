@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 
@@ -64,7 +65,8 @@ func testReleaseAssetSelectionUsesExactVersionedNames() {
             asset("snapai-manifest-v1.1.9.json"),
             asset("snapai-manifest-latest.json"),
             asset("SnapAI-v1.2.0.zip"),
-            asset("snapai-manifest-v1.2.0.json")
+            asset("snapai-manifest-v1.2.0.json"),
+            asset("snapai-manifest-v1.2.0.json.sig")
         ]
     )
 
@@ -72,10 +74,14 @@ func testReleaseAssetSelectionUsesExactVersionedNames() {
            "release asset selection chooses the exact app zip for the release tag")
     expect(release.manifestAsset?.name == "snapai-manifest-v1.2.0.json",
            "release asset selection chooses the exact manifest for the release tag")
+    expect(release.manifestSignatureAsset?.name == "snapai-manifest-v1.2.0.json.sig",
+           "release asset selection chooses the exact manifest signature for the release tag")
     expect(release.expectedAppZipAssetName == "SnapAI-v1.2.0.zip",
            "release asset selection exposes the expected app zip name")
     expect(release.expectedManifestAssetName == "snapai-manifest-v1.2.0.json",
            "release asset selection exposes the expected manifest name")
+    expect(release.expectedManifestSignatureAssetName == "snapai-manifest-v1.2.0.json.sig",
+           "release asset selection exposes the expected manifest signature name")
 
     let missingExactRelease = UpdateChecker.Release(
         tagName: "v1.2.0",
@@ -98,21 +104,26 @@ func testReleaseAssetSelectionUsesExactVersionedNames() {
         htmlURL: URL(string: "https://github.com/junchan0412/SnapAI/releases/tag/1.2.0")!,
         assets: [
             asset("SnapAI-v1.2.0.zip"),
-            asset("snapai-manifest-v1.2.0.json")
+            asset("snapai-manifest-v1.2.0.json"),
+            asset("snapai-manifest-v1.2.0.json.sig")
         ]
     )
     expect(bareTagRelease.appZipAsset?.name == "SnapAI-v1.2.0.zip",
            "release asset selection normalizes bare numeric release tags")
     expect(bareTagRelease.manifestAsset?.name == "snapai-manifest-v1.2.0.json",
            "release manifest selection normalizes bare numeric release tags")
+    expect(bareTagRelease.manifestSignatureAsset?.name == "snapai-manifest-v1.2.0.json.sig",
+           "release manifest signature selection normalizes bare numeric release tags")
 
     let fallbackRelease = UpdateChecker.webFallbackRelease(tagName: "1.2.0")
     expect(fallbackRelease.appZipAsset?.name == "SnapAI-v1.2.0.zip",
            "web fallback release includes the exact app zip asset")
     expect(fallbackRelease.manifestAsset?.name == "snapai-manifest-v1.2.0.json",
            "web fallback release includes the exact manifest asset")
-    expect(fallbackRelease.assets.count == 2,
-           "web fallback release constructs both install and checksum assets")
+    expect(fallbackRelease.manifestSignatureAsset?.name == "snapai-manifest-v1.2.0.json.sig",
+           "web fallback release includes the exact manifest signature asset")
+    expect(fallbackRelease.assets.count == 3,
+           "web fallback release constructs install, manifest, and signature assets")
 
     let duplicateZipRelease = UpdateChecker.Release(
         tagName: "v1.2.0",
@@ -153,6 +164,44 @@ func testReleaseAssetSelectionUsesExactVersionedNames() {
     } catch {
         expect(error.localizedDescription.contains("重复资产 snapai-manifest-v1.2.0.json"),
                "duplicate manifest error names the ambiguous asset")
+    }
+
+    let missingSignatureRelease = UpdateChecker.Release(
+        tagName: "v1.2.0",
+        name: nil,
+        htmlURL: URL(string: "https://github.com/junchan0412/SnapAI/releases/tag/v1.2.0")!,
+        assets: [
+            asset("SnapAI-v1.2.0.zip"),
+            asset("snapai-manifest-v1.2.0.json")
+        ]
+    )
+    do {
+        _ = try UpdateChecker.requiredManifestSignatureAsset(for: missingSignatureRelease,
+                                                             assetName: "snapai-manifest-v1.2.0.json")
+        expect(false, "missing manifest signature fails release metadata validation")
+    } catch {
+        expect(error.localizedDescription.contains("签名文件 snapai-manifest-v1.2.0.json.sig"),
+               "missing manifest signature error names the expected signature asset")
+    }
+
+    let duplicateSignatureRelease = UpdateChecker.Release(
+        tagName: "v1.2.0",
+        name: nil,
+        htmlURL: URL(string: "https://github.com/junchan0412/SnapAI/releases/tag/v1.2.0")!,
+        assets: [
+            asset("SnapAI-v1.2.0.zip"),
+            asset("snapai-manifest-v1.2.0.json"),
+            asset("snapai-manifest-v1.2.0.json.sig"),
+            asset("snapai-manifest-v1.2.0.json.sig")
+        ]
+    )
+    do {
+        _ = try UpdateChecker.requiredManifestSignatureAsset(for: duplicateSignatureRelease,
+                                                             assetName: "snapai-manifest-v1.2.0.json")
+        expect(false, "duplicate manifest signatures fail release metadata validation")
+    } catch {
+        expect(error.localizedDescription.contains("重复资产 snapai-manifest-v1.2.0.json.sig"),
+               "duplicate manifest signature error names the ambiguous asset")
     }
 }
 
@@ -284,6 +333,109 @@ func testReleaseManifestValidation() {
     ])
     expect(manifestError(badSHA).contains("sha256 格式无效"),
            "rejects manifests with malformed sha256 values")
+}
+
+func testReleaseManifestSigningAndSignatureValidation() {
+    let assetName = "SnapAI-v1.2.0.zip"
+    let sha = String(repeating: "0", count: 64)
+    let requirement = #"identifier "com.snapai.app" and certificate leaf = H"547f9e9ccbac459f1ae9db2644e819edeb2e766e""#
+    let signing = UpdateChecker.ReleaseManifest.Signing(
+        designatedRequirement: requirement,
+        certificateFingerprintSHA1: "547F9E9CCBAC459F1AE9DB2644E819EDEB2E766E"
+    )
+    let manifest = UpdateChecker.ReleaseManifest(
+        version: "v1.2.0",
+        bundleIdentifier: "com.snapai.app",
+        signing: signing,
+        assets: [
+            UpdateChecker.ReleaseManifest.ManifestAsset(name: assetName, sha256: sha)
+        ]
+    )
+    let validatedSigning = try? UpdateChecker.validatedManifestSigning(
+        from: manifest,
+        expectedBundleID: "com.snapai.app",
+        expectedDesignatedRequirement: requirement
+    )
+    expect(validatedSigning == signing,
+           "validates manifest bundle id and designated requirement")
+    expect(UpdateChecker.normalizedSHA1(" 547F9E9CCBAC459F1AE9DB2644E819EDEB2E766E\n") == "547f9e9ccbac459f1ae9db2644e819edeb2e766e",
+           "normalizes uppercase SHA1 certificate fingerprints")
+    expect(UpdateChecker.normalizedSHA1(String(repeating: "g", count: 40)) == nil,
+           "rejects non-hex SHA1 certificate fingerprints")
+
+    func signingError(_ manifest: UpdateChecker.ReleaseManifest,
+                      bundleID: String = "com.snapai.app",
+                      requirement: String = requirement) -> String {
+        do {
+            _ = try UpdateChecker.validatedManifestSigning(from: manifest,
+                                                           expectedBundleID: bundleID,
+                                                           expectedDesignatedRequirement: requirement)
+            return ""
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    let missingBundle = UpdateChecker.ReleaseManifest(version: "v1.2.0",
+                                                      signing: signing,
+                                                      assets: manifest.assets)
+    expect(signingError(missingBundle).contains("缺少 bundleIdentifier"),
+           "rejects manifests without a bundle id")
+
+    let mismatchedBundle = UpdateChecker.ReleaseManifest(version: "v1.2.0",
+                                                         bundleIdentifier: "com.other.app",
+                                                         signing: signing,
+                                                         assets: manifest.assets)
+    expect(signingError(mismatchedBundle).contains("bundleIdentifier"),
+           "rejects manifests whose bundle id differs from the current app")
+
+    let missingSigning = UpdateChecker.ReleaseManifest(version: "v1.2.0",
+                                                       bundleIdentifier: "com.snapai.app",
+                                                       assets: manifest.assets)
+    expect(signingError(missingSigning).contains("缺少签名身份信息"),
+           "rejects manifests without signing identity metadata")
+
+    let badFingerprint = UpdateChecker.ReleaseManifest(
+        version: "v1.2.0",
+        bundleIdentifier: "com.snapai.app",
+        signing: UpdateChecker.ReleaseManifest.Signing(
+            designatedRequirement: requirement,
+            certificateFingerprintSHA1: "1234"
+        ),
+        assets: manifest.assets
+    )
+    expect(signingError(badFingerprint).contains("certificateFingerprintSHA1 格式无效"),
+           "rejects malformed certificate fingerprints")
+
+    let manifestJSON = #"{"version":"v1.2.0","assets":[{"name":"SnapAI-v1.2.0.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}]}"#
+    let publicKey = """
+    -----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAidXV39jpDaUp39k6chin
+    zPA3sYFuF10X1vvSU/xtK/KZmIMbrhROM2LP31zRjQ0yhDEElNe//lS0GhOqv7hJ
+    JmmAQDPyCLEutKxsY1PktkhsBNeT3D8nDsNAnPrJrZ7yTWIdmkR5C32tI8tZIK55
+    m97VcnxDeZNImN+rShHNWrkJAajcVALIVevSmiTUTu8GmYMIk/MwGFes+Ztsqp1m
+    yi0FQDyTD6hoCwmkY42byNnFrpSWShsfWkzzFktojGIQuiOTUcQIAPrATb/Ay61A
+    84jhyyZ1SdSygABHCqHWdGEgwGtXtS6uU/jEFKAR9G0/JJ64SHfeJ8ieqg1VmkdB
+    1QIDAQAB
+    -----END PUBLIC KEY-----
+    """
+    let signature = Data(base64Encoded: "Wg9Qz9j10a3HtYiCe9l3CNtO9Vyz93fZixoYTouHmA7Uc5gSgGs9vZNEAArjWqOI4uGwMo1qyagZSss8ufrLCw27YgXYhdaKngi4yovwnyQLMXp5640IVgmxEzlnMwehVIpsl/9DKG7HdV7LSEuKPqSasJiUJWUW/i59x8zI5xX2QmPMu8OZtuNkjnG0OxZkNj0L85aJ/azNVoxyHBpAqjOZkEjePInaQuZtc4mxWaZpfH9Hdi4eU3X0ZJ5E3Pirm+prN3LUXx43b8B5B54F0jUdVghe2oF0oJcmChPvf4cNc9e8oSyNPRZX/xZptPExD7lZcJ993tSWGvfmnbCdlg==")!
+    do {
+        try UpdateChecker.verifyManifestSignature(manifestData: Data(manifestJSON.utf8),
+                                                  signatureData: signature,
+                                                  publicKeyPEM: publicKey)
+    } catch {
+        expect(false, "valid manifest signature verifies: \(error.localizedDescription)")
+    }
+    do {
+        try UpdateChecker.verifyManifestSignature(manifestData: Data((manifestJSON + " ").utf8),
+                                                  signatureData: signature,
+                                                  publicKeyPEM: publicKey)
+        expect(false, "tampered manifest signature fails verification")
+    } catch {
+        expect(error.localizedDescription.contains("Release manifest 签名无法验证"),
+               "tampered manifest reports signature verification failure")
+    }
 }
 
 func testLatestInstallLogURLValidation() {
@@ -997,9 +1149,24 @@ func testAIClientEffectiveRuntimeParametersAreSanitized() {
            "runtime clamps provider max tokens")
     expect(AIClient.effectiveTimeout(settings: settings) == AppSettings.importedRequestTimeoutRange.lowerBound,
            "runtime clamps low provider timeout")
+    expect(AIClient.openAIOutputTokenParameter(settings: settings)?.key == "max_tokens",
+           "OpenAI runtime defaults to max_tokens output limit parameter")
+    expect(AIClient.openAIOutputTokenParameter(settings: settings)?.value == AppSettings.importedMaxTokensRange.upperBound,
+           "OpenAI runtime uses sanitized max token value for output limit parameter")
+
+    settings.providers[0].outputTokenParameterMode = .maxCompletionTokens
+    expect(AIClient.openAIOutputTokenParameter(settings: settings)?.key == "max_completion_tokens",
+           "OpenAI runtime can switch to max_completion_tokens for newer compatible models")
+    expect(AIClient.openAIOutputTokenParameter(settings: settings, value: 1)?.value == 1,
+           "OpenAI runtime can override output token value for connection tests")
+
+    settings.providers[0].outputTokenParameterMode = .omitted
+    expect(AIClient.openAIOutputTokenParameter(settings: settings) == nil,
+           "OpenAI runtime can omit output token parameters for incompatible services")
 
     settings.providers[0].temperature = nil
     settings.providers[0].maxTokens = -10
+    settings.providers[0].outputTokenParameterMode = .maxTokens
     settings.providers[0].requestTimeout = .infinity
 
     expect(AIClient.effectiveTemperature(settings: settings) == 0.3,
@@ -1191,6 +1358,13 @@ func testActionPipelineDiagnostic() {
                                                       sourceKind: .codeEditor)
     expect(capturedInput.inputPolicy == "text+capture-accessibility+source-code-editor",
            "pipeline diagnostic records selected-text capture method")
+
+    let serviceInput = ActionPipelineDiagnostic.make(action: action,
+                                                     settings: settings,
+                                                     hasImage: false,
+                                                     captureMethod: .service)
+    expect(serviceInput.inputPolicy == "text+capture-service",
+           "pipeline diagnostic records text delivered by the macOS Services menu")
 }
 
 func testAIActionSanitizesImportedConfiguration() {
@@ -1692,6 +1866,221 @@ func testCapturedTextPreservesSelectionWhitespace() {
     expect(outcome.usableText == "  hello\n", "capture outcome preserves usable selection whitespace")
 }
 
+func testTextWriteBackAppendPayloadContract() {
+    expect(TextWriteBackPayload.appendPayload(for: "追加内容") == "\n追加内容",
+           "append writeback inserts exactly one leading newline before the result")
+    expect(TextWriteBackPayload.appendPayload(for: "\n已有换行") == "\n\n已有换行",
+           "append writeback preserves the result text exactly after its separator newline")
+}
+
+func testTextCaptureExtractsSelectedSubstringFromAXValueRange() {
+    let value = "ab😀cd"
+    expect(TextCapture.selectedSubstring(in: value, range: CFRange(location: 2, length: 2)) == "😀",
+           "extracts selected text from UTF-16 AX ranges that cover an emoji")
+    expect(TextCapture.selectedSubstring(in: value, range: CFRange(location: 1, length: 4)) == "b😀c",
+           "extracts mixed ASCII and emoji selections from AX value ranges")
+    expect(TextCapture.selectedSubstring(in: value, range: CFRange(location: 2, length: 1)) == nil,
+           "rejects AX ranges that split a surrogate pair")
+    expect(TextCapture.selectedSubstring(in: value, range: CFRange(location: 0, length: 0)) == nil,
+           "rejects empty AX selection ranges")
+    expect(TextCapture.selectedSubstring(in: value, range: CFRange(location: 99, length: 1)) == nil,
+           "rejects out-of-bounds AX selection ranges")
+    expect(TextCapture.selectedSubstring(in: "   ", range: CFRange(location: 0, length: 3)) == nil,
+           "rejects whitespace-only text extracted through AX ranges")
+}
+
+func testServicePasteboardTextAcceptsCommonPlainTextTypes() {
+    func textForType(_ rawType: String, text: String = "来自服务菜单的文本") -> String? {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceTest-\(UUID().uuidString)"))
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: NSPasteboard.PasteboardType(rawType))
+        defer { pasteboard.releaseGlobally() }
+        return ServicePasteboardText.text(from: pasteboard)
+    }
+
+    expect(textForType("public.utf8-plain-text") == "来自服务菜单的文本",
+           "services text helper accepts public.utf8-plain-text")
+    expect(textForType("public.plain-text") == "来自服务菜单的文本",
+           "services text helper accepts public.plain-text")
+    expect(textForType("public.text") == "来自服务菜单的文本",
+           "services text helper accepts public.text")
+    expect(textForType("NSStringPboardType") == "来自服务菜单的文本",
+           "services text helper keeps legacy NSStringPboardType support")
+    expect(textForType("NeXT plain ascii pasteboard type", text: "ASCII service text") == "ASCII service text",
+           "services text helper keeps legacy NeXT ASCII pasteboard support")
+    expect(textForType("com.apple.traditional-mac-plain-text", text: "MacRoman style text") == "MacRoman style text",
+           "services text helper accepts traditional mac plain text payloads")
+    expect(textForType("public.text", text: " \n\t") == nil,
+           "services text helper rejects whitespace-only service payloads")
+
+    let legacyDataPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceLegacyDataTest-\(UUID().uuidString)"))
+    legacyDataPasteboard.clearContents()
+    legacyDataPasteboard.setData(Data("来自 legacy data 的文本".utf8),
+                                 forType: NSPasteboard.PasteboardType("NSStringPboardType"))
+    defer { legacyDataPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: legacyDataPasteboard) == "来自 legacy data 的文本",
+           "services text helper decodes legacy NSStringPboardType data when property-list reads are unavailable")
+
+    let utf16Pasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceUTF16Test-\(UUID().uuidString)"))
+    utf16Pasteboard.clearContents()
+    if let utf16Data = "来自 UTF-16 的文本".data(using: .utf16LittleEndian) {
+        utf16Pasteboard.setData(utf16Data,
+                                forType: NSPasteboard.PasteboardType("public.utf16-external-plain-text"))
+    }
+    defer { utf16Pasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: utf16Pasteboard) == "来自 UTF-16 的文本",
+           "services text helper accepts UTF-16 service text")
+
+    let itemPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceItemTest-\(UUID().uuidString)"))
+    itemPasteboard.clearContents()
+    let item = NSPasteboardItem()
+    item.setString("来自 pasteboard item 的文本", forType: NSPasteboard.PasteboardType("public.utf8-plain-text"))
+    itemPasteboard.writeObjects([item])
+    defer { itemPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: itemPasteboard) == "来自 pasteboard item 的文本",
+           "services text helper reads text from pasteboard items")
+
+    let rtfPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceRTFTest-\(UUID().uuidString)"))
+    rtfPasteboard.clearContents()
+    let attributed = NSAttributedString(string: "来自 RTF 的文本")
+    if let rtfData = try? attributed.data(from: NSRange(location: 0, length: attributed.length),
+                                          documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+        rtfPasteboard.setData(rtfData, forType: NSPasteboard.PasteboardType("public.rtf"))
+    }
+    defer { rtfPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: rtfPasteboard) == "来自 RTF 的文本",
+           "services text helper extracts plain text from RTF service payloads")
+
+    let legacyRTFPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceLegacyRTFTest-\(UUID().uuidString)"))
+    legacyRTFPasteboard.clearContents()
+    if let rtfData = try? attributed.data(from: NSRange(location: 0, length: attributed.length),
+                                          documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]) {
+        legacyRTFPasteboard.setData(rtfData, forType: NSPasteboard.PasteboardType("NSRTFPboardType"))
+    }
+    defer { legacyRTFPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: legacyRTFPasteboard) == "来自 RTF 的文本",
+           "services text helper extracts plain text from legacy RTF service payloads")
+
+    let htmlPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceHTMLTest-\(UUID().uuidString)"))
+    htmlPasteboard.clearContents()
+    let html = "<html><body>来自 <strong>HTML</strong> 的文本</body></html>"
+    htmlPasteboard.setData(Data(html.utf8), forType: NSPasteboard.PasteboardType("public.html"))
+    defer { htmlPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: htmlPasteboard)?.contains("来自 HTML 的文本") == true,
+           "services text helper extracts plain text from HTML service payloads")
+
+    let legacyHTMLPasteboard = NSPasteboard(name: NSPasteboard.Name("SnapAIServiceLegacyHTMLTest-\(UUID().uuidString)"))
+    legacyHTMLPasteboard.clearContents()
+    legacyHTMLPasteboard.setData(Data(html.utf8), forType: NSPasteboard.PasteboardType("Apple HTML pasteboard type"))
+    defer { legacyHTMLPasteboard.releaseGlobally() }
+    expect(ServicePasteboardText.text(from: legacyHTMLPasteboard)?.contains("来自 HTML 的文本") == true,
+           "services text helper extracts plain text from legacy HTML service payloads")
+}
+
+func testTextCaptureTargetActivationGuards() {
+    let currentPID = pid_t(100)
+    expect(!TextCapture.shouldActivateTargetForCapture(targetPID: nil,
+                                                       currentPID: currentPID,
+                                                       isTerminated: false),
+           "does not activate when there is no captured target app")
+    expect(!TextCapture.shouldActivateTargetForCapture(targetPID: 0,
+                                                       currentPID: currentPID,
+                                                       isTerminated: false),
+           "does not activate invalid process identifiers")
+    expect(!TextCapture.shouldActivateTargetForCapture(targetPID: currentPID,
+                                                       currentPID: currentPID,
+                                                       isTerminated: false),
+           "does not activate SnapAI itself as a capture target")
+    expect(!TextCapture.shouldActivateTargetForCapture(targetPID: currentPID + 1,
+                                                       currentPID: currentPID,
+                                                       isTerminated: true),
+           "does not activate a terminated target app")
+    expect(TextCapture.shouldActivateTargetForCapture(targetPID: currentPID + 1,
+                                                      currentPID: currentPID,
+                                                      isTerminated: false),
+           "allows a live external app to be reactivated before clipboard fallback")
+    expect(!TextCapture.shouldRetryAccessibilityAfterTargetActivation(preferAX: false,
+                                                                      capturedText: nil,
+                                                                      targetPID: currentPID + 1,
+                                                                      targetIsTerminated: false,
+                                                                      currentPID: currentPID),
+           "does not retry AX after activation when the user disabled AX-first capture")
+    expect(!TextCapture.shouldRetryAccessibilityAfterTargetActivation(preferAX: true,
+                                                                      capturedText: "selected",
+                                                                      targetPID: currentPID + 1,
+                                                                      targetIsTerminated: false,
+                                                                      currentPID: currentPID),
+           "does not retry AX after activation when AX already captured text")
+    expect(TextCapture.shouldRetryAccessibilityAfterTargetActivation(preferAX: true,
+                                                                     capturedText: nil,
+                                                                     targetPID: currentPID + 1,
+                                                                     targetIsTerminated: false,
+                                                                     currentPID: currentPID),
+           "retries AX after activating a live external target before clipboard fallback")
+    expect(TextCapture.targetActivationWaitMicroseconds == 120_000,
+           "keeps a short focus-settle delay after target app activation")
+    expect(TextCapture.transientMenuDismissWaitMicroseconds == 60_000,
+           "keeps a short transient-menu dismissal delay before clipboard fallback")
+    expect(TextCapture.clipboardChangePollLimit == 80,
+           "allows a longer clipboard fallback wait for context-menu initiated captures")
+    expect(TextCapture.shouldDismissTransientMenusBeforeCopy(targetPID: currentPID + 1,
+                                                            frontmostPID: currentPID,
+                                                            currentPID: currentPID),
+           "dismisses transient menus when capture must return from SnapAI to the target app")
+    expect(TextCapture.shouldDismissTransientMenusBeforeCopy(targetPID: currentPID + 1,
+                                                            frontmostPID: currentPID + 2,
+                                                            currentPID: currentPID),
+           "dismisses transient menus when a system menu app is frontmost before clipboard fallback")
+    expect(!TextCapture.shouldDismissTransientMenusBeforeCopy(targetPID: currentPID + 1,
+                                                             frontmostPID: currentPID + 1,
+                                                             currentPID: currentPID),
+           "does not send escape for direct hotkey capture while the target app is already frontmost")
+    expect(!TextCapture.shouldDismissTransientMenusBeforeCopy(targetPID: nil,
+                                                             frontmostPID: currentPID + 1,
+                                                             currentPID: currentPID),
+           "does not dismiss menus without a known target app")
+}
+
+func testCaptureTargetResolverUsesRecentExternalAppWhenSnapAIIsFrontmost() {
+    let currentPID = pid_t(100)
+    expect(CaptureTargetResolver.preferredSource(frontmostPID: 200,
+                                                 frontmostIsTerminated: false,
+                                                 lastExternalPID: 300,
+                                                 lastExternalIsTerminated: false,
+                                                 currentPID: currentPID) == .frontmost,
+           "uses the live frontmost external app as the capture target")
+    expect(CaptureTargetResolver.preferredSource(frontmostPID: currentPID,
+                                                 frontmostIsTerminated: false,
+                                                 lastExternalPID: 300,
+                                                 lastExternalIsTerminated: false,
+                                                 currentPID: currentPID) == .lastExternal,
+           "falls back to the last external app when SnapAI is frontmost")
+    expect(CaptureTargetResolver.preferredSource(frontmostPID: 201,
+                                                 frontmostIsTerminated: false,
+                                                 frontmostBundleIdentifier: "com.apple.systemuiserver",
+                                                 lastExternalPID: 300,
+                                                 lastExternalIsTerminated: false,
+                                                 currentPID: currentPID) == .lastExternal,
+           "falls back to the last external app when a system menu bar process is frontmost")
+    expect(CaptureTargetResolver.preferredSource(frontmostPID: 200,
+                                                 frontmostIsTerminated: true,
+                                                 lastExternalPID: 300,
+                                                 lastExternalIsTerminated: false,
+                                                 currentPID: currentPID) == .lastExternal,
+           "ignores terminated frontmost apps")
+    expect(CaptureTargetResolver.preferredSource(frontmostPID: currentPID,
+                                                 frontmostIsTerminated: false,
+                                                 lastExternalPID: 300,
+                                                 lastExternalIsTerminated: true,
+                                                 currentPID: currentPID) == .none,
+           "does not fall back to a terminated last external app")
+    expect(!CaptureTargetResolver.isUsableExternalApp(pid: 201,
+                                                      isTerminated: false,
+                                                      bundleIdentifier: "com.apple.controlcenter",
+                                                      currentPID: currentPID),
+           "does not treat Control Center as a text capture target")
+}
+
 func testTextCaptureRecoveryGuidePointsToActionablePermissionHelp() {
     expect(TextCaptureRecoveryGuide.title == "未检测到选中的文字",
            "text capture recovery guide uses the no-selection alert title")
@@ -1887,9 +2276,88 @@ func testHotKeyConflictDetection() {
         includeQuickPanel: true
     )
     expect(conflict != nil, "detects action hotkey conflict")
+    let detail = HotKeyConflictDetector.conflictDetail(
+        for: ask.hotKey!,
+        actions: [ask, translate],
+        excludingActionID: "translate",
+        quickPanelHotKey: .quickPanelDefault,
+        includeQuickPanel: true
+    )
+    expect(detail == HotKeyConflictDetector.Conflict(title: "提问", target: .action(id: "ask")),
+           "hotkey conflict detail points to the conflicting action")
+    let quickPanelConflict = HotKeyConflictDetector.conflictDetail(
+        for: .quickPanelDefault,
+        actions: [ask, translate],
+        excludingActionID: nil,
+        quickPanelHotKey: .quickPanelDefault,
+        includeQuickPanel: true
+    )
+    expect(quickPanelConflict == HotKeyConflictDetector.Conflict(title: "快捷提问面板", target: .quickPanel),
+           "hotkey conflict detail points to the quick panel shortcut")
     expect(HotKeyConflictDetector.systemWarning(
         for: HotKeyCombo(keyCode: UInt32(kVK_ANSI_Q), modifiers: UInt32(cmdKey))
     ) != nil, "warns for common system shortcut")
+}
+
+func testHotKeyRecorderTextDescribesRecordingAndReservedShortcuts() {
+    expect(HotKeyRecorderText.title(for: .unset, recording: false) == "未设置",
+           "hotkey recorder shows a clear empty state")
+    expect(HotKeyRecorderText.title(for: .askDefault, recording: true) == "录制中...",
+           "hotkey recorder shows a distinct recording state")
+    expect(HotKeyRecorderText.recordingHelp.contains("Esc") &&
+           HotKeyRecorderText.recordingHelp.contains("Delete"),
+           "hotkey recorder recording help explains cancel and clear keys")
+    let commandQ = HotKeyCombo(keyCode: UInt32(kVK_ANSI_Q), modifiers: UInt32(cmdKey))
+    expect(HotKeyRecorderText.help(for: commandQ, recording: false).contains("退出应用"),
+           "hotkey recorder help carries reserved system shortcut warnings")
+    expect(HotKeyRecorderText.instructions.contains("Esc") &&
+           HotKeyRecorderText.instructions.contains("Delete") &&
+           HotKeyRecorderText.instructions.contains("系统保留快捷键"),
+           "hotkey recorder visible instructions explain cancel, clear, and reserved shortcuts")
+}
+
+func testHotKeyCoordinatorDetectsConflictsAndRegistrationFailures() {
+    let settings = AppSettings()
+    let sharedCombo = HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))
+    var first = AIAction(name: "一号", hotKey: sharedCombo)
+    first.id = "first"
+    var second = AIAction(name: "二号", hotKey: sharedCombo)
+    second.id = "second"
+    settings.actions = [first, second]
+    settings.quickPanelHotKey = HotKeyCombo(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+
+    var unregisterCalled = false
+    var registeredCombos: [HotKeyCombo] = []
+    var triggeredActionID: String?
+    var quickTriggered = false
+    var handlers: [() -> Void] = []
+    let failures = HotKeyCoordinator().registerAll(
+        settings: settings,
+        actionHandler: { triggeredActionID = $0 },
+        quickPanelHandler: { quickTriggered = true },
+        registerHotKey: { combo, handler in
+            registeredCombos.append(combo)
+            handlers.append(handler)
+            if combo == settings.quickPanelHotKey { return nil }
+            return UInt32(registeredCombos.count)
+        },
+        unregisterAll: {
+            unregisterCalled = true
+        },
+        logFailures: false
+    )
+
+    expect(unregisterCalled, "hotkey coordinator unregisters existing shortcuts before registration")
+    expect(registeredCombos == [sharedCombo, settings.quickPanelHotKey],
+           "hotkey coordinator registers first unique action and quick panel shortcut")
+    expect(failures.contains { $0.contains("动作「二号」") && $0.contains("冲突") },
+           "hotkey coordinator reports duplicate action shortcut conflicts")
+    expect(failures.contains { $0.contains("快捷提问面板") && $0.contains("注册失败") },
+           "hotkey coordinator reports registrar failures")
+    handlers.first?()
+    handlers.dropFirst().first?()
+    expect(triggeredActionID == "first", "hotkey coordinator routes action hotkey callbacks")
+    expect(quickTriggered, "hotkey coordinator routes quick panel callback")
 }
 
 func testCommandPaletteMatchesMultipleTerms() {
@@ -2186,6 +2654,44 @@ func testModelSwitchCommandFactoryFiltersAndMarksCurrentModel() {
            "model command carries switch target")
 }
 
+func testMenuCoordinatorBuildsModelSwitchMenu() {
+    let settings = AppSettings()
+    var primary = AIProvider(name: "OpenAI",
+                             apiProtocol: .openAI,
+                             baseURL: "https://api.openai.com/v1",
+                             apiKey: "key",
+                             models: [
+                                AIModelEntry(name: "gpt-4o-mini"),
+                                AIModelEntry(name: "disabled-model", enabled: false)
+                             ])
+    primary.id = "openai"
+    primary.isEnabled = true
+    var disabledProvider = AIProvider(name: "Disabled",
+                                      apiProtocol: .openAI,
+                                      baseURL: "https://disabled.test/v1",
+                                      apiKey: "key",
+                                      models: [AIModelEntry(name: "hidden-model")])
+    disabledProvider.id = "disabled"
+    disabledProvider.isEnabled = false
+    settings.providers = [primary, disabledProvider]
+    settings.activeProviderID = primary.id
+    settings.activeModel = "gpt-4o-mini"
+
+    let menu = MenuCoordinator.modelSwitchMenu(settings: settings,
+                                               target: NSObject(),
+                                               action: Selector(("switchModel:")))
+    let titles = menu.items.map(\.title)
+    expect(titles.contains("OpenAI"), "model switch menu includes enabled provider header")
+    expect(titles.contains("  gpt-4o-mini"), "model switch menu includes enabled model")
+    expect(!titles.contains("Disabled"), "model switch menu omits disabled providers")
+    expect(!titles.contains("  disabled-model"), "model switch menu omits disabled models")
+    let modelItem = menu.items.first { $0.title == "  gpt-4o-mini" }
+    expect(modelItem?.state == .on, "model switch menu marks the active model")
+    let represented = modelItem?.representedObject as? [String: String]
+    expect(represented?["provider"] == "openai" && represented?["model"] == "gpt-4o-mini",
+           "model switch menu carries provider and model identifiers")
+}
+
 func testModelSwitchCommandIDsAreStableSlugs() {
     var provider = AIProvider(name: "Local",
                               apiProtocol: .openAI,
@@ -2382,6 +2888,17 @@ func testAutomationSettingsSectionSelectionNormalizesQueries() {
            "settings section selection falls back for unknown sections")
     expect(AutomationSettingsSectionSelection.resolve(nil, fallback: .actions) == .actions,
            "settings section selection falls back for missing sections")
+}
+
+func testAutomationRouterParsesURLsAndSettingsSections() {
+    expect(AutomationRouter.command(from: "snapai://settings/ai") == .openSettings(section: "ai"),
+           "automation router parses raw URL strings into automation commands")
+    expect(AutomationRouter.command(from: "not a url") == nil,
+           "automation router rejects invalid URL strings")
+    expect(AutomationRouter.settingsSection(for: "history_records", fallback: .ai) == .history,
+           "automation router resolves settings section aliases")
+    expect(AutomationRouter.settingsSection(for: nil, fallback: .permission) == .permission,
+           "automation router keeps current settings section as fallback")
 }
 
 func snapAIURL(host: String, queryItems: [URLQueryItem] = [], path: String = "") -> URL {
@@ -3238,6 +3755,9 @@ func testAIRequestDiagnosticsSummary() {
                                            submissionPrivacy: PrivacySubmissionDiagnostic(
                                             originalCharacterCount: 42,
                                             submittedCharacterCount: 36,
+                                            processedTextCharacterCount: 36,
+                                            finalUserPromptCharacterCount: 88,
+                                            systemPromptCharacterCount: 96,
                                             hasImage: true,
                                             redactionEnabled: true,
                                             redactionMatchCount: 2,
@@ -3305,6 +3825,9 @@ func testAIRequestDiagnosticsSummary() {
     expect(summary.contains("Submission Privacy:"), "includes submission privacy section")
     expect(summary.contains("Original Characters: 42"), "reports original character count")
     expect(summary.contains("Submitted Characters: 36"), "reports submitted character count")
+    expect(summary.contains("Processed Text Characters: 36"), "reports redacted/processed text character count")
+    expect(summary.contains("Final User Prompt Characters: 88"), "reports final user prompt character count")
+    expect(summary.contains("System Prompt Characters: 96"), "reports system prompt character count")
     expect(summary.contains("Attached Image: yes"), "reports attached image state")
     expect(summary.contains("Redaction Matches: 2"), "reports redaction match count")
     expect(summary.contains("Invalid Redaction Rules: 1"), "reports invalid redaction rules")
@@ -4170,6 +4693,61 @@ func testAIRequestFallbackDecisionExplainsSkippedFallbacks() {
     expect(cloudConfirmation.userNote == "本地模型失败;改用云端备用模型前需要确认",
            "privacy cloud fallback confirmation provides a short user note")
 
+    let primary = AIRequestRoute(providerID: "p1",
+                                 providerName: "Primary",
+                                 modelName: "fast-model",
+                                 reason: "当前模型")
+    let secondary = AIRequestRoute(providerID: "p2",
+                                   providerName: "Fallback",
+                                   modelName: "backup-model",
+                                   reason: "备用模型")
+    let fallbackDiagnostics = AIRequestDiagnostics(actionName: "提问",
+                                                   sourceCharacterCount: 12,
+                                                   hasImage: false,
+                                                   fallbackEnabled: true,
+                                                   routingPreference: .balanced,
+                                                   candidateCount: 2,
+                                                   candidateRoutes: [primary, secondary])
+    let failure = FallbackRunner.routeFailure(
+        error: NSError(domain: "SnapAI.Test",
+                       code: 1,
+                       userInfo: [NSLocalizedDescriptionKey: "timeout sk-live-secret-value-1234567890"]),
+        outputText: "partial answer",
+        routeStartedAt: Date(timeIntervalSinceNow: -1),
+        route: primary,
+        routes: [primary, secondary],
+        index: 0,
+        diagnostics: fallbackDiagnostics,
+        fallbackEnabled: true
+    )
+    expect(failure.decision.reason == .partialOutput,
+           "fallback runner preserves partial-output protection")
+    expect(!failure.decision.shouldTryNext,
+           "fallback runner does not automatically switch after partial output")
+    expect(!failure.safeErrorMessage.contains("sk-live-secret-value"),
+           "fallback runner sanitizes error messages before diagnostics")
+    let thinkingOnlyFailure = FallbackRunner.routeFailure(
+        error: NSError(domain: "SnapAI.Test",
+                       code: 2,
+                       userInfo: [NSLocalizedDescriptionKey: "stream interrupted"]),
+        outputText: "",
+        thinkingText: "已有推理过程",
+        routeStartedAt: Date(timeIntervalSinceNow: -1),
+        route: primary,
+        routes: [primary, secondary],
+        index: 0,
+        diagnostics: fallbackDiagnostics,
+        fallbackEnabled: true
+    )
+    expect(thinkingOnlyFailure.outputCharacterCount == 0,
+           "thinking-only failures keep visible output count separate")
+    expect(thinkingOnlyFailure.receivedCharacterCount == "已有推理过程".count,
+           "thinking-only failures count received thinking as partial content")
+    expect(thinkingOnlyFailure.decision.reason == .willTryNext,
+           "fallback runner can switch routes after hidden thinking text is received")
+    expect(thinkingOnlyFailure.decision.shouldTryNext,
+           "thinking-only partial content does not block automatic fallback")
+
     let route = AIRequestRoute(providerID: "p1",
                                providerName: "Primary",
                                modelName: "fast-model",
@@ -4241,6 +4819,78 @@ func testAIRequestFallbackDecisionExplainsSkippedFallbacks() {
            "request recovery code exposes privacy cloud fallback confirmation")
     expect(cloudDiagnostics.requestRecoverySuggestion.contains("本地模型失败"),
            "request recovery explains privacy cloud fallback confirmation")
+}
+
+func testFallbackRunnerSwitchesAfterThinkingOnlyFailureAndProtectsVisiblePartialOutput() {
+    let primary = AIRequestRoute(providerID: "p1",
+                                 providerName: "Primary",
+                                 modelName: "reasoner",
+                                 reason: "当前模型")
+    let secondary = AIRequestRoute(providerID: "p2",
+                                   providerName: "Fallback",
+                                   modelName: "backup-model",
+                                   reason: "备用模型")
+    let diagnostics = AIRequestDiagnostics(actionName: "推理",
+                                           actionRequiresReasoning: true,
+                                           sourceCharacterCount: 20,
+                                           hasImage: false,
+                                           fallbackEnabled: true,
+                                           routingPreference: .balanced,
+                                           candidateCount: 2,
+                                           candidateRoutes: [primary, secondary])
+
+    var thinkingOnly = StreamingAccumulator()
+    thinkingOnly.appendContentToken("<think>首个模型已经开始推理</think>", extractsThinkTags: true)
+    expect(thinkingOnly.outputText.isEmpty,
+           "thinking-only route failure has no visible partial output")
+    expect(!thinkingOnly.thinkingText.isEmpty,
+           "thinking-only route failure can still have thinking text")
+
+    let thinkingFailure = FallbackRunner.routeFailure(
+        error: NSError(domain: "SnapAI.Test",
+                       code: 504,
+                       userInfo: [NSLocalizedDescriptionKey: "gateway timeout"]),
+        outputText: thinkingOnly.outputText,
+        thinkingText: thinkingOnly.thinkingText,
+        routeStartedAt: Date(timeIntervalSinceNow: -2),
+        route: primary,
+        routes: [primary, secondary],
+        index: 0,
+        diagnostics: diagnostics,
+        fallbackEnabled: true
+    )
+    expect(thinkingFailure.nextRoute == secondary,
+           "fallback runner targets the second route after the first route fails")
+    expect(thinkingFailure.decision.reason == .willTryNext,
+           "thinking-only failures can automatically switch to a backup route")
+
+    thinkingOnly.resetForFallback()
+    expect(thinkingOnly.outputText.isEmpty && thinkingOnly.thinkingText.isEmpty,
+           "automatic fallback clears thinking text before the backup route starts")
+    thinkingOnly.appendContentToken("备用模型答案", extractsThinkTags: true)
+    expect(thinkingOnly.outputText == "备用模型答案",
+           "backup route starts from a clean visible output state")
+
+    var visiblePartial = StreamingAccumulator()
+    visiblePartial.appendContentToken("<think>推理</think>已经输出一部分答案", extractsThinkTags: true)
+    let partialFailure = FallbackRunner.routeFailure(
+        error: NSError(domain: "SnapAI.Test",
+                       code: 500,
+                       userInfo: [NSLocalizedDescriptionKey: "server error"]),
+        outputText: visiblePartial.outputText,
+        routeStartedAt: Date(timeIntervalSinceNow: -1),
+        route: primary,
+        routes: [primary, secondary],
+        index: 0,
+        diagnostics: diagnostics,
+        fallbackEnabled: true
+    )
+    expect(!visiblePartial.outputText.isEmpty,
+           "visible partial route failure keeps user-visible output")
+    expect(partialFailure.decision.reason == .partialOutput,
+           "visible partial output blocks automatic fallback")
+    expect(!partialFailure.decision.shouldTryNext,
+           "fallback runner protects partial user-visible content from silent replacement")
 }
 
 func testVisibleErrorRecoverySuggestionText() {
@@ -5324,6 +5974,91 @@ func testAIRouterUsesStableConfiguredOrderForEqualScores() {
            "uses configured provider/model order when fallback scores tie")
 }
 
+func testRoutingMetricsRecordPerformanceAndFailures() {
+    let route = AIRequestRoute(providerID: "provider-1",
+                               providerName: "Provider",
+                               modelName: "plain-beta",
+                               reason: "备用模型")
+    var table = RoutingMetricsTable.empty
+    table.recordSuccess(route: route,
+                        elapsedMilliseconds: 1_800,
+                        firstTokenMilliseconds: 700)
+    table.recordSuccess(route: route,
+                        elapsedMilliseconds: 2_200,
+                        firstTokenMilliseconds: 900)
+    table.recordFailure(route: route,
+                        elapsedMilliseconds: 3_000,
+                        firstTokenMilliseconds: nil,
+                        reason: "timeout /Users/alice sk-live-secret-value-1234567890")
+    table.recordManualPreference(providerID: route.providerID,
+                                 modelName: route.modelName)
+
+    guard let record = table.record(for: route) else {
+        expect(false, "routing metrics creates a record for route attempts")
+        return
+    }
+    expect(record.successCount == 2, "routing metrics records route successes")
+    expect(record.failureCount == 1, "routing metrics records route failures")
+    expect(record.averageFirstTokenMilliseconds == 800, "routing metrics tracks average first-token latency")
+    expect(record.averageElapsedMilliseconds == 2_333, "routing metrics tracks average total latency")
+    let failureSummary = record.failureReasons.keys.joined(separator: " ")
+    expect(!failureSummary.contains("/Users/alice") &&
+           !failureSummary.contains("sk-live-secret-value") &&
+           failureSummary.contains("[REDACTED"),
+           "routing metrics sanitizes failure reason fragments")
+    expect(record.manualPreferenceScore == 1, "routing metrics records manual model switch preference")
+    expect(table.scoreAdjustment(for: route) > 0, "good local performance improves route score")
+}
+
+func testAIRouterUsesRoutingMetricsForFallbackOrder() {
+    let settings = AppSettings()
+    var provider = AIProvider(name: "Measured", apiProtocol: .openAI,
+                              baseURL: "https://measured.test/v1",
+                              apiKey: "key",
+                              models: [
+                                AIModelEntry(name: "plain-active"),
+                                AIModelEntry(name: "plain-alpha"),
+                                AIModelEntry(name: "plain-beta")
+                              ])
+    provider.isEnabled = true
+    settings.providers = [provider]
+    settings.activeProviderID = provider.id
+    settings.activeModel = "plain-active"
+    settings.autoRouteEnabled = false
+    settings.fallbackEnabled = true
+
+    let alpha = AIRequestRoute(providerID: provider.id,
+                               providerName: provider.name,
+                               modelName: "plain-alpha",
+                               reason: "备用模型")
+    let beta = AIRequestRoute(providerID: provider.id,
+                              providerName: provider.name,
+                              modelName: "plain-beta",
+                              reason: "备用模型")
+    var metrics = RoutingMetricsTable.empty
+    for _ in 0..<4 {
+        metrics.recordFailure(route: alpha,
+                              elapsedMilliseconds: 12_000,
+                              firstTokenMilliseconds: 9_000,
+                              reason: "timeout")
+        metrics.recordSuccess(route: beta,
+                              elapsedMilliseconds: 1_500,
+                              firstTokenMilliseconds: 600)
+    }
+
+    let routes = AIRequestRouter.candidates(settings: settings,
+                                            action: AIAction.defaults()[0],
+                                            sourceText: "short",
+                                            hasImage: false,
+                                            routingMetrics: metrics)
+    expect(routes.first?.modelName == "plain-active",
+           "manual routing still keeps the active model first")
+    expect(routes.dropFirst().first?.modelName == "plain-beta",
+           "routing metrics promotes the better-performing fallback route")
+    expect(routes.dropFirst().first?.reason == "本机表现优先",
+           "routing metrics labels locally preferred fallback candidates")
+}
+
 func testPrivacyRedactionDefaults() {
     let defaultRules = PrivacyRedactionRule.defaults()
     expect(defaultRules.contains { $0.name == "API Key 与访问令牌" },
@@ -5466,6 +6201,12 @@ func testPrivacySubmissionPreviewExplainsFinalPayload() {
     expect(submission.summaryText.contains("附加内容: 1 张图片"), "reports image attachment")
     expect(submission.summaryText.contains("保存历史: 是"), "reports history policy")
     expect(submission.summaryText.contains("历史内容: 仅元信息"), "reports history content storage policy")
+    expect(submission.summaryText.contains("原文字符数: 19"), "reports original text size")
+    expect(submission.summaryText.contains("脱敏后文本字符数: 7"), "reports processed text size")
+    expect(submission.summaryText.contains("最终 User Prompt 字符数: 11"), "reports final user prompt size")
+    expect(submission.summaryText.contains("System Prompt 字符数: 4"), "reports system prompt size")
+    expect(!submission.summaryText.contains("发送字符数"),
+           "submission summary avoids ambiguous sent-character wording")
     expect(submission.summaryText.contains("隐私风险: 风险中"),
            "reports local privacy risk in submission summary")
     expect(submission.summaryText.contains("隐私建议: 发送前预览并确认; 确认图片不含敏感信息"),
@@ -5483,6 +6224,9 @@ func testPrivacySubmissionPreviewExplainsFinalPayload() {
     let diagnostic = submission.diagnostic(previewRequired: true)
     expect(diagnostic.originalCharacterCount == 19, "diagnostic reports original length")
     expect(diagnostic.submittedCharacterCount == 7, "diagnostic reports submitted length")
+    expect(diagnostic.processedTextCharacterCount == 7, "diagnostic reports processed text length")
+    expect(diagnostic.finalUserPromptCharacterCount == 11, "diagnostic reports final user prompt length")
+    expect(diagnostic.systemPromptCharacterCount == 4, "diagnostic reports system prompt length")
     expect(diagnostic.redactionMatchCount == 1, "diagnostic reports redaction matches")
     expect(diagnostic.invalidRedactionRuleCount == 0, "diagnostic reports invalid rule count")
     expect(diagnostic.saveHistoryEnabled, "diagnostic reports history policy")
@@ -5495,8 +6239,22 @@ func testPrivacySubmissionPreviewExplainsFinalPayload() {
            "metadata-only submission exposes a concise privacy protection summary")
     expect(diagnostic.summaryLines.contains { $0.contains("Privacy Risk: medium") },
            "diagnostic summary includes machine-readable privacy risk")
+    expect(diagnostic.summaryLines.contains("Processed Text Characters: 7"),
+           "diagnostic summary includes processed text count")
+    expect(diagnostic.summaryLines.contains("Final User Prompt Characters: 11"),
+           "diagnostic summary includes final user prompt count")
+    expect(diagnostic.summaryLines.contains("System Prompt Characters: 4"),
+           "diagnostic summary includes system prompt count")
     expect(diagnostic.summaryLines.contains("Privacy Recovery: 发送前预览并确认; 确认图片不含敏感信息"),
            "diagnostic summary includes privacy recovery guidance")
+    let routedDiagnostic = diagnostic.withPayloadCharacterCounts(finalUserPromptCharacterCount: 31,
+                                                                 systemPromptCharacterCount: 4)
+    expect(routedDiagnostic.processedTextCharacterCount == 7,
+           "payload count refresh keeps the processed text count")
+    expect(routedDiagnostic.finalUserPromptCharacterCount == 31,
+           "payload count refresh can represent source-context-expanded user prompts")
+    expect(routedDiagnostic.summaryLines.contains("Final User Prompt Characters: 31"),
+           "refreshed diagnostic summary reports the final user prompt count")
     expect(diagnostic.historyTags == ["本地脱敏", "脱敏命中", "隐私风险中", "隐私预览", "仅元信息"],
            "diagnostic produces privacy history tags")
 }
@@ -5829,8 +6587,6 @@ func testAppSettingsUpdateHistoryTagsSanitizesManualTags() {
 }
 
 func testSettingsDecodeSanitizesStoredHistory() {
-    let settings = AppSettings()
-    settings.historyLimit = 50_000
     var first = HistoryEntry(actionName: String(repeating: "动作", count: 80),
                              source: "SOURCE " + String(repeating: "s", count: AppSettings.historySourceCharacterLimit + 20),
                              output: "OUTPUT " + String(repeating: "o", count: AppSettings.historyOutputCharacterLimit + 20),
@@ -5845,11 +6601,16 @@ func testSettingsDecodeSanitizesStoredHistory() {
                               model: "model",
                               tags: ["second"])
     second.id = "duplicate-history"
-    settings.history = [first, second]
+    struct LegacyHistorySettingsPayload: Encodable {
+        var history: [HistoryEntry]
+        var historyLimit: Int
+    }
 
-    guard let data = try? JSONEncoder().encode(settings),
+    let legacyPayload = LegacyHistorySettingsPayload(history: [first, second],
+                                                     historyLimit: 50_000)
+    guard let data = try? JSONEncoder().encode(legacyPayload),
           let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) else {
-        expect(false, "settings history decode succeeds")
+        expect(false, "legacy settings history decode succeeds")
         return
     }
 
@@ -5928,6 +6689,12 @@ func testPrivacySubmissionPreviewCanRepresentFollowUpPayload() {
     expect(submission.userPrompt == "继续解释 [邮箱]", "follow-up preview uses the redacted follow-up text itself")
     expect(!submission.userPrompt.contains("初始动作"), "follow-up preview does not wrap text in the initial action prompt")
     expect(!submission.contentText.contains("test@example.com"), "follow-up preview hides redacted sensitive text")
+    expect(submission.diagnostic(previewRequired: true).processedTextCharacterCount == "继续解释 [邮箱]".count,
+           "follow-up diagnostic reports the redacted follow-up text length")
+    expect(submission.diagnostic(previewRequired: true).finalUserPromptCharacterCount == "继续解释 [邮箱]".count,
+           "follow-up diagnostic uses the redacted follow-up itself as the user prompt length")
+    expect(submission.diagnostic(previewRequired: true).systemPromptCharacterCount == "system".count,
+           "follow-up diagnostic reports system prompt length")
     expect(submission.diagnostic(previewRequired: true).redactionMatchCount == 1,
            "follow-up diagnostic preserves redaction metadata")
 }
@@ -6072,8 +6839,16 @@ func testSettingsCodablePreservesRoutingAndHistoryPreferences() {
     settings.fallbackEnabled = true
     settings.historyContentStorage = .metadataOnly
     settings.actions[0].saveHistory = false
+    settings.history = [
+        HistoryEntry(actionName: "总结",
+                     source: "不应写入设置 JSON 的原文",
+                     output: "不应写入设置 JSON 的结果",
+                     provider: "Provider",
+                     model: "gpt-4o-mini")
+    ]
 
     guard let data = try? JSONEncoder().encode(settings),
+          let json = String(data: data, encoding: .utf8),
           let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) else {
         expect(false, "settings encode/decode succeeds")
         return
@@ -6084,6 +6859,9 @@ func testSettingsCodablePreservesRoutingAndHistoryPreferences() {
     expect(decoded.historyContentStorage == .metadataOnly, "preserves history content storage preference")
     expect(decoded.actions.first?.saveHistory == false, "preserves action history preference")
     expect(decoded.providers.first?.apiKey == "", "does not persist provider api key in JSON")
+    expect(decoded.history.isEmpty, "new settings JSON no longer carries history entries")
+    expect(!json.contains("不应写入设置 JSON"),
+           "new settings JSON omits history source and output content")
 }
 
 func testSettingsExportConfigurationOmitsSecretsAndHistory() {
@@ -7446,6 +8224,125 @@ func testFollowUpInputBehaviorSupportsMultilineDrafts() {
            "multiline follow-up draft keeps arrow keys for text navigation")
 }
 
+func testRequestSessionBuildsInitialMessagesAndCounts() {
+    let settings = AppSettings()
+    settings.systemPrompt = "系统提示"
+    var action = AIAction.defaults()[0]
+    action.prompt = "处理: {{text}}"
+    action.targetLanguage = .auto
+    let context = SelectionSourceContext(kind: .terminal, appName: "Ghostty")
+    let imageData = Data([0x89, 0x50, 0x4E, 0x47])
+
+    let payload = RequestSession.initialMessages(settings: settings,
+                                                 action: action,
+                                                 targetLanguage: .auto,
+                                                 sourceText: "日志",
+                                                 imageData: imageData,
+                                                 imageMimeType: "image/png",
+                                                 sourceContext: context)
+    expect(payload.hasImage, "request session marks image payloads")
+    expect(payload.messages.count == 2, "request session builds system and user messages")
+    expect(payload.messages.first?.role == .system &&
+           payload.messages.first?.content == "系统提示",
+           "request session includes effective system prompt")
+    expect(payload.messages.last?.role == .user &&
+           payload.messages.last?.content.contains("[SnapAI 选区来源]") == true &&
+           payload.messages.last?.content.contains("处理: 日志") == true,
+           "request session renders user prompt with source context")
+    expect(payload.messages.last?.imageData == imageData,
+           "request session attaches image data to first user message")
+
+    let counts = RequestSession.payloadCharacterCounts(messages: payload.messages)
+    expect(counts.finalUserPrompt == payload.messages.last?.content.count,
+           "request session reports final user prompt characters")
+    expect(counts.systemPrompt == "系统提示".count,
+           "request session reports system prompt characters")
+
+    var followUpMessages = payload.messages
+    RequestSession.appendFollowUp(to: &followUpMessages,
+                                  assistantText: "上次回答",
+                                  userText: "继续解释")
+    expect(followUpMessages.suffix(2).map(\.role) == [.assistant, .user],
+           "request session appends assistant context before follow-up")
+}
+
+func testStreamingAccumulatorSeparatesThinkingAndResetsForFallback() {
+    var accumulator = StreamingAccumulator()
+    accumulator.appendContentToken("开头 <thi", extractsThinkTags: true)
+    expect(accumulator.outputText == "开头 ",
+           "streaming accumulator buffers partial think start tags without leaking them")
+    accumulator.appendContentToken("nk>推理</thi", extractsThinkTags: true)
+    expect(accumulator.outputText == "开头 ",
+           "streaming accumulator keeps thinking text out of visible output")
+    expect(accumulator.thinkingText == "推理",
+           "streaming accumulator collects DeepSeek-style thinking text")
+    accumulator.appendContentToken("nk>正文", extractsThinkTags: true)
+    expect(accumulator.outputText == "开头 正文",
+           "streaming accumulator resumes visible output after think tag")
+    expect(accumulator.thinkingText == "推理",
+           "streaming accumulator does not append visible output to thinking text")
+
+    accumulator.appendExternalThinking(" Anthropic")
+    expect(accumulator.thinkingText == "推理 Anthropic",
+           "streaming accumulator also records external thinking deltas")
+
+    accumulator.resetForFallback()
+    expect(accumulator.outputText.isEmpty,
+           "streaming accumulator clears partial visible output before fallback routes")
+    expect(accumulator.thinkingText.isEmpty,
+           "streaming accumulator clears thinking output before fallback routes")
+
+    accumulator.appendContentToken("备用答案", extractsThinkTags: true)
+    expect(accumulator.outputText == "备用答案",
+           "streaming accumulator starts the fallback route from a clean output state")
+    expect(accumulator.thinkingText.isEmpty,
+           "streaming accumulator does not leak thinking text into fallback routes")
+
+    accumulator.appendContentToken("尾部 <", extractsThinkTags: true)
+    expect(accumulator.outputText == "备用答案尾部 ",
+           "streaming accumulator buffers possible trailing tag fragments")
+    accumulator.finish()
+    expect(accumulator.outputText == "备用答案尾部 <",
+           "streaming accumulator flushes incomplete tag fragments when the stream finishes")
+}
+
+func testResultRouteStatusTextBuildsCompactPrimaryAndDetails() {
+    let status = ResultRouteStatusText.make(providerName: "OpenAI",
+                                            modelName: "gpt-4o-mini",
+                                            fallbackModelName: "fallback",
+                                            contextSummary: "项目上下文 · 1200 字",
+                                            routeExplanation: "将优先使用 OpenAI / gpt-4o-mini · 自动路由: 均衡",
+                                            routeNote: "将优先使用 OpenAI / gpt-4o-mini · 自动路由: 均衡")
+    expect(status.primaryText == "OpenAI / gpt-4o-mini",
+           "result route status shows provider and active model in the primary line")
+    expect(status.detailLines == [
+        "上下文: 项目上下文 · 1200 字",
+        "将优先使用 OpenAI / gpt-4o-mini · 自动路由: 均衡"
+    ], "result route status keeps route details deduplicated")
+
+    let fallbackOnly = ResultRouteStatusText.make(providerName: "",
+                                                  modelName: "",
+                                                  fallbackModelName: "deepseek-chat",
+                                                  contextSummary: nil,
+                                                  routeExplanation: nil,
+                                                  routeNote: "正在切换备用模型")
+    expect(fallbackOnly.primaryText == "deepseek-chat",
+           "result route status falls back to configured model before the request reports an active model")
+    expect(fallbackOnly.detailLines == ["正在切换备用模型"],
+           "result route status keeps fallback notes visible in expanded details")
+
+    let preparing = ResultRouteStatusText.make(providerName: " ",
+                                               modelName: "",
+                                               fallbackModelName: " ",
+                                               contextSummary: " ",
+                                               routeExplanation: nil,
+                                               routeNote: "")
+    expect(preparing.primaryText == "正在准备请求",
+           "result route status has a compact preparing label when no route is known")
+    expect(preparing.detailLines.isEmpty,
+           "result route status ignores blank detail lines")
+}
+
 func testFollowUpHistoryStoreNavigatesRecentPromptsSafely() {
     var history = FollowUpHistoryStore(limit: 3)
     expect(history.count == 0, "follow-up history starts empty")
@@ -8174,6 +9071,137 @@ func testHistoryEntryCommandPaletteKeywordsCoverMetadata() {
            !sensitiveKeywords.contains("|") &&
            !sensitiveKeywords.contains("`"),
            "history command keywords are single-line and markdown-safe")
+}
+
+func testHistoryStorePersistsAndSearchesWithFTS() {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("SnapAI-HistoryStore-\(UUID().uuidString).sqlite")
+    defer {
+        try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(atPath: url.path + "-wal")
+        try? FileManager.default.removeItem(atPath: url.path + "-shm")
+    }
+    let store = HistoryStore(url: url)
+    let older = HistoryEntry(id: "older",
+                             date: Date(timeIntervalSince1970: 1),
+                             actionName: "总结",
+                             source: "旧记录",
+                             output: "普通输出",
+                             provider: "OpenAI",
+                             model: "gpt-4o-mini",
+                             tags: ["projectA"])
+    let newer = HistoryEntry(id: "newer",
+                             date: Date(timeIntervalSince1970: 2),
+                             actionName: "诊断",
+                             source: "release manifest 校验失败",
+                             output: "检查签名和 SHA256",
+                             provider: "Local",
+                             model: "local-model",
+                             isFavorite: true,
+                             tags: ["发布", "更新"])
+
+    store.replaceAll([older, newer], limit: 20)
+    expect(store.load(limit: 20).map(\.id) == ["newer", "older"],
+           "history store loads entries by newest first")
+    expect(store.search("release SHA256", limit: 20).map(\.id) == ["newer"],
+           "history store searches source and output through SQLite FTS")
+    expect(store.search("projectA", limit: 20).map(\.id) == ["older"],
+           "history store indexes display tags")
+
+    store.delete(id: "newer")
+    expect(store.load(limit: 20).map(\.id) == ["older"],
+           "history store deletes a single entry from table and index")
+    store.deleteAll()
+    expect(store.load(limit: 20).isEmpty, "history store clears all entries")
+}
+
+func testHistorySearchUsesStoreResultsBeforeFacetFiltering() {
+    let summary = HistoryEntry(id: "summary",
+                               date: Date(timeIntervalSince1970: 3),
+                               actionName: "总结",
+                               source: "release manifest",
+                               output: "签名校验",
+                               provider: "OpenAI",
+                               model: "gpt-4o-mini",
+                               isFavorite: true,
+                               tags: ["发布"])
+    let translation = HistoryEntry(id: "translation",
+                                   date: Date(timeIntervalSince1970: 2),
+                                   actionName: "翻译",
+                                   source: "release manifest",
+                                   output: "translation",
+                                   provider: "OpenAI",
+                                   model: "gpt-4o-mini",
+                                   tags: ["发布"])
+    let staleStoreCopy = HistoryEntry(id: "summary",
+                                      date: Date(timeIntervalSince1970: 1),
+                                      actionName: "总结",
+                                      source: "release manifest",
+                                      output: "旧索引副本",
+                                      provider: "OpenAI",
+                                      model: "gpt-4o-mini",
+                                      isFavorite: false,
+                                      tags: ["发布"])
+    var searchedQuery = ""
+    var searchedLimit = 0
+    let criteria = HistoryFilterCriteria(query: "release",
+                                         actionFilter: "总结",
+                                         favoriteOnly: true)
+    let filtered = HistorySearch.filteredEntries(
+        criteria: criteria,
+        memoryEntries: [summary, translation],
+        limit: 50,
+        searchStore: { query, limit in
+            searchedQuery = query
+            searchedLimit = limit
+            return [translation, staleStoreCopy]
+        }
+    )
+
+    expect(searchedQuery == "release", "history search sends the query to the local FTS store")
+    expect(searchedLimit == 50, "history search asks the store for the configured history limit")
+    expect(filtered.map(\.id) == ["summary"],
+           "history search applies action and favorite facets after FTS search")
+    expect(filtered.first?.output == "签名校验" && filtered.first?.isFavorite == true,
+           "history search prefers the live in-memory copy over stale store rows")
+}
+
+func testHistorySearchFallsBackToMemoryForCompactMatching() {
+    let compactModel = HistoryEntry(id: "compact",
+                                    date: Date(timeIntervalSince1970: 0),
+                                    actionName: "总结",
+                                    source: "普通历史",
+                                    output: "结果",
+                                    provider: "OpenAI",
+                                    model: "gpt-4o-mini")
+    var didSearchStore = false
+    let filtered = HistorySearch.filteredEntries(
+        criteria: HistoryFilterCriteria(query: "gpt4omini"),
+        memoryEntries: [compactModel],
+        limit: 50,
+        searchStore: { _, _ in
+            didSearchStore = true
+            return []
+        }
+    )
+
+    expect(didSearchStore, "history search still consults FTS for compact queries")
+    expect(filtered.map(\.id) == ["compact"],
+           "history search preserves in-memory compact matching when FTS has no direct hit")
+
+    didSearchStore = false
+    let noQuery = HistorySearch.filteredEntries(
+        criteria: HistoryFilterCriteria(modelFilter: "gpt4omini"),
+        memoryEntries: [compactModel],
+        limit: 50,
+        searchStore: { _, _ in
+            didSearchStore = true
+            return []
+        }
+    )
+    expect(!didSearchStore, "history search does not hit the store when there is no free-text query")
+    expect(noQuery.map(\.id) == ["compact"],
+           "history search keeps facet-only filtering in memory")
 }
 
 func testHistoryFilterCriteriaMatchesMultipleTermsAndFacets() {
@@ -8932,12 +9960,62 @@ func testConversationExportMarkdown() {
            "protected conversation export still includes safe diagnostics")
 }
 
+func testResultPersistenceAndWriteBackCoordinator() {
+    let metrics = ResultPersistence.completionMetrics(
+        startTime: Date(timeIntervalSince1970: 10),
+        outputText: "结果",
+        now: Date(timeIntervalSince1970: 12.5)
+    )
+    expect(metrics.elapsed == 2.5, "result persistence computes elapsed time")
+    expect(metrics.characterCount == 2, "result persistence computes output character count")
+
+    let export = ResultPersistence.conversationExport(
+        actionName: "总结",
+        sourceText: "原文",
+        outputText: "结果",
+        providerName: "Provider",
+        modelName: "",
+        fallbackModelName: "fallback-model",
+        elapsed: 1,
+        diagnostics: nil,
+        protectsContent: false,
+        date: Date(timeIntervalSince1970: 0)
+    )
+    expect(export.markdown.contains("Provider / fallback-model"),
+           "result persistence uses fallback model name when active route model is empty")
+
+    var replaced: (String, String)?
+    ResultWriteBackCoordinator.replace(original: "旧",
+                                       replacement: "新",
+                                       handler: { replaced = ($0, $1) })
+    expect(replaced?.0 == "旧" && replaced?.1 == "新",
+           "writeback coordinator forwards replace requests")
+
+    var appended: String?
+    ResultWriteBackCoordinator.append(text: "追加",
+                                      handler: { appended = $0 })
+    expect(appended == "追加", "writeback coordinator forwards append requests")
+    expect(ResultWriteBackCoordinator.shouldAutoReplace(recordUsage: true,
+                                                        autoReplaceEnabled: true,
+                                                        replaceByDefault: true,
+                                                        outputText: "结果",
+                                                        errorMessage: nil),
+           "writeback coordinator allows successful configured auto-replace")
+    expect(!ResultWriteBackCoordinator.shouldAutoReplace(recordUsage: true,
+                                                         autoReplaceEnabled: true,
+                                                         replaceByDefault: true,
+                                                         outputText: "结果",
+                                                         errorMessage: "failed"),
+           "writeback coordinator blocks auto-replace after errors")
+}
+
 testVersionNormalizationAndCompare()
 testReleaseTagParsing()
 testReleaseAssetSelectionUsesExactVersionedNames()
 testGitHubAssetDigestValidation()
 testChecksumSourceRequiresDigestOrManifest()
 testReleaseManifestValidation()
+testReleaseManifestSigningAndSignatureValidation()
 testLatestInstallLogURLValidation()
 testInstallLogCommandSubtitleRedactsUserPaths()
 testDesignatedRequirementParsing()
@@ -8957,6 +10035,7 @@ testActionTemplateLibraryExportsPortableBundle()
 testActionTemplateLibraryImportsAndInstallsSafely()
 testDefaultPolishActionConfirmsReplacement()
 testTextReplacementSelectionDelay()
+testMenuCoordinatorBuildsModelSwitchMenu()
 testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath()
 testScreenCapturePermissionPreflightAndRecoveryMessage()
 testScreenCaptureFailureDiagnosticsAreShareableAndPathFree()
@@ -8966,6 +10045,11 @@ testWriteBackFallbackDiagnosticSummarizesFailureWithoutContent()
 testWriteBackUndoFallbackDiagnosticSummarizesFailureWithoutContent()
 testWriteBackCommandFactoryReflectsUndoAvailability()
 testCapturedTextPreservesSelectionWhitespace()
+testTextWriteBackAppendPayloadContract()
+testTextCaptureExtractsSelectedSubstringFromAXValueRange()
+testServicePasteboardTextAcceptsCommonPlainTextTypes()
+testTextCaptureTargetActivationGuards()
+testCaptureTargetResolverUsesRecentExternalAppWhenSnapAIIsFrontmost()
 testTextCaptureRecoveryGuidePointsToActionablePermissionHelp()
 testTextCaptureDiagnosticSummarizesStateWithoutContent()
 testSelectionSourceContextClassifiesAppsSafely()
@@ -8973,6 +10057,8 @@ testSystemPrivacySettingsBuildsStablePaneURLs()
 testPasteboardRestoreDecisionProtectsUserChanges()
 testTextCaptureValidatesAXCoreFoundationTypes()
 testHotKeyConflictDetection()
+testHotKeyRecorderTextDescribesRecordingAndReservedShortcuts()
+testHotKeyCoordinatorDetectsConflictsAndRegistrationFailures()
 testCommandPaletteMatchesMultipleTerms()
 testCommandPaletteRanksMatchesByRelevance()
 testCommandPaletteSearchesShortcutTextAliases()
@@ -8984,6 +10070,7 @@ testActionCommandFactoryPrioritizesFrequentActions()
 testActionCommandIDsAreStableSlugs()
 testAutomationActionSelectionNormalizesQueries()
 testAutomationSettingsSectionSelectionNormalizesQueries()
+testAutomationRouterParsesURLsAndSettingsSections()
 testAutomationURLCommandParsing()
 testAutomationWriteBackPolicyRequiresCapturedSelection()
 testAutomationRunOptionsApplyToActionWithoutChangingSettings()
@@ -9008,6 +10095,7 @@ testAIRequestDiagnosticsBuildsRouteDisplayNotesWithIssues()
 testAIRequestDiagnosticsAnnotatesAttemptsWithRouteIssues()
 testAIRequestDiagnosticsSkipsHardIncompatibleRoutes()
 testAIRequestFallbackDecisionExplainsSkippedFallbacks()
+testFallbackRunnerSwitchesAfterThinkingOnlyFailureAndProtectsVisiblePartialOutput()
 testVisibleErrorRecoverySuggestionText()
 testAIRequestDiagnosticsClassifiesCommonErrorRecoverySuggestions()
 testNoCandidateRouteDiagnosticsExplainProviderReadiness()
@@ -9034,6 +10122,8 @@ testAIRouterUsesRoutingPreferenceForFallbackOrder()
 testAIRouterUsesRoutingPreferenceWhenOnlyFallbackIsEnabled()
 testAIRouterPrefersLocalModelRoutesInPrivacyMode()
 testAIRouterUsesStableConfiguredOrderForEqualScores()
+testRoutingMetricsRecordPerformanceAndFailures()
+testAIRouterUsesRoutingMetricsForFallbackOrder()
 testPrivacyRedactionDefaults()
 testPrivacyRedactionDefaultSampleDemonstratesSensitiveFormats()
 testPrivacyRedactionPreviewReportsInvalidRules()
@@ -9086,6 +10176,9 @@ testRoutingContextCommandFactoryReflectsCurrentState()
 testResultDiagnosticsCommandIsSearchable()
 testResultRecoveryCommandPointsToAISettings()
 testFollowUpInputBehaviorSupportsMultilineDrafts()
+testRequestSessionBuildsInitialMessagesAndCounts()
+testStreamingAccumulatorSeparatesThinkingAndResetsForFallback()
+testResultRouteStatusTextBuildsCompactPrimaryAndDetails()
 testFollowUpHistoryStoreNavigatesRecentPromptsSafely()
 testResultCommandFactoryHidesCommandsWithoutResultContext()
 testResultCommandStateBuildsFromResultTexts()
@@ -9100,6 +10193,9 @@ testResultCommandFactoryShowsRecoverySettingsWithoutDiagnostics()
 testHistoryEntryMarkdownExport()
 testHistoryEntryCompactTitlesForMenus()
 testHistoryEntryCommandPaletteKeywordsCoverMetadata()
+testHistoryStorePersistsAndSearchesWithFTS()
+testHistorySearchUsesStoreResultsBeforeFacetFiltering()
+testHistorySearchFallsBackToMemoryForCompactMatching()
 testHistoryFilterCriteriaMatchesMultipleTermsAndFacets()
 testHistoryFilterCriteriaMatchesDisplayFallbacks()
 testHistoryCollectionExportMarkdown()
@@ -9112,6 +10208,7 @@ testHistoryExportCommandFactoryBuildsRankedFacetCommands()
 testHistoryExportCommandFactoryKeepsPrivacyTagsBeyondFacetLimit()
 testHistoryExportCommandIDsAreStableSlugs()
 testConversationExportMarkdown()
+testResultPersistenceAndWriteBackCoordinator()
 
 if failures.isEmpty {
     print("SnapAILogicTests passed")

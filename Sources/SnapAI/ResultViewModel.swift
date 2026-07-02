@@ -24,6 +24,7 @@ final class ResultViewModel: ObservableObject {
     /// #2 Thinking/推理文本(Anthropic 或 DeepSeek R1 的 <think> 内容)
     @Published var thinkingText: String = ""
     @Published var showThinking: Bool = false
+    @Published var showRouteDetails: Bool = false
 
     let settings: AppSettings
     private var client: AIClient
@@ -35,13 +36,17 @@ final class ResultViewModel: ObservableObject {
     private var replacementOriginalText: String = ""
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
     private var requestDiagnostics: AIRequestDiagnostics?
+    private var streamAccumulator = StreamingAccumulator()
 
     // 打字机
-    private var fullText: String = ""
     private var streamDone: Bool = false
     private var typewriterTimer: Timer?
     private var charsPerTick: Int { settings.typewriterSpeed.charsPerTick }
     private var tickInterval: TimeInterval { settings.typewriterSpeed.tickInterval }
+    private var fullText: String {
+        get { streamAccumulator.outputText }
+        set { streamAccumulator.outputText = newValue }
+    }
 
     // #5 追问历史(↑/↓ 浏览)
     private var followUpHistory = FollowUpHistoryStore()
@@ -130,6 +135,7 @@ final class ResultViewModel: ObservableObject {
         self.autoReplaceEnabled = autoReplaceEnabled
         thinkingText = ""
         showThinking = false
+        showRouteDetails = false
         resetOutput()
         history = []
         sendInitial()
@@ -178,34 +184,16 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func sendInitial() {
-        var act = action
-        act.targetLanguage = targetLanguage
-        let renderedText = act.render(text: sourceText)
-        let userContent = Self.userContent(renderedText: renderedText,
-                                           sourceContext: pendingSourceContext)
-        let hasImage = pendingImageData != nil
-
-        var messages: [ChatMessage] = []
-        let systemPrompt = settings.effectiveSystemPrompt
-        if !systemPrompt.isEmpty {
-            messages.append(ChatMessage(role: .system, content: systemPrompt))
-        }
-        // #3 图片内容挂载到第一条 user 消息
-        var userMsg = ChatMessage(role: .user, content: userContent)
-        if let img = pendingImageData {
-            userMsg.imageData = img
-            userMsg.imageMimeType = pendingImageMimeType
-            pendingImageData = nil
-        }
-        messages.append(userMsg)
-        history = messages
-        runStream(hasImage: hasImage)
-    }
-
-    static func userContent(renderedText: String,
-                            sourceContext: SelectionSourceContext?) -> String {
-        guard let sourceContext else { return renderedText }
-        return "\(sourceContext.promptPrefix)\n\n\(renderedText)"
+        let payload = RequestSession.initialMessages(settings: settings,
+                                                     action: action,
+                                                     targetLanguage: targetLanguage,
+                                                     sourceText: sourceText,
+                                                     imageData: pendingImageData,
+                                                     imageMimeType: pendingImageMimeType,
+                                                     sourceContext: pendingSourceContext)
+        pendingImageData = nil
+        history = payload.messages
+        runStream(hasImage: payload.hasImage)
     }
 
     private func preparedSourceSubmission(for text: String,
@@ -266,10 +254,9 @@ final class ResultViewModel: ObservableObject {
         }
         // #5 追问历史
         followUpHistory.record(q)
-        if !fullText.isEmpty {
-            history.append(ChatMessage(role: .assistant, content: fullText))
-        }
-        history.append(ChatMessage(role: .user, content: prepared.text))
+        RequestSession.appendFollowUp(to: &history,
+                                      assistantText: fullText,
+                                      userText: prepared.text)
         submissionPrivacy = prepared.diagnostic
         followUp = ""
         thinkingText = ""
@@ -346,14 +333,15 @@ final class ResultViewModel: ObservableObject {
 
     /// #3 替换原文
     func replaceOriginal() {
-        guard !fullText.isEmpty else { return }
-        onReplace?(replacementOriginalText, fullText)
+        ResultWriteBackCoordinator.replace(original: replacementOriginalText,
+                                           replacement: fullText,
+                                           handler: onReplace)
     }
 
     /// #8 追加到文档
     func appendToDocument() {
-        guard !fullText.isEmpty else { return }
-        onAppend?(fullText)
+        ResultWriteBackCoordinator.append(text: fullText,
+                                          handler: onAppend)
     }
 
     func exportConversation() {
@@ -366,23 +354,28 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func conversationExport(date: Date = Date()) -> ConversationExport {
-        ConversationExport(actionName: action.name,
-                           sourceText: sourceText,
-                           outputText: completeText,
-                           providerName: activeProviderName,
-                           modelName: activeModelName.isEmpty ? settings.model : activeModelName,
-                           elapsed: elapsed,
-                           diagnostics: requestDiagnostics?.summaryText(includeAttemptMessages: false) ?? "",
-                           protectsContent: submissionPrivacy?.contentExportProtectionEnabled == true,
-                           date: date)
+        ResultPersistence.conversationExport(
+            actionName: action.name,
+            sourceText: sourceText,
+            outputText: completeText,
+            providerName: activeProviderName,
+            modelName: activeModelName,
+            fallbackModelName: settings.model,
+            elapsed: elapsed,
+            diagnostics: requestDiagnostics,
+            protectsContent: submissionPrivacy?.contentExportProtectionEnabled == true,
+            date: date
+        )
     }
 
     // MARK: - 内部
 
     private func resetOutput() {
         stopTypewriter()
-        fullText = ""
+        streamAccumulator.resetForFallback()
         output = ""
+        thinkingText = ""
+        showRouteDetails = false
         streamDone = false
         errorMessage = nil
         routeNote = nil
@@ -397,6 +390,7 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func runStream(hasImage: Bool) {
+        refreshSubmissionPayloadCharacterCounts()
         let contextDiagnostic = AIRequestContextDiagnostic.make(settings: settings)
         let requestHasImage = hasImage || history.contains { $0.imageData != nil }
         let payloadDiagnostic = AIRequestPayloadDiagnostic.make(messages: history,
@@ -410,7 +404,8 @@ final class ResultViewModel: ObservableObject {
                                                 action: action,
                                                 sourceText: sourceText,
                                                 hasImage: requestHasImage,
-                                                routingTextCharacterCount: payloadDiagnostic.textCharacterCount)
+                                                routingTextCharacterCount: payloadDiagnostic.textCharacterCount,
+                                                routingMetrics: RoutingMetricsStore.shared.snapshot())
         guard !routes.isEmpty else {
             errorMessage = "没有可用的 AI 供应商或模型,请在设置中启用至少一个模型。"
             let unavailableSummary = AIRequestDiagnostics.noCandidateRouteReasonSummary(providers: settings.providers)
@@ -446,6 +441,15 @@ final class ResultViewModel: ObservableObject {
                                                submissionPrivacy: submissionPrivacy,
                                                candidateRoutes: routes)
         runRoute(at: 0, routes: routes, diagnostics: diagnostics)
+    }
+
+    private func refreshSubmissionPayloadCharacterCounts() {
+        guard let submissionPrivacy else { return }
+        let counts = RequestSession.payloadCharacterCounts(messages: history)
+        self.submissionPrivacy = submissionPrivacy.withPayloadCharacterCounts(
+            finalUserPromptCharacterCount: counts.finalUserPrompt,
+            systemPromptCharacterCount: counts.systemPrompt
+        )
     }
 
     private func runRoute(at index: Int,
@@ -491,86 +495,66 @@ final class ResultViewModel: ObservableObject {
         streamDone = false
         startTime = Date()
         let routeStartedAt = startTime ?? Date()
+        var firstTokenMilliseconds: Int?
         let typewriterOn = settings.typewriterSpeed != .off
         let thinkingEnabled = action.thinkingMode
 
         if typewriterOn { startTypewriter() }
 
-        // #2 DeepSeek R1 <think> tag 状态机
-        var inThinkTag = false
-        var thinkBuffer = ""
-
         client.stream(messages: history, action: action) { [weak self] token in
             guard let self = self else { return }
-            if thinkingEnabled {
-                // 检测 <think> 标签(DeepSeek R1 style)
-                var remaining = thinkBuffer + token
-                thinkBuffer = ""
-                while !remaining.isEmpty {
-                    if inThinkTag {
-                        if let end = remaining.range(of: "</think>") {
-                            self.thinkingText += String(remaining[remaining.startIndex..<end.lowerBound])
-                            remaining = String(remaining[end.upperBound...])
-                            inThinkTag = false
-                        } else if remaining.hasSuffix("<") || remaining.hasSuffix("</") {
-                            thinkBuffer = remaining
-                            remaining = ""
-                        } else {
-                            self.thinkingText += remaining
-                            remaining = ""
-                        }
-                    } else {
-                        if let start = remaining.range(of: "<think>") {
-                            self.fullText += String(remaining[remaining.startIndex..<start.lowerBound])
-                            remaining = String(remaining[start.upperBound...])
-                            inThinkTag = true
-                        } else {
-                            self.fullText += remaining
-                            remaining = ""
-                        }
-                    }
-                }
-            } else {
-                self.fullText += token
+            if firstTokenMilliseconds == nil {
+                firstTokenMilliseconds = AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt)
             }
+            self.streamAccumulator.appendContentToken(token,
+                                                      extractsThinkTags: thinkingEnabled)
+            self.thinkingText = self.streamAccumulator.thinkingText
             if !typewriterOn { self.output = self.fullText }
         } onThinking: { [weak self] thinking in
             // Anthropic extended thinking 块
-            self?.thinkingText += thinking
+            guard let self = self else { return }
+            self.streamAccumulator.appendExternalThinking(thinking)
+            self.thinkingText = self.streamAccumulator.thinkingText
         } onComplete: { [weak self] error in
             guard let self = self else { return }
+            self.streamAccumulator.finish()
+            self.thinkingText = self.streamAccumulator.thinkingText
             self.streamDone = true
             if let error = error {
-                let safeErrorMessage = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription)
-                let outputCharacterCount = self.fullText.count
-                let nextRoute = routes.indices.contains(index + 1) ? routes[index + 1] : nil
-                let fallbackDecision = AIRequestFallbackDecision.decide(
-                    fallbackEnabled: self.settings.fallbackEnabled,
-                    hasNextRoute: nextRoute != nil,
-                    outputCharacterCount: outputCharacterCount,
-                    requiresCloudFallbackConfirmation: routeDiagnostics.requiresCloudFallbackConfirmation(from: route,
-                                                                                                          to: nextRoute)
+                let failure = FallbackRunner.routeFailure(
+                    error: error,
+                    outputText: self.fullText,
+                    thinkingText: self.thinkingText,
+                    routeStartedAt: routeStartedAt,
+                    route: route,
+                    routes: routes,
+                    index: index,
+                    diagnostics: routeDiagnostics,
+                    fallbackEnabled: self.settings.fallbackEnabled
                 )
-                var failedDiagnostics = routeDiagnostics
-                failedDiagnostics.mark(route: route,
-                                       status: .failed,
-                                       message: safeErrorMessage,
-                                       elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
-                                       outputCharacterCount: outputCharacterCount,
-                                       fallbackDecision: fallbackDecision)
+                let failedDiagnostics = failure.diagnosticsMarkingFailure(routeDiagnostics,
+                                                                          route: route)
+                RoutingMetricsStore.shared.recordFailure(
+                    route: route,
+                    elapsedMilliseconds: failure.elapsedMilliseconds,
+                    firstTokenMilliseconds: firstTokenMilliseconds,
+                    reason: failure.safeErrorMessage
+                )
                 self.updateRequestDiagnostics(failedDiagnostics)
-                if fallbackDecision.shouldTryNext {
+                if failure.decision.shouldTryNext {
                     self.stopTypewriter()
                     self.output = ""
+                    self.streamAccumulator.resetForFallback()
+                    self.thinkingText = self.streamAccumulator.thinkingText
                     self.errorMessage = nil
                     self.routeNote = route.fallbackSwitchNote
                     self.runRoute(at: index + 1, routes: routes, diagnostics: failedDiagnostics)
                     return
                 }
-                if let note = fallbackDecision.userNote {
+                if let note = failure.decision.userNote {
                     self.routeNote = note
                 }
-                self.errorMessage = safeErrorMessage
+                self.errorMessage = failure.safeErrorMessage
                 self.stopTypewriter()
                 self.output = self.fullText
                 self.isStreaming = false
@@ -581,6 +565,11 @@ final class ResultViewModel: ObservableObject {
                                           status: .succeeded,
                                           elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
                                           outputCharacterCount: self.fullText.count)
+                RoutingMetricsStore.shared.recordSuccess(
+                    route: route,
+                    elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
+                    firstTokenMilliseconds: firstTokenMilliseconds
+                )
                 self.updateRequestDiagnostics(completedDiagnostics)
                 self.output = self.fullText
                 self.isStreaming = false
@@ -591,6 +580,11 @@ final class ResultViewModel: ObservableObject {
                                           status: .succeeded,
                                           elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
                                           outputCharacterCount: self.fullText.count)
+                RoutingMetricsStore.shared.recordSuccess(
+                    route: route,
+                    elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
+                    firstTokenMilliseconds: firstTokenMilliseconds
+                )
                 self.updateRequestDiagnostics(completedDiagnostics)
             }
         }
@@ -605,8 +599,10 @@ final class ResultViewModel: ObservableObject {
     private func finishMetrics(recordUsage: Bool, saveHistory: Bool) {
         guard !metricsFinished else { return }
         metricsFinished = true
-        if let start = startTime { elapsed = Date().timeIntervalSince(start) }
-        charCount = fullText.count
+        let completion = ResultPersistence.completionMetrics(startTime: startTime,
+                                                             outputText: fullText)
+        elapsed = completion.elapsed
+        charCount = completion.characterCount
         if recordUsage {
             // #11 使用统计
             settings.recordActionUsage(actionName: action.name)
@@ -616,24 +612,33 @@ final class ResultViewModel: ObservableObject {
         } else if recordUsage {
             settings.save()
         }
-        if recordUsage,
-           autoReplaceEnabled,
-           action.replaceByDefault,
-           !fullText.isEmpty,
-           errorMessage == nil {
+        if ResultWriteBackCoordinator.shouldAutoReplace(recordUsage: recordUsage,
+                                                        autoReplaceEnabled: autoReplaceEnabled,
+                                                        replaceByDefault: action.replaceByDefault,
+                                                        outputText: fullText,
+                                                        errorMessage: errorMessage) {
             autoReplaceEnabled = false
-            onReplace?(replacementOriginalText, fullText)
+            ResultWriteBackCoordinator.replace(original: replacementOriginalText,
+                                               replacement: fullText,
+                                               handler: onReplace)
         }
     }
 
     private func saveToHistoryIfNeeded() {
-        guard !savedToHistory, !fullText.isEmpty, errorMessage == nil else { return }
-        savedToHistory = true
-        settings.addHistory(action: action.name, source: sourceText, output: fullText,
-                            provider: activeProviderName.isEmpty ? (settings.activeProvider?.name ?? "") : activeProviderName,
-                            model: activeModelName.isEmpty ? settings.model : activeModelName,
-                            tags: submissionPrivacy?.historyTags ?? [],
-                            contentStorage: submissionPrivacy?.effectiveHistoryContentStorage)
+        savedToHistory = ResultPersistence.saveHistoryIfNeeded(
+            settings: settings,
+            alreadySaved: savedToHistory,
+            action: action,
+            sourceText: sourceText,
+            outputText: fullText,
+            errorMessage: errorMessage,
+            providerName: activeProviderName,
+            fallbackProviderName: settings.activeProvider?.name ?? "",
+            modelName: activeModelName,
+            fallbackModelName: settings.model,
+            historyTags: submissionPrivacy?.historyTags ?? [],
+            contentStorage: submissionPrivacy?.effectiveHistoryContentStorage
+        )
     }
 
     private func startTypewriter() {

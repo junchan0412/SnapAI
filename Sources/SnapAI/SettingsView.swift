@@ -73,6 +73,8 @@ final class AISettingsUI: ObservableObject {
     @Published var newRedactionReplacement: String = "[已隐藏]"
     @Published var newContextName: String = ""
     @Published var redactionSample: String = PrivacyFilter.defaultSampleText
+    @Published var showRoutingDiagnostics: Bool = false
+    @Published var hotKeyConflictDestination: HotKeyConflictDetector.Conflict.Target?
     var deferredSaveTask: Task<Void, Never>?
 }
 
@@ -121,52 +123,26 @@ private enum SettingsCommitPolicy {
     case deferredSave
 }
 
-private struct SettingsSectionPicker: View {
-    @Binding var selection: SettingsSection
+private struct SettingsSidebarRow: View {
+    let section: SettingsSection
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(SettingsSection.allCases) { section in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        selection = section
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: section.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(section.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                    }
-                    .frame(width: section.tabWidth, height: 30, alignment: .center)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(selection == section ? .primary : .secondary)
-                .background {
-                    if selection == section {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Color(nsColor: .selectedControlColor).opacity(0.22))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                            }
-                    }
-                }
-                .accessibilityLabel(section.title)
+        HStack(spacing: 10) {
+            Image(systemName: section.icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(section.title)
+                    .lineLimit(1)
+                Text(section.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .padding(3)
-        .background {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.72))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 2)
+        .accessibilityLabel(section.title)
     }
 }
 
@@ -185,77 +161,102 @@ struct SettingsView: View {
     private var isPinned: Bool { pinState.isPinned }
 
     var body: some View {
-        VStack(spacing: 10) {
-            settingsHeader
-            settingsContentSurface
+        NavigationSplitView {
+            settingsSidebar
+        } detail: {
+            VStack(spacing: 0) {
+                settingsHeader
+                Divider()
+                settingsContentSurface
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 640, height: 500)
-        .padding(12)
+        .frame(minWidth: 760, idealWidth: 840, minHeight: 560, idealHeight: 620)
         .onDisappear {
             flushDeferredSave()
         }
     }
 
-    private var settingsHeader: some View {
-        ZStack {
-            SettingsSectionPicker(selection: Binding(
-                get: { navigation.selectedSection },
-                set: { navigation.selectedSection = $0 }
-            ))
-            HStack {
-                Spacer()
-                Button {
-                    let newValue = !pinState.isPinned
-                    withAnimation(.easeInOut(duration: 0.16)) {
-                        pinState.isPinned = newValue
-                    }
-                    onPinChange(newValue)
-                } label: {
-                    Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
-                        .font(.system(size: 15, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .scaleEffect(isPinned ? 1.04 : 0.96)
-                        .frame(width: 30, height: 30)
-                        .contentShape(Rectangle())
+    private var settingsSidebar: some View {
+        List(selection: Binding<SettingsSection?>(
+            get: { navigation.selectedSection },
+            set: { selected in
+                guard let selected else { return }
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    navigation.select(selected)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(isPinned ? Color.accentColor : .secondary)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
+            }
+        )) {
+            Section("设置") {
+                ForEach(SettingsSection.allCases) { section in
+                    SettingsSidebarRow(section: section)
+                        .tag(section)
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(0.1), lineWidth: 1)
-                }
-                .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
-                .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
-                .accessibilityValue(SettingsWindowPinCommand.accessibilityValue(isPinned: isPinned))
             }
         }
+        .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 164, ideal: 188, max: 230)
+    }
+
+    private var settingsHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: navigation.selectedSection.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.tint)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(navigation.selectedSection.title)
+                    .font(.title3.weight(.semibold))
+                Text(navigation.selectedSection.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            pinButton
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
+    }
+
+    private var pinButton: some View {
+        Button {
+            let newValue = !pinState.isPinned
+            withAnimation(.easeInOut(duration: 0.16)) {
+                pinState.isPinned = newValue
+            }
+            onPinChange(newValue)
+        } label: {
+            Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
+                .font(.system(size: 15, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .scaleEffect(isPinned ? 1.04 : 0.96)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isPinned ? Color.accentColor : .secondary)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(0.1), lineWidth: 1)
+        }
+        .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
+        .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
+        .accessibilityValue(SettingsWindowPinCommand.accessibilityValue(isPinned: isPinned))
     }
 
     private var settingsContentSurface: some View {
         ZStack {
             selectedSectionContent
                 .id(navigation.selectedSection.id)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .trailing)),
-                    removal: .opacity.combined(with: .move(edge: .leading))
-                ))
+                .transition(.opacity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.primary.opacity(0.018))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.055), lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .animation(.easeInOut(duration: 0.18), value: navigation.selectedSection)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .animation(.easeInOut(duration: 0.14), value: navigation.selectedSection)
     }
 
     @ViewBuilder
@@ -313,42 +314,51 @@ struct SettingsView: View {
                                  filled: settings.fallbackEnabled)
             }
 
-            HStack(alignment: .top, spacing: 14) {
-                currentSelectionColumn
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                Divider()
-                    .frame(height: 128)
-                routeSettingsColumn
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            currentModelSummaryRow
+            routingPolicyRow
+            routingDiagnosticsDisclosure
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
-    private var currentSelectionColumn: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            settingsMiniHeader("当前使用", systemImage: "server.rack")
-            HStack(spacing: 8) {
-                providerMenu
-                modelMenu
-            }
-            .frame(maxWidth: .infinity)
-            if settings.switchableEntries.isEmpty {
-                Text("还没有可用的「供应商 + 模型」。请在下方添加供应商、填好 Key 并获取模型。")
+    private var currentModelSummaryRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "server.rack")
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(settings.modelSelectionTitle)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(currentModelDetailText)
                     .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(settings.activeProvider?.baseURL.isEmpty == false ? (settings.activeProvider?.baseURL ?? "") : "当前供应商未设置端点")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(settings.switchableEntries.isEmpty ? .orange : .secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+            Spacer(minLength: 12)
+            HStack(spacing: 8) {
+                providerMenu
+                    .frame(width: 180)
+                modelMenu
+                    .frame(width: 220)
+            }
         }
-        .frame(minHeight: 112, alignment: .topLeading)
+        .padding(9)
+        .background(Color.primary.opacity(0.028))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var currentModelDetailText: String {
+        guard !settings.switchableEntries.isEmpty else {
+            return "还没有可用的供应商和模型。请添加供应商、填写 Key 并获取模型。"
+        }
+        let provider = settings.activeProvider?.name ?? "未选择供应商"
+        let endpoint = settings.activeProvider?.baseURL.isEmpty == false ? (settings.activeProvider?.baseURL ?? "") : "未设置端点"
+        return "\(provider) · \(endpoint)"
     }
 
     private var providerMenu: some View {
@@ -356,7 +366,9 @@ struct SettingsView: View {
             ForEach(settings.providers.filter { $0.isEnabled }) { p in
                 Button {
                     let m = p.enabledModelNames.first ?? ""
-                    settings.activate(providerID: p.id, model: m)
+                    settings.activate(providerID: p.id,
+                                      model: m,
+                                      recordManualPreference: true)
                     onChange()
                 } label: {
                     if p.id == settings.activeProvider?.id {
@@ -398,6 +410,66 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
         .buttonStyle(.bordered)
         .clipped()
+    }
+
+    private var routingPolicyRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                settingsMiniHeader("路由策略", systemImage: "point.3.connected.trianglepath.dotted")
+                Spacer()
+                SnapAIStatusPill(title: settings.routingPreference.rawValue,
+                                 systemImage: "slider.horizontal.3",
+                                 tint: .secondary,
+                                 filled: false)
+            }
+            HStack(alignment: .center, spacing: 14) {
+                Toggle("自动选择模型", isOn: $settings.autoRouteEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .onChange(of: settings.autoRouteEnabled) { commit() }
+                Toggle("失败时切换备用模型", isOn: $settings.fallbackEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .onChange(of: settings.fallbackEnabled) { commit() }
+                Spacer(minLength: 12)
+                Picker("", selection: $settings.routingPreference) {
+                    ForEach(AIRoutingPreference.allCases) { preference in
+                        Text(preference.rawValue).tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: 260)
+                .onChange(of: settings.routingPreference) { commit() }
+            }
+        }
+        .padding(9)
+        .background(Color.primary.opacity(0.02))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var routingDiagnosticsDisclosure: some View {
+        DisclosureGroup(isExpanded: Binding(
+            get: { ui.showRoutingDiagnostics },
+            set: { ui.showRoutingDiagnostics = $0 }
+        )) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(routingPreviewText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(settings.routingPreference.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 6)
+        } label: {
+            Label("路由诊断", systemImage: "stethoscope")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 2)
     }
 
     private var routeSettingsColumn: some View {
@@ -721,7 +793,25 @@ struct SettingsView: View {
                 Text("Max tokens").font(.caption).foregroundStyle(.secondary)
                 TextField("默认 2048", text: maxTokBinding)
                     .textFieldStyle(.roundedBorder).frame(width: 90)
-                Text("(Anthropic 必填,留空用默认)").font(.caption2).foregroundStyle(.secondary)
+                Text(provider.apiProtocol == .anthropic ? "(Anthropic 固定使用 max_tokens)" : "(留空用默认)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if provider.apiProtocol == .openAI {
+                HStack {
+                    Text("输出参数").font(.caption).foregroundStyle(.secondary)
+                    Picker("", selection: bindingForProvider(provider.id, \.outputTokenParameterMode)) {
+                        ForEach(OutputTokenParameterMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(width: 260)
+                    Text("OpenAI 兼容服务不一致时可切换。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
             // #13 超时配置
             HStack {
@@ -932,11 +1022,7 @@ struct SettingsView: View {
                 }
                 Text("{{text}} = 选中文字;{{lang}} = 目标语言指令(翻译类)。带快捷键的动作可全局触发。")
                     .font(.caption2).foregroundStyle(.secondary)
-                if let hotKeyError = ui.hotKeyError {
-                    Label(hotKeyError, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
+                hotKeyNotice
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("快捷提问面板")
@@ -947,10 +1033,12 @@ struct SettingsView: View {
                         HotKeyRecorder(combo: Binding(
                             get: { settings.quickPanelHotKey },
                             set: { newVal in
-                                if let conflict = hotKeyConflict(for: newVal, excludingActionID: nil, includeQuickPanel: false) {
-                                    ui.hotKeyError = "快捷提问面板与「\(conflict)」冲突,未保存"
+                                if let conflict = hotKeyConflictDetail(for: newVal, excludingActionID: nil, includeQuickPanel: false) {
+                                    ui.hotKeyError = "快捷提问面板与「\(conflict.title)」冲突,未保存"
+                                    ui.hotKeyConflictDestination = conflict.target
                                     return
                                 }
+                                ui.hotKeyConflictDestination = nil
                                 ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
                                 settings.quickPanelHotKey = newVal
                                 commit()
@@ -963,6 +1051,10 @@ struct SettingsView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text(HotKeyRecorderText.instructions)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
 
@@ -972,6 +1064,24 @@ struct SettingsView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var hotKeyNotice: some View {
+        if let hotKeyError = ui.hotKeyError {
+            HStack(spacing: 8) {
+                Label(hotKeyError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                if let destination = ui.hotKeyConflictDestination {
+                    Button("查看冲突项") {
+                        showHotKeyConflictTarget(destination)
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption2)
+                }
+            }
         }
     }
 
@@ -1077,10 +1187,12 @@ struct SettingsView: View {
                             set: { newVal in
                                 guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
                                 if newVal.modifiers != 0,
-                                   let conflict = hotKeyConflict(for: newVal, excludingActionID: action.id, includeQuickPanel: true) {
-                                    ui.hotKeyError = "动作「\(action.name)」与「\(conflict)」冲突,未保存"
+                                   let conflict = hotKeyConflictDetail(for: newVal, excludingActionID: action.id, includeQuickPanel: true) {
+                                    ui.hotKeyError = "动作「\(action.name)」与「\(conflict.title)」冲突,未保存"
+                                    ui.hotKeyConflictDestination = conflict.target
                                     return
                                 }
+                                ui.hotKeyConflictDestination = nil
                                 ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
                                 settings.actions[idx].hotKey = newVal.modifiers == 0 ? nil : newVal
                                 commit()
@@ -1095,10 +1207,22 @@ struct SettingsView: View {
                             }.controlSize(.small)
                         }
                     }
+                    Text(HotKeyRecorderText.instructions)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     // #6 冲突检测
-                    if let conflict = hotkeyConflict(for: action) {
-                        Label("与「\(conflict)」冲突", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption2).foregroundStyle(.orange)
+                    if let conflict = hotkeyConflictDetail(for: action) {
+                        HStack(spacing: 8) {
+                            Label("与「\(conflict.title)」冲突", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Button("查看冲突项") {
+                                showHotKeyConflictTarget(conflict.target)
+                            }
+                            .buttonStyle(.link)
+                            .font(.caption2)
+                        }
                     }
                 }
             }
@@ -1224,18 +1348,42 @@ struct SettingsView: View {
 
     /// #6 检测快捷键冲突:返回冲突的动作名或"快捷提问"
     private func hotkeyConflict(for action: AIAction) -> String? {
+        hotkeyConflictDetail(for: action)?.title
+    }
+
+    private func hotkeyConflictDetail(for action: AIAction) -> HotKeyConflictDetector.Conflict? {
         guard let hk = action.hotKey, hk.modifiers != 0 else { return nil }
-        return hotKeyConflict(for: hk, excludingActionID: action.id, includeQuickPanel: true)
+        return hotKeyConflictDetail(for: hk, excludingActionID: action.id, includeQuickPanel: true)
     }
 
     private func hotKeyConflict(for combo: HotKeyCombo,
                                 excludingActionID: String?,
                                 includeQuickPanel: Bool) -> String? {
-        HotKeyConflictDetector.conflict(for: combo,
-                                        actions: settings.actions,
-                                        excludingActionID: excludingActionID,
-                                        quickPanelHotKey: settings.quickPanelHotKey,
-                                        includeQuickPanel: includeQuickPanel)
+        hotKeyConflictDetail(for: combo,
+                             excludingActionID: excludingActionID,
+                             includeQuickPanel: includeQuickPanel)?.title
+    }
+
+    private func hotKeyConflictDetail(for combo: HotKeyCombo,
+                                      excludingActionID: String?,
+                                      includeQuickPanel: Bool) -> HotKeyConflictDetector.Conflict? {
+        HotKeyConflictDetector.conflictDetail(for: combo,
+                                              actions: settings.actions,
+                                              excludingActionID: excludingActionID,
+                                              quickPanelHotKey: settings.quickPanelHotKey,
+                                              includeQuickPanel: includeQuickPanel)
+    }
+
+    private func showHotKeyConflictTarget(_ target: HotKeyConflictDetector.Conflict.Target) {
+        navigation.select(.actions)
+        switch target {
+        case .action(let id):
+            ui.expandedActionID = id
+        case .quickPanel:
+            ui.expandedActionID = nil
+            ui.hotKeyError = "冲突项在上方「快捷提问面板」"
+            ui.hotKeyConflictDestination = nil
+        }
     }
 
     // MARK: - 历史
@@ -1879,6 +2027,7 @@ struct SettingsView: View {
         settings.redactionEnabled = imported.redactionEnabled
         settings.redactionRules = imported.redactionRules
         settings.historyContentStorage = imported.historyContentStorage
+        settings.savedHistoryFilters = imported.savedHistoryFilters
         settings.contextProfiles = imported.contextProfiles
         settings.activeContextProfileID = imported.activeContextProfileID
         settings.historyLimit = imported.historyLimit

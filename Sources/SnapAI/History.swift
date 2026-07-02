@@ -240,7 +240,7 @@ private extension String {
     }
 }
 
-struct HistoryFilterCriteria: Equatable {
+struct HistoryFilterCriteria: Codable, Equatable {
     static let allActions = "全部动作"
     static let allModels = "全部模型"
     static let allTags = "全部标签"
@@ -250,6 +250,10 @@ struct HistoryFilterCriteria: Equatable {
     var modelFilter: String = Self.allModels
     var tagFilter: String = Self.allTags
     var favoriteOnly: Bool = false
+
+    var isDefault: Bool {
+        self == HistoryFilterCriteria()
+    }
 
     func matches(_ entry: HistoryEntry) -> Bool {
         if favoriteOnly && !entry.isFavorite { return false }
@@ -362,6 +366,56 @@ struct HistoryFilterCriteria: Equatable {
             .lowercased()
             .split(whereSeparator: isQuerySeparator)
             .joined()
+    }
+}
+
+struct SavedHistoryFilter: Codable, Identifiable, Equatable {
+    var id: String = UUID().uuidString
+    var name: String
+    var criteria: HistoryFilterCriteria
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    var displayName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名筛选" : name
+    }
+
+    var subtitle: String {
+        criteria.summaryText
+    }
+}
+
+enum HistorySearch {
+    static func filteredEntries(criteria: HistoryFilterCriteria,
+                                memoryEntries: [HistoryEntry],
+                                limit: Int,
+                                searchStore: (String, Int) -> [HistoryEntry]) -> [HistoryEntry] {
+        let query = criteria.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return criteria.apply(to: memoryEntries)
+        }
+
+        let memoryByID = Dictionary(uniqueKeysWithValues: memoryEntries.map { ($0.id, $0) })
+        let storeLimit = max(max(0, limit), memoryEntries.count, 1)
+        var seen = Set<String>()
+        var candidates: [HistoryEntry] = []
+
+        func append(_ entry: HistoryEntry) {
+            guard !seen.contains(entry.id) else { return }
+            seen.insert(entry.id)
+            candidates.append(entry)
+        }
+
+        for entry in searchStore(query, storeLimit) {
+            append(memoryByID[entry.id] ?? entry)
+        }
+
+        // Preserve compact/fallback matching semantics and any unsynced in-memory edits.
+        for entry in criteria.apply(to: memoryEntries) {
+            append(entry)
+        }
+
+        return criteria.apply(to: candidates)
     }
 }
 

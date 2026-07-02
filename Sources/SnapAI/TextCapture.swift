@@ -76,6 +76,7 @@ struct PasteboardSnapshotLimits: Equatable {
 enum TextCaptureMethod: String, Equatable {
     case accessibility = "accessibility"
     case clipboard = "clipboard"
+    case service = "service"
 }
 
 enum TextCaptureFailureReason: String, Equatable {
@@ -105,6 +106,9 @@ struct TextCaptureOutcome: Equatable {
 enum TextCapture {
     private static let snapshotQueue = DispatchQueue(label: "com.snapai.text-selection-snapshot")
     private static var recentSnapshot: TextSelectionSnapshot?
+    static let targetActivationWaitMicroseconds: useconds_t = 120_000
+    static let transientMenuDismissWaitMicroseconds: useconds_t = 60_000
+    static let clipboardChangePollLimit = 80
 
     /// 当前进程是否已被授予辅助功能权限
     static func hasAccessibilityPermission(prompt: Bool = false) -> Bool {
@@ -113,13 +117,17 @@ enum TextCapture {
     }
 
     /// 异步获取选中文字。结果在主线程(MainActor)回调。
-    static func capture(preferAX: Bool, completion: @escaping @MainActor (String?) -> Void) {
-        captureDetailed(preferAX: preferAX) { outcome in
+    static func capture(preferAX: Bool,
+                        targetApp: NSRunningApplication? = nil,
+                        completion: @escaping @MainActor (String?) -> Void) {
+        captureDetailed(preferAX: preferAX, targetApp: targetApp) { outcome in
             completion(outcome.usableText)
         }
     }
 
-    static func captureDetailed(preferAX: Bool, completion: @escaping @MainActor (TextCaptureOutcome) -> Void) {
+    static func captureDetailed(preferAX: Bool,
+                                targetApp: NSRunningApplication? = nil,
+                                completion: @escaping @MainActor (TextCaptureOutcome) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             var outcome = TextCaptureOutcome(text: nil,
                                              method: nil,
@@ -129,7 +137,7 @@ enum TextCapture {
                                              pasteboardReasonCode: nil,
                                              clipboardWaitAttempts: 0)
             if preferAX {
-                let result = captureViaAX()
+                let result = captureViaAX(targetApp: targetApp)
                 if usableCapturedText(result) != nil {
                     outcome.text = result
                     outcome.method = .accessibility
@@ -137,9 +145,23 @@ enum TextCapture {
                     outcome.failureReason = .accessibilityEmptySelection
                 }
             }
+            if shouldRetryAccessibilityAfterTargetActivation(preferAX: preferAX,
+                                                              capturedText: outcome.text,
+                                                              targetPID: targetApp?.processIdentifier,
+                                                              targetIsTerminated: targetApp?.isTerminated ?? true) {
+                if activateTargetForCapture(targetApp) {
+                    usleep(targetActivationWaitMicroseconds)
+                    let retry = captureViaAX(targetApp: targetApp)
+                    if usableCapturedText(retry) != nil {
+                        outcome.text = retry
+                        outcome.method = .accessibility
+                        outcome.failureReason = nil
+                    }
+                }
+            }
             if outcome.usableText == nil {
                 outcome.clipboardAttempted = true
-                let copyResult = captureViaCopyDetailed()
+                let copyResult = captureViaCopyDetailed(targetApp: targetApp)
                 outcome.text = copyResult.text
                 outcome.clipboardWaitAttempts = copyResult.waitAttempts
                 outcome.pasteboardReasonCode = copyResult.pasteboardReasonCode
@@ -178,28 +200,178 @@ enum TextCapture {
         clearSelectionSnapshot()
     }
 
-    private static func captureViaAX() -> String? {
+    private static func captureViaAX(targetApp: NSRunningApplication? = nil) -> String? {
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(systemWide,
-                                            kAXFocusedUIElementAttribute as CFString,
-                                            &focused) == .success,
-              let element = focused,
-              isAXUIElementRef(element) else {
-            return nil
+        if AXUIElementCopyAttributeValue(systemWide,
+                                         kAXFocusedUIElementAttribute as CFString,
+                                         &focused) == .success,
+           let element = focused,
+           isAXUIElementRef(element) {
+            let axElement = element as! AXUIElement
+            var visited = AXTraversalCounter()
+            if let text = selectedText(in: axElement, depth: 2, visited: &visited) {
+                return text
+            }
         }
-        let axElement = element as! AXUIElement
 
-        var selected: CFTypeRef?
-        if AXUIElementCopyAttributeValue(axElement,
-                                         kAXSelectedTextAttribute as CFString,
-                                         &selected) == .success,
-           let text = selected as? String, !text.isEmpty {
-            storeSelectionSnapshot(element: axElement, selectedText: text)
-            return text
+        if let targetApp,
+           shouldActivateTargetForCapture(targetPID: targetApp.processIdentifier,
+                                          currentPID: ProcessInfo.processInfo.processIdentifier,
+                                          isTerminated: targetApp.isTerminated) {
+            let appElement = AXUIElementCreateApplication(targetApp.processIdentifier)
+            var visited = AXTraversalCounter()
+            if let text = selectedText(in: appElement, depth: 5, visited: &visited) {
+                return text
+            }
         }
         clearSelectionSnapshot()
         return nil
+    }
+
+    private struct AXTraversalCounter {
+        var count = 0
+    }
+
+    private static func selectedText(in element: AXUIElement,
+                                     depth: Int,
+                                     visited: inout AXTraversalCounter) -> String? {
+        guard visited.count < 90 else { return nil }
+        visited.count += 1
+
+        var selected: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element,
+                                         kAXSelectedTextAttribute as CFString,
+                                         &selected) == .success,
+           let text = selected as? String,
+           usableCapturedText(text) != nil {
+            storeSelectionSnapshot(element: element, selectedText: text)
+            return text
+        }
+        if let text = selectedTextFromValueRange(in: element) {
+            return text
+        }
+
+        guard depth > 0 else { return nil }
+
+        for attribute in [
+            kAXFocusedUIElementAttribute as CFString,
+            kAXFocusedWindowAttribute as CFString
+        ] {
+            var value: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+               let rawValue = value,
+               isAXUIElementRef(rawValue) {
+                let child = rawValue as! AXUIElement
+                if let text = selectedText(in: child, depth: depth - 1, visited: &visited) {
+                    return text
+                }
+            }
+        }
+
+        for attribute in [
+            kAXChildrenAttribute as CFString,
+            "AXVisibleChildren" as CFString
+        ] {
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+                  let children = value as? [Any] else {
+                continue
+            }
+            for childValue in children {
+                let rawChild = childValue as CFTypeRef
+                guard isAXUIElementRef(rawChild) else { continue }
+                let child = rawChild as! AXUIElement
+                if let text = selectedText(in: child, depth: depth - 1, visited: &visited) {
+                    return text
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private static func selectedTextFromValueRange(in element: AXUIElement) -> String? {
+        guard let range = selectedRange(in: element),
+              let value = stringValue(in: element),
+              let text = selectedSubstring(in: value, range: range) else {
+            return nil
+        }
+        storeSelectionSnapshot(element: element,
+                               selectedText: text,
+                               selectedRange: range)
+        return text
+    }
+
+    private static func selectedRange(in element: AXUIElement) -> CFRange? {
+        if let range = rangeAttribute(kAXSelectedTextRangeAttribute as CFString, in: element),
+           range.length > 0 {
+            return range
+        }
+        var ranges: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element,
+                                         "AXSelectedTextRanges" as CFString,
+                                         &ranges) == .success,
+           let rawRanges = ranges as? [Any] {
+            for rawRange in rawRanges {
+                let value = rawRange as CFTypeRef
+                if isAXValueRef(value),
+                   let range = cfRange(from: value),
+                   range.length > 0 {
+                    return range
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func rangeAttribute(_ attribute: CFString, in element: AXUIElement) -> CFRange? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
+              let rawValue = value,
+              isAXValueRef(rawValue) else {
+            return nil
+        }
+        return cfRange(from: rawValue)
+    }
+
+    private static func cfRange(from value: CFTypeRef) -> CFRange? {
+        let axValue = value as! AXValue
+        guard AXValueGetType(axValue) == .cfRange else { return nil }
+        var range = CFRange()
+        guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
+        return range
+    }
+
+    private static func stringValue(in element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element,
+                                            kAXValueAttribute as CFString,
+                                            &value) == .success else {
+            return nil
+        }
+        return value as? String
+    }
+
+    static func selectedSubstring(in value: String, range: CFRange) -> String? {
+        guard range.location >= 0,
+              range.length > 0 else {
+            return nil
+        }
+        let endOffset = range.location + range.length
+        guard endOffset >= range.location,
+              endOffset <= value.utf16.count else {
+            return nil
+        }
+        let utf16Start = value.utf16.index(value.utf16.startIndex,
+                                          offsetBy: range.location)
+        let utf16End = value.utf16.index(utf16Start,
+                                        offsetBy: range.length)
+        guard let start = String.Index(utf16Start, within: value),
+              let end = String.Index(utf16End, within: value) else {
+            return nil
+        }
+        return usableCapturedText(String(value[start..<end]))
     }
 
     private static func storeSelectionSnapshot(element: AXUIElement, selectedText: String) {
@@ -213,8 +385,7 @@ enum TextCapture {
             return
         }
         let axValue = rawValue as! AXValue
-        guard
-              AXValueGetType(axValue) == .cfRange else {
+        guard AXValueGetType(axValue) == .cfRange else {
             clearSelectionSnapshot()
             return
         }
@@ -223,8 +394,16 @@ enum TextCapture {
             clearSelectionSnapshot()
             return
         }
+        storeSelectionSnapshot(element: element,
+                               selectedText: selectedText,
+                               selectedRange: range)
+    }
+
+    private static func storeSelectionSnapshot(element: AXUIElement,
+                                               selectedText: String,
+                                               selectedRange: CFRange) {
         let snapshot = TextSelectionSnapshot(element: element,
-                                             selectedRange: range,
+                                             selectedRange: selectedRange,
                                              selectedText: selectedText)
         snapshotQueue.sync {
             recentSnapshot = snapshot
@@ -251,10 +430,10 @@ enum TextCapture {
         captureViaCopyDetailed().text
     }
 
-    private static func captureViaCopyDetailed() -> (text: String?,
-                                                     failureReason: TextCaptureFailureReason?,
-                                                     pasteboardReasonCode: String?,
-                                                     waitAttempts: Int) {
+    private static func captureViaCopyDetailed(targetApp: NSRunningApplication? = nil) -> (text: String?,
+                                                                                           failureReason: TextCaptureFailureReason?,
+                                                                                           pasteboardReasonCode: String?,
+                                                                                           waitAttempts: Int) {
         clearSelectionSnapshot()
         let pasteboard = NSPasteboard.general
         let previousSnapshot = snapshotPasteboard(pasteboard)
@@ -262,12 +441,25 @@ enum TextCapture {
             return (nil, .pasteboardSnapshotUnsafe, previousSnapshot.reasonCode, 0)
         }
         let previousChangeCount = pasteboard.changeCount
+        let frontmostPIDBeforeCopy = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let shouldDismissTransientMenu = shouldDismissTransientMenusBeforeCopy(
+            targetPID: targetApp?.processIdentifier,
+            frontmostPID: frontmostPIDBeforeCopy
+        )
 
+        if let targetApp,
+           activateTargetForCapture(targetApp) {
+            usleep(targetActivationWaitMicroseconds)
+        }
+        if shouldDismissTransientMenu {
+            sendEscape()
+            usleep(transientMenuDismissWaitMicroseconds)
+        }
         sendCmdC()
 
-        // 轮询等待剪贴板更新(最多约 400ms)
+        // 轮询等待剪贴板更新(最多约 800ms),给右键菜单和复杂编辑控件更多响应时间。
         var attempts = 0
-        while pasteboard.changeCount == previousChangeCount && attempts < 40 {
+        while pasteboard.changeCount == previousChangeCount && attempts < clipboardChangePollLimit {
             usleep(10_000) // 10ms
             attempts += 1
         }
@@ -290,6 +482,64 @@ enum TextCapture {
         return (captured, nil, nil, attempts)
     }
 
+    static func shouldActivateTargetForCapture(targetPID: pid_t?,
+                                               currentPID: pid_t = ProcessInfo.processInfo.processIdentifier,
+                                               isTerminated: Bool) -> Bool {
+        guard let targetPID,
+              targetPID > 0,
+              !isTerminated,
+              targetPID != currentPID else {
+            return false
+        }
+        return true
+    }
+
+    static func shouldRetryAccessibilityAfterTargetActivation(preferAX: Bool,
+                                                              capturedText: String?,
+                                                              targetPID: pid_t?,
+                                                              targetIsTerminated: Bool,
+                                                              currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
+        guard preferAX,
+              usableCapturedText(capturedText) == nil else {
+            return false
+        }
+        return shouldActivateTargetForCapture(targetPID: targetPID,
+                                              currentPID: currentPID,
+                                              isTerminated: targetIsTerminated)
+    }
+
+    static func shouldDismissTransientMenusBeforeCopy(targetPID: pid_t?,
+                                                      frontmostPID: pid_t?,
+                                                      currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
+        guard let targetPID,
+              targetPID > 0,
+              targetPID != currentPID,
+              let frontmostPID,
+              frontmostPID != targetPID else {
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    static func activateTargetForCapture(_ targetApp: NSRunningApplication?,
+                                         currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
+        guard let targetApp,
+              shouldActivateTargetForCapture(targetPID: targetApp.processIdentifier,
+                                             currentPID: currentPID,
+                                             isTerminated: targetApp.isTerminated) else {
+            return false
+        }
+        if Thread.isMainThread {
+            _ = targetApp.activate()
+            return true
+        }
+        DispatchQueue.main.sync {
+            _ = targetApp.activate()
+        }
+        return true
+    }
+
     private static func sendCmdC() {
         guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
         let cKey = CGKeyCode(kVK_ANSI_C)
@@ -299,6 +549,15 @@ enum TextCapture {
         up?.flags = .maskCommand
         down?.post(tap: .cghidEventTap)
         up?.post(tap: .cghidEventTap)
+    }
+
+    private static func sendEscape() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return }
+        let escapeKey = CGKeyCode(kVK_Escape)
+        CGEvent(keyboardEventSource: source, virtualKey: escapeKey, keyDown: true)?
+            .post(tap: .cghidEventTap)
+        CGEvent(keyboardEventSource: source, virtualKey: escapeKey, keyDown: false)?
+            .post(tap: .cghidEventTap)
     }
 
     /// 模拟 ⌘V 粘贴(用于把结果替换回原文位置)

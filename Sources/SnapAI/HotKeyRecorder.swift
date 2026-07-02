@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Carbon.HIToolbox
 
 /// 一个可录制快捷键的控件:点击后按下组合键即可捕获。
@@ -35,13 +36,18 @@ struct HotKeyRecorder: NSViewRepresentable {
         private func configure() {
             bezelStyle = .rounded
             setButtonType(.momentaryPushIn)
+            image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "快捷键")
+            imagePosition = .imageLeading
             target = self
             action = #selector(startRecording)
             refreshTitle()
         }
 
         func refreshTitle() {
-            title = recording ? "请按下快捷键…" : combo.displayString
+            title = HotKeyRecorderText.title(for: combo, recording: recording)
+            toolTip = HotKeyRecorderText.help(for: combo, recording: recording)
+            contentTintColor = recording ? .controlAccentColor : nil
+            needsDisplay = true
         }
 
         @objc private func startRecording() {
@@ -75,7 +81,10 @@ struct HotKeyRecorder: NSViewRepresentable {
             if flags.contains(.shift) { mods |= UInt32(shiftKey) }
 
             // 要求至少一个修饰键,避免误触
-            if mods == 0 { return }
+            guard mods != 0 else {
+                NSSound.beep()
+                return
+            }
 
             let newCombo = HotKeyCombo(keyCode: UInt32(event.keyCode), modifiers: mods)
             combo = newCombo

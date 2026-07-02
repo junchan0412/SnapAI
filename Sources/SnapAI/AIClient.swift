@@ -109,6 +109,14 @@ final class AIClient {
         AppSettings.sanitizedImportedRequestTimeout(settings.activeProvider?.requestTimeout) ?? defaultRequestTimeout
     }
 
+    static func openAIOutputTokenParameter(settings: AppSettings,
+                                           value: Int? = nil) -> (key: String, value: Int)? {
+        let mode = settings.activeProvider?.outputTokenParameterMode ?? .maxTokens
+        guard let key = mode.parameterKey else { return nil }
+        let tokenValue = value ?? effectiveMaxTokens(settings: settings)
+        return (key, max(1, tokenValue))
+    }
+
     static func effectiveThinkingBudget(action: AIAction) -> Int {
         AIAction.sanitizedThinkingBudget(action.thinkingBudget)
     }
@@ -300,11 +308,13 @@ final class AIClient {
             url = try endpoint("/chat/completions")
             req = URLRequest(url: url)
             req.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
-            let body: [String: Any] = [
+            var body: [String: Any] = [
                 "model": settings.model,
-                "max_tokens": 1,
                 "messages": [["role": "user", "content": "hi"]]
             ]
+            if let outputTokens = Self.openAIOutputTokenParameter(settings: settings, value: 1) {
+                body[outputTokens.key] = outputTokens.value
+            }
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         case .anthropic:
             url = try endpoint("/messages")
@@ -422,12 +432,15 @@ final class AIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": settings.model,
             "temperature": effectiveTemperature,
             "stream": true,
             "messages": messages.map { openAIMessageDict($0) }
         ]
+        if let outputTokens = Self.openAIOutputTokenParameter(settings: settings) {
+            body[outputTokens.key] = outputTokens.value
+        }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (bytes, response) = try await URLSession.shared.bytes(for: req)

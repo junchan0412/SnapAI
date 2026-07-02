@@ -7,6 +7,20 @@ enum UpdateChecker {
     private static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/junchan0412/SnapAI/releases/latest")!
     private static let latestReleasePageURL = URL(string: "https://github.com/junchan0412/SnapAI/releases/latest")!
     private static let latestInstallLogKey = "SnapAI.UpdateChecker.latestInstallLogPath"
+    private static let manifestPublicKeyResourceName = "ManifestPublicKey"
+    private static let embeddedManifestPublicKeyPEM = """
+    -----BEGIN PUBLIC KEY-----
+    MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA6V7iUMZyADSXO9CCtysa
+    rkUAXplF9dy7YtYKcbK8av5f0ChnwKiJFGwA5oTnIoOMnJC6Mzp/F40NbMVhJVm1
+    Si/L3DnDanmIeFZ6xZ7aGHImBfolJ4ijvPwnu6iABblDiBrPXqXqnw3THa2dKf0Z
+    St3fo2SL3SKXQL/sT2FrgUnf0e2hMgQ9dRW0EDhhkOaKILVHBTRpfqIrOWDxB7ii
+    Bw2j4KGLEZ6ORddPsyRw0C3c86HrMu3HAfGtHEXdd8Kds13VhAGLRhwpAiiQRa5r
+    JXFupsMilqY83klud0zySkK2/PLwLWoLQoW8DPcbDf7fbODkQLI3D1rkzZ884Gm7
+    jbGUwTlVpSS1VFuix2FL2VF7NKBY2KK3qsA/NMA1LrLcKkusykHxoB2XbcG66lzr
+    qdPmyKL6A0BnHtuNFi2xJN0Gof49HEjIfPYmWb4tnltGylsSlnQLuk3Kqrhnt2Kg
+    SQiGk9c798Ua589neEDBGM37s+8sFQtprq96/Ey4ShxTAgMBAAE=
+    -----END PUBLIC KEY-----
+    """
 
     struct Release: Decodable {
         let tagName: String
@@ -29,12 +43,20 @@ enum UpdateChecker {
             uniqueAsset(named: expectedManifestAssetName)
         }
 
+        var manifestSignatureAsset: Asset? {
+            uniqueAsset(named: expectedManifestSignatureAssetName)
+        }
+
         var expectedAppZipAssetName: String {
             "SnapAI-\(versionedTag).zip"
         }
 
         var expectedManifestAssetName: String {
             "snapai-manifest-\(versionedTag).json"
+        }
+
+        var expectedManifestSignatureAssetName: String {
+            "\(expectedManifestAssetName).sig"
         }
 
         private var versionedTag: String {
@@ -67,10 +89,38 @@ enum UpdateChecker {
         struct ManifestAsset: Decodable {
             let name: String
             let sha256: String
+
+            init(name: String, sha256: String) {
+                self.name = name
+                self.sha256 = sha256
+            }
+        }
+
+        struct Signing: Decodable, Equatable {
+            let designatedRequirement: String
+            let certificateFingerprintSHA1: String
+
+            init(designatedRequirement: String,
+                 certificateFingerprintSHA1: String) {
+                self.designatedRequirement = designatedRequirement
+                self.certificateFingerprintSHA1 = certificateFingerprintSHA1
+            }
         }
 
         let version: String?
+        let bundleIdentifier: String?
+        let signing: Signing?
         let assets: [ManifestAsset]
+
+        init(version: String?,
+             bundleIdentifier: String? = nil,
+             signing: Signing? = nil,
+             assets: [ManifestAsset]) {
+            self.version = version
+            self.bundleIdentifier = bundleIdentifier
+            self.signing = signing
+            self.assets = assets
+        }
     }
 
     enum InstallLogStatus: Equatable {
@@ -135,6 +185,7 @@ enum UpdateChecker {
         case releaseLookupFailed(primary: Error, fallback: Error)
         case checksumMismatch(expected: String, actual: String)
         case invalidManifest(String)
+        case invalidManifestSignature(String)
         case invalidReleaseMetadata(String)
         case signingIdentityChanged(current: String, incoming: String)
         case signingRequirementUnavailable(String)
@@ -162,6 +213,8 @@ enum UpdateChecker {
                 return "更新包 SHA256 校验失败。\n期望: \(expected)\n实际: \(actual)"
             case .invalidManifest(let message):
                 return "Release manifest 无法验证:\n\(SensitiveTextSanitizer.sanitizedMessage(message))"
+            case .invalidManifestSignature(let message):
+                return "Release manifest 签名无法验证:\n\(SensitiveTextSanitizer.sanitizedMessage(message))"
             case .invalidReleaseMetadata(let message):
                 return "Release 元数据无法验证:\n\(SensitiveTextSanitizer.sanitizedMessage(message))"
             case .signingIdentityChanged(let current, let incoming):
@@ -326,16 +379,27 @@ enum UpdateChecker {
 
     private static func verifyDownload(zipURL: URL, asset: Asset, release: Release) async throws {
         let actual = try sha256Hex(for: zipURL)
-        if let expected = try validatedGitHubDigestSHA256(asset.digest) {
-            guard actual == expected else {
-                throw UpdateError.checksumMismatch(expected: expected, actual: actual)
-            }
-            return
-        }
-
         let manifestAsset = try requiredManifestAsset(for: release, assetName: asset.name)
-        let manifest = try await downloadManifest(manifestAsset)
-        let expected = try validatedManifestSHA256(from: manifest,
+        let signatureAsset = try requiredManifestSignatureAsset(for: release,
+                                                               assetName: manifestAsset.name)
+        let manifestPayload = try await downloadManifest(manifestAsset)
+        let signature = try await downloadManifestSignature(signatureAsset)
+        try verifyManifestSignature(manifestData: manifestPayload.data,
+                                    signatureData: signature)
+        if let githubDigest = try validatedGitHubDigestSHA256(asset.digest) {
+            let manifestDigest = try validatedManifestSHA256(from: manifestPayload.manifest,
+                                                             releaseTag: release.tagName,
+                                                             assetName: asset.name)
+            guard githubDigest == manifestDigest else {
+                throw UpdateError.invalidReleaseMetadata("GitHub digest 与已签名 manifest 中的 sha256 不一致。")
+            }
+        }
+        let expectedBundleID = Bundle.main.bundleIdentifier ?? "com.snapai.app"
+        let currentRequirement = try designatedRequirement(for: Bundle.main.bundleURL)
+        try validatedManifestSigning(from: manifestPayload.manifest,
+                                     expectedBundleID: expectedBundleID,
+                                     expectedDesignatedRequirement: currentRequirement)
+        let expected = try validatedManifestSHA256(from: manifestPayload.manifest,
                                                    releaseTag: release.tagName,
                                                    assetName: asset.name)
         guard actual == expected else {
@@ -343,7 +407,7 @@ enum UpdateChecker {
         }
     }
 
-    private static func downloadManifest(_ asset: Asset) async throws -> ReleaseManifest {
+    private static func downloadManifest(_ asset: Asset) async throws -> (data: Data, manifest: ReleaseManifest) {
         var request = updateRequest(url: asset.browserDownloadURL, accept: "application/json")
         request.timeoutInterval = 20
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -351,10 +415,23 @@ enum UpdateChecker {
             throw UpdateError.invalidManifest("manifest 下载失败(status \(http.statusCode))。")
         }
         do {
-            return try JSONDecoder().decode(ReleaseManifest.self, from: data)
+            return (data, try JSONDecoder().decode(ReleaseManifest.self, from: data))
         } catch {
             throw UpdateError.invalidManifest(error.localizedDescription)
         }
+    }
+
+    private static func downloadManifestSignature(_ asset: Asset) async throws -> Data {
+        var request = updateRequest(url: asset.browserDownloadURL, accept: "application/octet-stream")
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw UpdateError.invalidManifestSignature("manifest 签名下载失败(status \(http.statusCode))。")
+        }
+        guard !data.isEmpty else {
+            throw UpdateError.invalidManifestSignature("manifest 签名为空。")
+        }
+        return data
     }
 
     static func webFallbackRelease(tagName: String) -> Release {
@@ -362,6 +439,7 @@ enum UpdateChecker {
         let versionedTag = versionedReleaseTag(tagName)
         let appAssetName = "SnapAI-\(versionedTag).zip"
         let manifestAssetName = "snapai-manifest-\(versionedTag).json"
+        let manifestSignatureAssetName = "\(manifestAssetName).sig"
         return Release(
             tagName: tagName,
             name: nil,
@@ -375,6 +453,11 @@ enum UpdateChecker {
                 Asset(
                     name: manifestAssetName,
                     browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: manifestAssetName),
+                    digest: nil
+                ),
+                Asset(
+                    name: manifestSignatureAssetName,
+                    browserDownloadURL: releaseDownloadURL(tagName: tagName, assetName: manifestSignatureAssetName),
                     digest: nil
                 )
             ]
@@ -394,6 +477,21 @@ enum UpdateChecker {
             )
         }
         return manifestAsset
+    }
+
+    static func requiredManifestSignatureAsset(for release: Release, assetName: String) throws -> Asset {
+        let matches = release.assets(named: release.expectedManifestSignatureAssetName)
+        guard matches.count == 1, let signatureAsset = matches.first else {
+            if matches.isEmpty {
+                throw UpdateError.invalidReleaseMetadata(
+                    "\(assetName) 缺少已签名 manifest 的签名文件 \(release.expectedManifestSignatureAssetName)。"
+                )
+            }
+            throw UpdateError.invalidReleaseMetadata(
+                "Release 中存在重复资产 \(release.expectedManifestSignatureAssetName),已取消自动安装。"
+            )
+        }
+        return signatureAsset
     }
 
     static func requiredAppZipAsset(for release: Release) throws -> Asset {
@@ -455,10 +553,86 @@ enum UpdateChecker {
         return sha256
     }
 
+    @discardableResult
+    static func validatedManifestSigning(from manifest: ReleaseManifest,
+                                         expectedBundleID: String,
+                                         expectedDesignatedRequirement: String) throws -> ReleaseManifest.Signing {
+        guard let bundleIdentifier = manifest.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !bundleIdentifier.isEmpty else {
+            throw UpdateError.invalidManifest("manifest 缺少 bundleIdentifier。")
+        }
+        guard bundleIdentifier == expectedBundleID else {
+            throw UpdateError.invalidManifest("manifest bundleIdentifier \(bundleIdentifier) 与当前应用 \(expectedBundleID) 不一致。")
+        }
+        guard let signing = manifest.signing else {
+            throw UpdateError.invalidManifest("manifest 缺少签名身份信息。")
+        }
+        let requirement = signing.designatedRequirement.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !requirement.isEmpty else {
+            throw UpdateError.invalidManifest("manifest designatedRequirement 为空。")
+        }
+        guard requirement == expectedDesignatedRequirement else {
+            throw UpdateError.invalidManifest("manifest designatedRequirement 与当前应用不一致。")
+        }
+        guard normalizedSHA1(signing.certificateFingerprintSHA1) != nil else {
+            throw UpdateError.invalidManifest("manifest certificateFingerprintSHA1 格式无效。")
+        }
+        return signing
+    }
+
+    static func verifyManifestSignature(manifestData: Data,
+                                        signatureData: Data,
+                                        publicKeyPEM: String = bundledManifestPublicKeyPEM()) throws {
+        guard !manifestData.isEmpty else {
+            throw UpdateError.invalidManifestSignature("manifest 为空。")
+        }
+        guard !signatureData.isEmpty else {
+            throw UpdateError.invalidManifestSignature("manifest 签名为空。")
+        }
+        let publicKey = publicKeyPEM.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard publicKey.contains("BEGIN PUBLIC KEY") else {
+            throw UpdateError.invalidManifestSignature("内置 manifest 公钥不可用。")
+        }
+
+        let verifyDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SnapAIManifestVerify-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: verifyDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: verifyDir) }
+
+        let manifestURL = verifyDir.appendingPathComponent("manifest.json")
+        let signatureURL = verifyDir.appendingPathComponent("manifest.sig")
+        let publicKeyURL = verifyDir.appendingPathComponent("manifest.pub")
+        try manifestData.write(to: manifestURL, options: .atomic)
+        try signatureData.write(to: signatureURL, options: .atomic)
+        try publicKey.write(to: publicKeyURL, atomically: true, encoding: .utf8)
+
+        do {
+            try runTool("/usr/bin/openssl", arguments: [
+                "dgst",
+                "-sha256",
+                "-verify", publicKeyURL.path,
+                "-signature", signatureURL.path,
+                manifestURL.path
+            ])
+        } catch {
+            throw UpdateError.invalidManifestSignature(error.localizedDescription)
+        }
+    }
+
     static func normalizedSHA256(_ value: String) -> String? {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let hexCharacters = CharacterSet(charactersIn: "0123456789abcdef")
         guard normalized.count == 64,
+              normalized.unicodeScalars.allSatisfy({ hexCharacters.contains($0) }) else {
+            return nil
+        }
+        return normalized
+    }
+
+    static func normalizedSHA1(_ value: String) -> String? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let hexCharacters = CharacterSet(charactersIn: "0123456789abcdef")
+        guard normalized.count == 40,
               normalized.unicodeScalars.allSatisfy({ hexCharacters.contains($0) }) else {
             return nil
         }
@@ -478,6 +652,15 @@ enum UpdateChecker {
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
         return request
+    }
+
+    static func bundledManifestPublicKeyPEM() -> String {
+        if let url = Bundle.main.url(forResource: manifestPublicKeyResourceName, withExtension: "pem"),
+           let text = try? String(contentsOf: url, encoding: .utf8),
+           text.contains("BEGIN PUBLIC KEY") {
+            return text
+        }
+        return embeddedManifestPublicKeyPEM
     }
 
     private static func apiErrorMessage(statusCode: Int, data: Data) -> String {

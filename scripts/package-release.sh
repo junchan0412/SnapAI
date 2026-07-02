@@ -71,6 +71,9 @@ verify_manifest() {
   local zip_path="$1"
   local manifest_path="$2"
   local expected_tag="$3"
+  local expected_bundle_id="$4"
+  local expected_requirement="$5"
+  local expected_certificate_fingerprint="$6"
   local actual_sha
   local expected_asset_name
 
@@ -104,6 +107,23 @@ verify_manifest() {
     echo "manifest: $manifest_path" >&2
     exit 1
   fi
+  if ! grep -F "\"bundleIdentifier\": \"$expected_bundle_id\"" "$manifest_path" >/dev/null; then
+    echo "error: manifest bundle id 与应用不一致。" >&2
+    echo "bundle:   $expected_bundle_id" >&2
+    echo "manifest: $manifest_path" >&2
+    exit 1
+  fi
+  if ! grep -F "\"designatedRequirement\": \"$(json_escape "$expected_requirement")\"" "$manifest_path" >/dev/null; then
+    echo "error: manifest designated requirement 与应用签名不一致。" >&2
+    echo "manifest: $manifest_path" >&2
+    exit 1
+  fi
+  if ! grep -F "\"certificateFingerprintSHA1\": \"$expected_certificate_fingerprint\"" "$manifest_path" >/dev/null; then
+    echo "error: manifest 证书指纹与应用签名不一致。" >&2
+    echo "fingerprint: $expected_certificate_fingerprint" >&2
+    echo "manifest:    $manifest_path" >&2
+    exit 1
+  fi
 }
 
 verify_manifest_signature() {
@@ -125,12 +145,10 @@ verify_manifest_signature() {
     echo "error: 无法从 SNAPAI_MANIFEST_PRIVATE_KEY 导出公钥用于签名校验。" >&2
     exit 1
   fi
-  if ! openssl pkeyutl -verify \
-    -pubin \
-    -inkey "$public_key" \
-    -rawin \
-    -in "$manifest_path" \
-    -sigfile "$signature_path" >/dev/null 2>&1; then
+  if ! openssl dgst -sha256 \
+    -verify "$public_key" \
+    -signature "$signature_path" \
+    "$manifest_path" >/dev/null 2>&1; then
     rm -rf "$verify_dir"
     echo "error: manifest 签名校验失败。" >&2
     echo "manifest:  $manifest_path" >&2
@@ -138,6 +156,50 @@ verify_manifest_signature() {
     exit 1
   fi
   rm -rf "$verify_dir"
+}
+
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+app_designated_requirement() {
+  codesign -d -r- "$1" 2>&1 \
+    | sed -n 's/^designated => //p' \
+    | head -n 1
+}
+
+certificate_fingerprint_from_requirement() {
+  printf '%s' "$1" \
+    | sed -n 's/.*certificate leaf = H"\([0-9A-Fa-f]*\)".*/\1/p' \
+    | tr '[:upper:]' '[:lower:]'
+}
+
+verify_stable_signing() {
+  local app_path="$1"
+  local details
+  local requirement
+  local fingerprint
+
+  details=$(codesign -dvvv "$app_path" 2>&1)
+  if printf '%s\n' "$details" | grep -F "Signature=adhoc" >/dev/null; then
+    echo "error: 正式 release 禁止 ad-hoc 签名。" >&2
+    exit 1
+  fi
+
+  requirement=$(app_designated_requirement "$app_path")
+  if [ -z "$requirement" ]; then
+    echo "error: 无法读取 designated requirement。" >&2
+    exit 1
+  fi
+  fingerprint=$(certificate_fingerprint_from_requirement "$requirement")
+  if [ -z "$fingerprint" ]; then
+    echo "error: designated requirement 中缺少稳定证书指纹。" >&2
+    echo "$requirement" >&2
+    exit 1
+  fi
+
+  RELEASE_DESIGNATED_REQUIREMENT="$requirement"
+  RELEASE_CERTIFICATE_FINGERPRINT="$fingerprint"
 }
 
 SOURCE_VERSION=$(plist_value CFBundleShortVersionString Resources/Info.plist)
@@ -183,13 +245,30 @@ rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME
 
 /usr/bin/xattr -cr "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
+verify_stable_signing "$APP_BUNDLE"
+
+if [ -z "${SNAPAI_MANIFEST_PRIVATE_KEY:-}" ] && {
+  [ "${SNAPAI_RELEASE:-0}" = "1" ] || [ "${SNAPAI_ALLOW_UNSIGNED_MANIFEST:-0}" != "1" ]
+}; then
+  echo "error: 正式 release 需要签名 manifest,但 SNAPAI_MANIFEST_PRIVATE_KEY 未设置。" >&2
+  echo "可用本机私钥路径:" >&2
+  echo "  export SNAPAI_MANIFEST_PRIVATE_KEY=\"$HOME/.snapai/snapai-manifest-private.pem\"" >&2
+  exit 1
+fi
 
 /usr/bin/ditto --norsrc --noextattr -c -k --keepParent "$APP_BUNDLE" "$DIST_DIR/$ZIP_NAME"
 SHA256=$(shasum -a 256 "$DIST_DIR/$ZIP_NAME" | awk '{print $1}')
+BUNDLE_ID=$(plist_value CFBundleIdentifier "$APP_BUNDLE/Contents/Info.plist")
+SAFE_REQUIREMENT=$(json_escape "$RELEASE_DESIGNATED_REQUIREMENT")
 
 cat > "$DIST_DIR/$MANIFEST_NAME" <<JSON
 {
   "version": "$TAG",
+  "bundleIdentifier": "$BUNDLE_ID",
+  "signing": {
+    "designatedRequirement": "$SAFE_REQUIREMENT",
+    "certificateFingerprintSHA1": "$RELEASE_CERTIFICATE_FINGERPRINT"
+  },
   "assets": [
     {
       "name": "$ZIP_NAME",
@@ -200,15 +279,14 @@ cat > "$DIST_DIR/$MANIFEST_NAME" <<JSON
 JSON
 
 if [ -n "${SNAPAI_MANIFEST_PRIVATE_KEY:-}" ]; then
-  openssl pkeyutl -sign \
-    -inkey "$SNAPAI_MANIFEST_PRIVATE_KEY" \
-    -rawin \
-    -in "$DIST_DIR/$MANIFEST_NAME" \
-    -out "$DIST_DIR/$MANIFEST_NAME.sig"
+  openssl dgst -sha256 \
+    -sign "$SNAPAI_MANIFEST_PRIVATE_KEY" \
+    -out "$DIST_DIR/$MANIFEST_NAME.sig" \
+    "$DIST_DIR/$MANIFEST_NAME"
   verify_manifest_signature "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$SNAPAI_MANIFEST_PRIVATE_KEY"
 fi
 
-verify_manifest "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$TAG"
+verify_manifest "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$TAG" "$BUNDLE_ID" "$RELEASE_DESIGNATED_REQUIREMENT" "$RELEASE_CERTIFICATE_FINGERPRINT"
 verify_packaged_zip "$DIST_DIR/$ZIP_NAME" "$SOURCE_VERSION"
 
 echo "$DIST_DIR/$ZIP_NAME"

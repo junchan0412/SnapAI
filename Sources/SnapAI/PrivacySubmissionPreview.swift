@@ -156,6 +156,9 @@ struct PrivacyPreviewRequirement: Equatable {
 struct PrivacySubmissionDiagnostic: Equatable {
     var originalCharacterCount: Int
     var submittedCharacterCount: Int
+    var processedTextCharacterCount: Int = 0
+    var finalUserPromptCharacterCount: Int = 0
+    var systemPromptCharacterCount: Int = 0
     var hasImage: Bool
     var redactionEnabled: Bool
     var redactionMatchCount: Int
@@ -203,11 +206,36 @@ struct PrivacySubmissionDiagnostic: Equatable {
         return "隐私保护：" + parts.joined(separator: "，")
     }
 
+    var effectiveProcessedTextCharacterCount: Int {
+        processedTextCharacterCount > 0 ? processedTextCharacterCount : submittedCharacterCount
+    }
+
+    var effectiveFinalUserPromptCharacterCount: Int {
+        finalUserPromptCharacterCount > 0 ? finalUserPromptCharacterCount : submittedCharacterCount
+    }
+
+    func withPayloadCharacterCounts(processedTextCharacterCount: Int? = nil,
+                                    finalUserPromptCharacterCount: Int,
+                                    systemPromptCharacterCount: Int) -> PrivacySubmissionDiagnostic {
+        var copy = self
+        if let processedTextCharacterCount {
+            copy.processedTextCharacterCount = max(0, processedTextCharacterCount)
+        } else if copy.processedTextCharacterCount == 0 {
+            copy.processedTextCharacterCount = max(0, copy.submittedCharacterCount)
+        }
+        copy.finalUserPromptCharacterCount = max(0, finalUserPromptCharacterCount)
+        copy.systemPromptCharacterCount = max(0, systemPromptCharacterCount)
+        return copy
+    }
+
     var summaryLines: [String] {
         [
             "Submission Privacy:",
             "Original Characters: \(originalCharacterCount)",
             "Submitted Characters: \(submittedCharacterCount)",
+            "Processed Text Characters: \(effectiveProcessedTextCharacterCount)",
+            "Final User Prompt Characters: \(effectiveFinalUserPromptCharacterCount)",
+            "System Prompt Characters: \(max(0, systemPromptCharacterCount))",
             "Attached Image: \(hasImage ? "yes" : "no")",
             "Redaction Enabled: \(redactionEnabled ? "yes" : "no")",
             "Redaction Matches: \(redactionMatchCount)",
@@ -329,7 +357,9 @@ struct PrivacySubmissionPreview {
         var lines = [
             "动作: \(actionName)",
             "原文字符数: \(originalText.count)",
-            "发送字符数: \(processedText.count)",
+            "脱敏后文本字符数: \(processedText.count)",
+            "最终 User Prompt 字符数: \(userPrompt.count)",
+            "System Prompt 字符数: \(systemPrompt.count)",
             "本地脱敏: \(redactionState)",
             "隐私风险: \(riskAssessment.summaryText)",
             "隐私建议: \(riskAssessment.recoverySuggestion)",
@@ -351,6 +381,9 @@ struct PrivacySubmissionPreview {
     func diagnostic(previewRequirement: PrivacyPreviewRequirement) -> PrivacySubmissionDiagnostic {
         PrivacySubmissionDiagnostic(originalCharacterCount: originalText.count,
                                     submittedCharacterCount: processedText.count,
+                                    processedTextCharacterCount: processedText.count,
+                                    finalUserPromptCharacterCount: userPrompt.count,
+                                    systemPromptCharacterCount: systemPrompt.count,
                                     hasImage: hasImage,
                                     redactionEnabled: redactionEnabled,
                                     redactionMatchCount: totalRedactionMatches,

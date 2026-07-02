@@ -13,15 +13,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var commandPalette: CommandPaletteController!
     private var historyWindow: HistoryWindowController!
     private var permissionHealth: PermissionHealthController!
-    private var settingsWindow: NSWindow?
-    private var settingsWindowPinned = false
-    private let settingsWindowPinState = SettingsWindowPinState()
-    private let settingsNavigation = SettingsNavigationModel()
-    private var onboardingWindow: NSWindow?
+    private var windowCoordinator: WindowCoordinator!
     private var appearanceObserver: NSObjectProtocol?
+    private var frontmostAppObserver: NSObjectProtocol?
+    private let hotKeyCoordinator = HotKeyCoordinator()
     private var hotKeyRegistrationFailures: [String] = []
     /// 触发前的前台 App,用于「替换原文」时把焦点交还
     private var previousApp: NSRunningApplication?
+    private var lastExternalFrontmostApp: NSRunningApplication?
     private var previousSelectionSnapshot: TextSelectionSnapshot?
     private var lastTextCaptureStatusSummary: String?
     private var lastWriteBackRecord: TextWriteBackRecord?
@@ -36,8 +35,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         applyActivationPolicy()
         applyAppIcon()
         installAppearanceObserver()
+        installFrontmostAppObserver()
         installAutomationURLHandler()
         iCloudSync.shared.pullIfNeeded(into: settings)
+        windowCoordinator = WindowCoordinator(
+            settings: settings,
+            onSettingsChange: { [weak self] in
+                self?.reloadAfterSettingsChange()
+            },
+            onPinStateChange: { [weak self] in
+                self?.installMainMenu()
+            }
+        )
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -128,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                   keyEquivalent: "")
             item.target = self
             item.representedObject = action.id
-            configureMenuItemShortcut(item, combo: action.hotKey)
+            MenuCoordinator.configureShortcut(item, combo: action.hotKey)
             menu.addItem(item)
         }
         // 无分组的动作先列
@@ -153,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let quickItem = menu.addItem(withTitle: "快捷提问 (\(settings.quickPanelHotKey.displayString))",
                                      action: #selector(toggleQuickInput), keyEquivalent: "")
         quickItem.target = self
-        configureMenuItemShortcut(quickItem, combo: settings.quickPanelHotKey)
+        MenuCoordinator.configureShortcut(quickItem, combo: settings.quickPanelHotKey)
         menu.addItem(.separator())
 
         if !hotKeyRegistrationFailures.isEmpty {
@@ -191,7 +200,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(workModeItem)
 
         let switchItem = NSMenuItem(title: "切换模型", action: nil, keyEquivalent: "")
-        switchItem.submenu = buildModelSwitchMenu()
+        switchItem.submenu = MenuCoordinator.modelSwitchMenu(settings: settings,
+                                                             target: self,
+                                                             action: #selector(switchModel(_:)))
         menu.addItem(switchItem)
 
         // 历史
@@ -222,43 +233,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func menuGroupTitle(for group: String) -> String {
         MarkdownExportSafety.metadata(group, fallback: "", maxLength: 80)
-    }
-
-    private func buildModelSwitchMenu() -> NSMenu {
-        let sub = NSMenu()
-        let enabledProviders = settings.providers.filter { $0.isEnabled }
-        if enabledProviders.isEmpty {
-            let item = NSMenuItem(title: "无可用配置,请到设置添加", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            sub.addItem(item)
-            return sub
-        }
-        for provider in enabledProviders {
-            let names = provider.enabledModelNames
-            if names.isEmpty { continue }
-            let providerName = MarkdownExportSafety.metadata(provider.name,
-                                                             fallback: "未命名供应商",
-                                                             maxLength: 80)
-            let header = NSMenuItem(title: providerName, action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            sub.addItem(header)
-            for model in names {
-                let modelName = MarkdownExportSafety.metadata(model,
-                                                              fallback: "未命名模型",
-                                                              maxLength: 120)
-                let item = NSMenuItem(title: "  \(modelName)",
-                                      action: #selector(switchModel(_:)),
-                                      keyEquivalent: "")
-                item.target = self
-                item.representedObject = ["provider": provider.id, "model": model]
-                if provider.id == settings.activeProvider?.id && model == settings.model {
-                    item.state = .on
-                }
-                sub.addItem(item)
-            }
-            sub.addItem(.separator())
-        }
-        return sub
     }
 
     private func buildWorkModeMenu() -> NSMenu {
@@ -363,16 +337,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    private func configureMenuItemShortcut(_ item: NSMenuItem, combo: HotKeyCombo?) {
-        guard let combo, !combo.isUnset else { return }
-        item.keyEquivalent = combo.keyEquivalent
-        item.keyEquivalentModifierMask = combo.nsModifierFlags
-    }
-
     @objc private func switchModel(_ sender: NSMenuItem) {
         guard let info = sender.representedObject as? [String: String],
               let pid = info["provider"], let model = info["model"] else { return }
-        settings.activate(providerID: pid, model: model)
+        settings.activate(providerID: pid, model: model, recordManualPreference: true)
         buildMenu()
         installMainMenu()
     }
@@ -401,7 +369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
             ?? settings.enabledActions.first
         guard let action = action else { return }
-        previousApp = NSWorkspace.shared.frontmostApplication
+        previousApp = currentCaptureTargetApp()
         resultVM.start(text: sourceText, action: action, autoReplaceEnabled: false)
         panelController.show()
     }
@@ -458,7 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                           action: #selector(toggleQuickInput),
                                           keyEquivalent: "")
         quick.target = self
-        configureMenuItemShortcut(quick, combo: settings.quickPanelHotKey)
+        MenuCoordinator.configureShortcut(quick, combo: settings.quickPanelHotKey)
         let workMode = NSMenuItem(title: "工作模式", action: nil, keyEquivalent: "")
         workMode.submenu = buildWorkModeMenu()
         operationMenu.addItem(workMode)
@@ -469,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                   keyEquivalent: "")
             item.target = self
             item.representedObject = action.id
-            configureMenuItemShortcut(item, combo: action.hotKey)
+            MenuCoordinator.configureShortcut(item, combo: action.hotKey)
             operationMenu.addItem(item)
         }
         operationMenu.addItem(.separator())
@@ -544,6 +512,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
+    private func installFrontmostAppObserver() {
+        rememberExternalFrontmostApp(NSWorkspace.shared.frontmostApplication)
+        frontmostAppObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            Task { @MainActor [weak self] in
+                self?.rememberExternalFrontmostApp(app)
+            }
+        }
+    }
+
+    private func rememberExternalFrontmostApp(_ app: NSRunningApplication?) {
+        guard CaptureTargetResolver.isUsableExternalApp(pid: app?.processIdentifier,
+                                                        isTerminated: app?.isTerminated ?? true,
+                                                        bundleIdentifier: app?.bundleIdentifier) else {
+            return
+        }
+        lastExternalFrontmostApp = app
+    }
+
+    private func currentCaptureTargetApp() -> NSRunningApplication? {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        rememberExternalFrontmostApp(frontmost)
+        return CaptureTargetResolver.resolve(frontmost: frontmost,
+                                             lastExternal: lastExternalFrontmostApp)
+    }
+
     private func statusBarImage() -> NSImage? {
         let image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: "SnapAI")
         image?.isTemplate = true
@@ -571,8 +569,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func handleAutomationURL(_ event: NSAppleEventDescriptor,
                                            withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let rawURL = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
-              let url = URL(string: rawURL),
-              let command = AutomationURLCommand.parse(url) else {
+              let command = AutomationRouter.command(from: rawURL) else {
             return
         }
         runAutomationCommand(command)
@@ -593,7 +590,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                           action: action.applyingAutomationOptions(options, settings: settings),
                           autoReplaceEnabled: AutomationWriteBackPolicy.urlRun(options: options).autoReplaceEnabled)
         case let .openQuickInput(text, actionQuery):
-            previousApp = NSWorkspace.shared.frontmostApplication
+            previousApp = currentCaptureTargetApp()
             previousSelectionSnapshot = nil
             if let action = actionForAutomation(query: actionQuery) {
                 quickInputModel.actionID = action.id
@@ -662,7 +659,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             showSettings(section: .ai)
             return
         }
-        settings.activate(providerID: selection.providerID, model: selection.modelName)
+        settings.activate(providerID: selection.providerID,
+                          model: selection.modelName,
+                          recordManualPreference: true)
         buildMenu()
         installMainMenu()
     }
@@ -854,7 +853,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func settingsSection(for raw: String?) -> SettingsSection {
-        AutomationSettingsSectionSelection.resolve(raw, fallback: settingsNavigation.selectedSection)
+        AutomationRouter.settingsSection(for: raw,
+                                         fallback: windowCoordinator.selectedSettingsSection)
     }
 
     // MARK: - macOS Services
@@ -868,65 +868,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func handleSnapAIService(_ pasteboard: NSPasteboard,
                              userData: String?,
                              error: AutoreleasingUnsafeMutablePointer<NSString?>) {
-        guard let text = serviceText(from: pasteboard) else {
-            error.pointee = "SnapAI 未从服务菜单收到可用文本。" as NSString
-            return
-        }
         let action = actionForAutomation(query: userData) ?? settings.enabledActions.first
         guard let action else {
             error.pointee = "SnapAI 还没有可用动作,请先打开设置完成配置。" as NSString
             openSettings()
             return
         }
-        previousApp = NSWorkspace.shared.frontmostApplication
+        guard let text = serviceText(from: pasteboard) else {
+            triggerCapturedSelection(action: action)
+            return
+        }
+        previousApp = currentCaptureTargetApp()
         previousSelectionSnapshot = nil
-        runQuickInput(text: text, action: action)
+        recordTextCaptureOutcome(TextCaptureOutcome(text: text,
+                                                    method: .service,
+                                                    accessibilityAttempted: false,
+                                                    clipboardAttempted: false,
+                                                    failureReason: nil,
+                                                    pasteboardReasonCode: nil,
+                                                    clipboardWaitAttempts: 0))
+        runQuickInput(text: text,
+                      action: action,
+                      originalText: text,
+                      autoReplaceEnabled: AutomationWriteBackPolicy.capturedSelection(action: action).autoReplaceEnabled,
+                      captureMethod: .service,
+                      sourceContext: SelectionSourceContext.make(appName: previousApp?.localizedName))
     }
 
     private func serviceText(from pasteboard: NSPasteboard) -> String? {
-        let text = pasteboard.string(forType: .string)
-            ?? pasteboard.string(forType: NSPasteboard.PasteboardType("NSStringPboardType"))
-            ?? pasteboard.string(forType: NSPasteboard.PasteboardType("public.utf8-plain-text"))
-        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        return text
+        ServicePasteboardText.text(from: pasteboard)
     }
 
     // MARK: - 快捷键
 
     private func registerHotKeys() {
-        HotKeyManager.shared.unregisterAll()
-        hotKeyRegistrationFailures = []
-        var used: [HotKeyCombo: String] = [:]
-
-        func register(_ combo: HotKeyCombo, label: String, handler: @escaping () -> Void) {
-            guard combo.modifiers != 0 else { return }
-            if let existing = used[combo] {
-                hotKeyRegistrationFailures.append("\(label) 与 \(existing) 冲突: \(combo.displayString)")
-                return
-            }
-            used[combo] = label
-            if HotKeyManager.shared.register(combo, handler: handler) == nil {
-                hotKeyRegistrationFailures.append("\(label) 注册失败: \(combo.displayString)")
-            }
-        }
-
-        // 各动作的快捷键
-        for action in settings.enabledActions {
-            guard let hk = action.hotKey else { continue }
-            let actionID = action.id
-            register(hk, label: "动作「\(action.name)」") { [weak self] in
+        hotKeyRegistrationFailures = hotKeyCoordinator.registerAll(
+            settings: settings,
+            actionHandler: { [weak self] actionID in
                 self?.triggerAction(id: actionID)
+            },
+            quickPanelHandler: { [weak self] in
+                self?.toggleQuickInput()
             }
-        }
-        // 快捷提问面板
-        register(settings.quickPanelHotKey, label: "快捷提问面板") { [weak self] in
-            self?.toggleQuickInput()
-        }
-        if !hotKeyRegistrationFailures.isEmpty {
-            NSLog("SnapAI: 快捷键注册异常 - \(hotKeyRegistrationFailures.joined(separator: "; "))")
-        }
+        )
     }
 
     private func reloadAfterSettingsChange() {
@@ -947,9 +931,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func triggerAction(id: String) {
         guard let action = settings.enabledActions.first(where: { $0.id == id }) else { return }
-        previousApp = NSWorkspace.shared.frontmostApplication
+        triggerCapturedSelection(action: action)
+    }
+
+    private func triggerCapturedSelection(action: AIAction) {
+        previousApp = currentCaptureTargetApp()
         previousSelectionSnapshot = nil
-        TextCapture.captureDetailed(preferAX: settings.useAXFirst) { [weak self] outcome in
+        TextCapture.captureDetailed(preferAX: settings.useAXFirst,
+                                    targetApp: previousApp) { [weak self] outcome in
             guard let self = self else { return }
             let text = outcome.usableText
             guard let text = text, !text.isEmpty else {
@@ -974,26 +963,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func toggleQuickInput() {
-        previousApp = NSWorkspace.shared.frontmostApplication
+        previousApp = currentCaptureTargetApp()
         previousSelectionSnapshot = nil
         quickInput.toggle()
     }
 
     private func runQuickInput(text: String,
                                action: AIAction,
+                               originalText: String? = nil,
                                imageData: Data? = nil,
                                imageMimeType: String = "image/png",
-                               autoReplaceEnabled: Bool = false) {
+                               autoReplaceEnabled: Bool = false,
+                               captureMethod: TextCaptureMethod? = nil,
+                               sourceContext: SelectionSourceContext? = nil) {
         quickInput.hide()
         guard let prepared = prepareTextForSubmission(text,
                                                       action: action,
                                                       imageData: imageData) else { return }
         resultVM.start(text: prepared.text,
+                       originalText: originalText,
                        action: action,
                        imageData: imageData,
                        imageMimeType: imageMimeType,
                        submissionPrivacy: prepared.diagnostic,
-                       autoReplaceEnabled: autoReplaceEnabled)
+                       autoReplaceEnabled: autoReplaceEnabled,
+                       captureMethod: captureMethod,
+                       sourceContext: sourceContext)
         panelController.show()
     }
 
@@ -1096,7 +1091,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                   reason: writeBackTargetUnavailableReason())
             return
         }
-        let insertedText = "\n" + text
+        let insertedText = TextWriteBackPayload.appendPayload(for: text)
         TextEditTransaction(targetApp: writeBackTarget).append(text) { [weak self] in
             self?.recordWriteBack(targetApp: writeBackTarget,
                                   operation: .append,
@@ -1407,8 +1402,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func toggleSettingsWindowPinnedFromCommandPalette() {
-        setSettingsWindowPinned(!settingsWindowPinned)
-        showSettings(section: settingsNavigation.selectedSection)
+        windowCoordinator.toggleSettingsWindowPinnedAndShow()
     }
 
     @objc private func copyResult() {
@@ -1539,7 +1533,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 systemImage: descriptor.systemImage,
                 keywords: descriptor.keywords,
                 perform: { [weak self] in
-                    self?.settings.activate(providerID: descriptor.providerID, model: descriptor.modelName)
+                    self?.settings.activate(providerID: descriptor.providerID,
+                                            model: descriptor.modelName,
+                                            recordManualPreference: true)
                     self?.buildMenu()
                     self?.installMainMenu()
                 }
@@ -1614,9 +1610,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             ),
             CommandPaletteItem(
                 id: "settings-window-pin",
-                title: SettingsWindowPinCommand.title(isPinned: settingsWindowPinned),
-                subtitle: SettingsWindowPinCommand.subtitle(isPinned: settingsWindowPinned),
-                systemImage: SettingsWindowPinCommand.systemImage(isPinned: settingsWindowPinned),
+                title: SettingsWindowPinCommand.title(isPinned: windowCoordinator.isSettingsWindowPinned),
+                subtitle: SettingsWindowPinCommand.subtitle(isPinned: windowCoordinator.isSettingsWindowPinned),
+                systemImage: SettingsWindowPinCommand.systemImage(isPinned: windowCoordinator.isSettingsWindowPinned),
                 keywords: SettingsWindowPinCommand.keywords,
                 perform: { [weak self] in self?.toggleSettingsWindowPinnedFromCommandPalette() }
             ),
@@ -1947,55 +1943,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - 设置窗口
 
     @objc private func openSettings() {
-        showSettings(section: settingsNavigation.selectedSection)
+        windowCoordinator.openSettings()
     }
 
     private func showSettings(section: SettingsSection) {
-        settingsNavigation.select(section)
-        if let w = settingsWindow {
-            applySettingsWindowPinnedState(to: w)
-            w.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let view = SettingsView(
-            settings: settings,
-            navigation: settingsNavigation,
-            onChange: { [weak self] in
-                self?.reloadAfterSettingsChange()
-            },
-            pinState: settingsWindowPinState,
-            onPinChange: { [weak self] newValue in
-                self?.setSettingsWindowPinned(newValue)
-            }
-        )
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "SnapAI 设置"
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.isReleasedWhenClosed = false
-        applySettingsWindowPinnedState(to: window)
-        window.center()
-        settingsWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func setSettingsWindowPinned(_ pinned: Bool) {
-        settingsWindowPinned = pinned
-        settingsWindowPinState.isPinned = pinned
-        if let settingsWindow {
-            applySettingsWindowPinnedState(to: settingsWindow)
-            settingsWindow.makeKeyAndOrderFront(nil)
-            if pinned {
-                settingsWindow.orderFrontRegardless()
-            }
-        }
-        installMainMenu()
-    }
-
-    private func applySettingsWindowPinnedState(to window: NSWindow) {
-        window.level = settingsWindowPinned ? .floating : .normal
+        windowCoordinator.showSettings(section: section)
     }
 
     @objc private func checkForUpdates() {
@@ -2005,28 +1957,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - 引导页(#14)
 
     private func showOnboarding() {
-        if let w = onboardingWindow {
-            w.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let view = OnboardingView(settings: settings) { [weak self] in
-            self?.settings.onboardingDone = true
-            self?.settings.save()
-            self?.onboardingWindow?.close()
-            self?.onboardingWindow = nil
-            self?.reloadAfterSettingsChange()
-        } openSettings: { [weak self] in
-            self?.openSettings()
-        }
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "欢迎使用 SnapAI"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.center()
-        onboardingWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        windowCoordinator.showOnboarding()
     }
 }

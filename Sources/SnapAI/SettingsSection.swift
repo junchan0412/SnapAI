@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-enum SettingsSection: String, CaseIterable, Identifiable {
+enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
     case ai
     case actions
     case history
@@ -27,6 +27,21 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .history: return "clock.arrow.circlepath"
         case .general: return "slider.horizontal.3"
         case .permission: return "checkmark.shield"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .ai:
+            return "供应商、模型、路由策略"
+        case .actions:
+            return "动作模板、快捷键、写回行为"
+        case .history:
+            return "记录、筛选、上下文包"
+        case .general:
+            return "启动、显示、隐私、同步"
+        case .permission:
+            return "辅助功能与系统权限"
         }
     }
 

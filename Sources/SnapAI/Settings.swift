@@ -274,6 +274,9 @@ final class AppSettings: ObservableObject, Codable {
     static let historyOutputCharacterLimit = 40_000
     static let historyTagLimit = 24
     static let historyTagCharacterLimit = 48
+    static let importedSavedHistoryFilterLimit = 24
+    static let importedSavedHistoryFilterNameLimit = 80
+    static let importedSavedHistoryFilterQueryLimit = 240
     static let defaultAskPrompt = "请简洁、准确地回答关于以下内容的问题或解释它:\n\n{{text}}"
     static let oldDefaultTranslatePrompt = "请把下面的文字翻译成中文;如果它本身就是中文,则翻译成英文。只输出翻译结果,不要解释:\n\n{{text}}"
     static let defaultTranslatePrompt = "请将下面的文字在中文和英文之间互译:如果原文是中文,翻译成自然流畅的英文;如果原文是英文或其他语言,翻译成简体中文。只输出翻译结果,不要解释:\n\n{{text}}"
@@ -318,6 +321,7 @@ final class AppSettings: ObservableObject, Codable {
     @Published var history: [HistoryEntry] = []
     @Published var historyLimit: Int = 50
     @Published var historyContentStorage: HistoryContentStorage = .full
+    @Published var savedHistoryFilters: [SavedHistoryFilter] = []
     @Published var onboardingDone: Bool = false
     @Published var panelWidth: Double = AppSettings.defaultPanelWidth
     @Published var panelHeight: Double = AppSettings.defaultPanelHeight
@@ -475,10 +479,14 @@ final class AppSettings: ObservableObject, Codable {
     }
 
     /// 选中某个供应商的某个模型为当前激活
-    func activate(providerID: String, model: String) {
+    func activate(providerID: String, model: String, recordManualPreference: Bool = false) {
         activeProviderID = providerID
         activeModel = model
         normalizeActive()
+        if recordManualPreference {
+            RoutingMetricsStore.shared.recordManualPreference(providerID: activeProviderID,
+                                                              modelName: activeModel)
+        }
         save()
     }
 
@@ -553,28 +561,66 @@ final class AppSettings: ObservableObject, Codable {
         if history.count > historyLimit {
             history = Array(history.prefix(historyLimit))
         }
+        HistoryStore.shared.upsert(entry, limit: historyLimit)
         save()
     }
 
     func clearHistory() {
         history.removeAll()
+        HistoryStore.shared.deleteAll()
         save()
     }
 
     func deleteHistory(id: String) {
         history.removeAll { $0.id == id }
+        HistoryStore.shared.delete(id: id)
         save()
     }
 
     func toggleHistoryFavorite(id: String) {
         guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
         history[idx].isFavorite.toggle()
+        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
         save()
     }
 
     func updateHistoryTags(id: String, tags: [String]) {
         guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
         history[idx].tags = Self.historyTags(tags)
+        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
+        save()
+    }
+
+    @discardableResult
+    func upsertSavedHistoryFilter(name: String,
+                                  criteria: HistoryFilterCriteria,
+                                  date: Date = Date()) -> SavedHistoryFilter? {
+        let safeName = Self.sanitizedSavedHistoryFilterName(name)
+        guard !safeName.isEmpty else { return nil }
+        let safeCriteria = Self.sanitizedHistoryFilterCriteria(criteria)
+        let nameKey = Self.savedHistoryFilterNameKey(safeName)
+
+        var filter: SavedHistoryFilter
+        if let index = savedHistoryFilters.firstIndex(where: { Self.savedHistoryFilterNameKey($0.name) == nameKey }) {
+            filter = savedHistoryFilters[index]
+            filter.name = safeName
+            filter.criteria = safeCriteria
+            filter.updatedAt = date
+            savedHistoryFilters.remove(at: index)
+        } else {
+            filter = SavedHistoryFilter(name: safeName,
+                                        criteria: safeCriteria,
+                                        createdAt: date,
+                                        updatedAt: date)
+        }
+        savedHistoryFilters.insert(filter, at: 0)
+        savedHistoryFilters = Self.sanitizedStoredSavedHistoryFilters(savedHistoryFilters)
+        save()
+        return savedHistoryFilters.first { $0.id == filter.id }
+    }
+
+    func deleteSavedHistoryFilter(id: String) {
+        savedHistoryFilters.removeAll { $0.id == id }
         save()
     }
 
@@ -600,7 +646,7 @@ final class AppSettings: ObservableObject, Codable {
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
         case contextProfiles, activeContextProfileID
-        case history, historyLimit, historyContentStorage, onboardingDone, panelWidth, panelHeight
+        case history, historyLimit, historyContentStorage, savedHistoryFilters, onboardingDone, panelWidth, panelHeight
         case actionUsageCounts, iCloudSyncEnabled
         // 旧:单配置(仅用于迁移,不再写出)
         case apiProtocol, baseURL, apiKey, model
@@ -700,6 +746,11 @@ final class AppSettings: ObservableObject, Codable {
             needsPostLoadSave = true
         }
         historyContentStorage = (try? c.decode(HistoryContentStorage.self, forKey: .historyContentStorage)) ?? .full
+        let decodedSavedHistoryFilters = (try? c.decode([SavedHistoryFilter].self, forKey: .savedHistoryFilters)) ?? []
+        savedHistoryFilters = Self.sanitizedStoredSavedHistoryFilters(decodedSavedHistoryFilters)
+        if savedHistoryFilters != decodedSavedHistoryFilters {
+            needsPostLoadSave = true
+        }
         // 已有存档的老用户视为已完成引导(缺该键时默认 true);全新安装走 init() 默认 false
         onboardingDone = (try? c.decode(Bool.self, forKey: .onboardingDone)) ?? true
         let decodedPanelWidth = (try? c.decode(Double.self, forKey: .panelWidth)) ?? Self.defaultPanelWidth
@@ -781,9 +832,11 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(redactionRules, forKey: .redactionRules)
         try c.encode(contextProfiles, forKey: .contextProfiles)
         try c.encode(activeContextProfileID, forKey: .activeContextProfileID)
-        try c.encode(history, forKey: .history)
+        // History content lives in HistoryStore. Keep decoding this key for
+        // legacy migration, but never write it back into UserDefaults.
         try c.encode(historyLimit, forKey: .historyLimit)
         try c.encode(historyContentStorage, forKey: .historyContentStorage)
+        try c.encode(savedHistoryFilters, forKey: .savedHistoryFilters)
         try c.encode(onboardingDone, forKey: .onboardingDone)
         try c.encode(panelWidth, forKey: .panelWidth)
         try c.encode(panelHeight, forKey: .panelHeight)
@@ -798,11 +851,14 @@ final class AppSettings: ObservableObject, Codable {
            let s = try? JSONDecoder().decode(AppSettings.self, from: data) {
             let hadPlaintext = String(data: data, encoding: .utf8)?.contains("\"apiKey\"") ?? false
             s.loadKeysFromKeychain()
+            s.loadHistoryFromLocalStoreOrMigrate()
             // 旧版本可能把明文 Key 存在 JSON 里;迁移后立即重写一次以彻底清除明文
             if hadPlaintext || s.needsPostLoadSave { s.save() }
             return s
         }
-        return AppSettings()
+        let settings = AppSettings()
+        settings.loadHistoryFromLocalStoreOrMigrate()
+        return settings
     }
 
     /// 已写入 Keychain 的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
@@ -848,8 +904,24 @@ final class AppSettings: ObservableObject, Codable {
             Keychain.setAPIKey(p.apiKey, for: p.id)
             keychainCache[p.id] = p.apiKey
         }
+        let sanitizedHistory = Self.sanitizedStoredHistory(history, limit: historyLimit)
+        if sanitizedHistory != history {
+            history = sanitizedHistory
+            HistoryStore.shared.replaceAll(history, limit: historyLimit)
+        }
         if let data = try? JSONEncoder().encode(self) {
             UserDefaults.standard.set(data, forKey: Self.storeKey)
+        }
+    }
+
+    private func loadHistoryFromLocalStoreOrMigrate() {
+        let storedHistory = HistoryStore.shared.load(limit: historyLimit)
+        if !storedHistory.isEmpty {
+            history = storedHistory
+            return
+        }
+        if !history.isEmpty {
+            HistoryStore.shared.replaceAll(history, limit: historyLimit)
         }
     }
 
@@ -951,6 +1023,7 @@ final class AppSettings: ObservableObject, Codable {
                                             allowEmpty: true,
                                             maxLength: Self.importedSystemPromptLimit)
         historyLimit = Self.clampedHistoryLimit(historyLimit)
+        savedHistoryFilters = Self.sanitizedStoredSavedHistoryFilters(savedHistoryFilters)
         redactionRules = Self.sanitizedImportedRedactionRules(redactionRules)
         let context = Self.sanitizedImportedContextProfiles(contextProfiles,
                                                             activeID: activeContextProfileID)
@@ -1077,6 +1150,62 @@ final class AppSettings: ObservableObject, Codable {
             copy.tags = historyTags(entry.tags, appending: appendedTags)
             return copy
         }
+    }
+
+    static func sanitizedStoredSavedHistoryFilters(_ filters: [SavedHistoryFilter]) -> [SavedHistoryFilter] {
+        var seenIDs = Set<String>()
+        var seenNames = Set<String>()
+        return filters.prefix(importedSavedHistoryFilterLimit).compactMap { filter in
+            let safeName = sanitizedSavedHistoryFilterName(filter.name)
+            guard !safeName.isEmpty else { return nil }
+            let nameKey = savedHistoryFilterNameKey(safeName)
+            guard seenNames.insert(nameKey).inserted else { return nil }
+            var copy = filter
+            copy.id = uniqueImportedID(filter.id, seenIDs: &seenIDs)
+            copy.name = safeName
+            copy.criteria = sanitizedHistoryFilterCriteria(filter.criteria)
+            if copy.updatedAt < copy.createdAt {
+                copy.updatedAt = copy.createdAt
+            }
+            return copy
+        }
+    }
+
+    static func sanitizedHistoryFilterCriteria(_ criteria: HistoryFilterCriteria) -> HistoryFilterCriteria {
+        HistoryFilterCriteria(
+            query: limitedImportedString(criteria.query.trimmingCharacters(in: .whitespacesAndNewlines),
+                                         maxLength: importedSavedHistoryFilterQueryLimit,
+                                         fallback: ""),
+            actionFilter: sanitizedHistoryFacet(criteria.actionFilter,
+                                                allValue: HistoryFilterCriteria.allActions),
+            modelFilter: sanitizedHistoryFacet(criteria.modelFilter,
+                                               allValue: HistoryFilterCriteria.allModels),
+            tagFilter: sanitizedHistoryFacet(criteria.tagFilter,
+                                             allValue: HistoryFilterCriteria.allTags),
+            favoriteOnly: criteria.favoriteOnly
+        )
+    }
+
+    static func sanitizedSavedHistoryFilterName(_ name: String) -> String {
+        limitedImportedString(name.trimmingCharacters(in: .whitespacesAndNewlines),
+                              maxLength: importedSavedHistoryFilterNameLimit,
+                              fallback: "")
+    }
+
+    private static func sanitizedHistoryFacet(_ value: String, allValue: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != allValue else { return allValue }
+        let limited = limitedImportedString(trimmed,
+                                            maxLength: importedSavedHistoryFilterNameLimit,
+                                            fallback: allValue)
+        return limited.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? allValue : limited
+    }
+
+    private static func savedHistoryFilterNameKey(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
     }
 
     static func sanitizedImportedProviderTemperature(_ value: Double?) -> Double? {

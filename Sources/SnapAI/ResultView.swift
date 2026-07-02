@@ -137,45 +137,62 @@ struct ResultView: View {
 
     @ViewBuilder
     private var routeStatusBar: some View {
-        let model = vm.activeModelName.isEmpty ? vm.settings.model : vm.activeModelName
-        let provider = vm.activeProviderName
-        let routeText = [provider, model].filter { !$0.isEmpty }.joined(separator: " / ")
-        if !routeText.isEmpty || vm.routeNote != nil || vm.routeExplanationText != nil || vm.isStreaming {
+        let routeText = routeStatusText
+        if routeText.primaryText != "正在准备请求" || !routeText.detailLines.isEmpty || vm.isStreaming {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 7) {
                     SnapAIStatusPill(title: vm.isStreaming ? "生成中" : vm.routeStatusTitle,
                                      systemImage: vm.isStreaming ? "sparkles" : "point.3.connected.trianglepath.dotted",
                                      tint: vm.isStreaming ? .accentColor : .secondary,
                                      filled: vm.isStreaming)
-                    if !routeText.isEmpty {
-                        Text(routeText)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    if let context = vm.activeContextSummaryText {
-                        SnapAIStatusPill(title: context,
-                                         systemImage: "text.book.closed",
-                                         tint: .secondary)
-                            .help("当前请求会合并这个上下文包")
-                    }
-                    Spacer(minLength: 0)
-                }
-                if let explanation = vm.routeExplanationText, !explanation.isEmpty {
-                    Text(explanation)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(.secondary)
-                } else if let note = vm.routeNote, !note.isEmpty {
-                    Text(note)
+                    Text(routeText.primaryText)
                         .lineLimit(1)
-                        .truncationMode(.tail)
-                        .foregroundStyle(.secondary)
+                        .truncationMode(.middle)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    if !routeText.detailLines.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.16)) {
+                                vm.showRouteDetails.toggle()
+                            }
+                        } label: {
+                            Image(systemName: vm.showRouteDetails ? "chevron.up.circle.fill" : "chevron.down.circle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(width: 20, height: 20)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(vm.showRouteDetails ? Color.accentColor : .secondary)
+                        .help(vm.showRouteDetails ? "收起路由详情" : "展开路由详情")
+                        .accessibilityLabel(vm.showRouteDetails ? "收起路由详情" : "展开路由详情")
+                    }
+                }
+                if vm.showRouteDetails && !routeText.detailLines.isEmpty {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(routeText.detailLines, id: \.self) { line in
+                            Text(line)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
             .font(.caption2)
             .padding(.horizontal, 14)
             .padding(.bottom, 8)
         }
+    }
+
+    private var routeStatusText: ResultRouteStatusText {
+        ResultRouteStatusText.make(providerName: vm.activeProviderName,
+                                   modelName: vm.activeModelName,
+                                   fallbackModelName: vm.settings.model,
+                                   contextSummary: vm.activeContextSummaryText,
+                                   routeExplanation: vm.routeExplanationText,
+                                   routeNote: vm.routeNote)
     }
 
     // MARK: - Scroll content
@@ -300,10 +317,13 @@ struct ResultView: View {
                 HStack(spacing: 10) {
                     if vm.elapsed > 0 { Label(String(format: "%.1fs", vm.elapsed), systemImage: "clock") }
                     if vm.charCount > 0 { Label("\(vm.charCount) 字", systemImage: "textformat") }
+                    Spacer(minLength: 0)
                     if let privacyStatus = vm.privacyProtectionStatusText {
                         Label(privacyStatus, systemImage: "hand.raised")
                             .lineLimit(1)
+                            .truncationMode(.tail)
                             .help(privacyStatus)
+                            .layoutPriority(1)
                     }
                     Button {
                         vm.copyBriefRequestDiagnostics()
@@ -313,15 +333,6 @@ struct ResultView: View {
                     .buttonStyle(.plain)
                     .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
                     .help(ResultDiagnosticsCommand.briefTitle)
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text(vm.activeModelName.isEmpty ? vm.settings.model : vm.activeModelName)
-                            .truncationMode(.middle)
-                            .lineLimit(1)
-                        if let note = vm.routeNote {
-                            Text(note).lineLimit(1)
-                        }
-                    }
                 }
                 .font(.caption2).foregroundStyle(.secondary)
             }

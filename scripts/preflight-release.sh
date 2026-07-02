@@ -5,10 +5,11 @@ cd "$(dirname "$0")/.."
 
 RUN_PACKAGE=1
 REQUIRE_CLEAN=0
+REQUIRE_SYNCED=0
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/preflight-release.sh [--skip-package] [--require-clean]
+Usage: scripts/preflight-release.sh [--skip-package] [--require-clean] [--require-synced]
 
 Runs the release readiness gate:
   1. git diff --check
@@ -20,7 +21,8 @@ Runs the release readiness gate:
 
 Options:
   --skip-package   Skip release zip/manifest packaging.
-  --require-clean  Fail if tracked or untracked changes are present.
+  --require-clean   Fail if tracked or untracked changes are present.
+  --require-synced  Fetch tags and fail unless HEAD matches its upstream.
 USAGE
 }
 
@@ -31,6 +33,9 @@ while [ $# -gt 0 ]; do
       ;;
     --require-clean)
       REQUIRE_CLEAN=1
+      ;;
+    --require-synced)
+      REQUIRE_SYNCED=1
       ;;
     -h|--help)
       usage
@@ -87,6 +92,24 @@ if [ "$REQUIRE_CLEAN" -eq 1 ]; then
   fi
 fi
 
+if [ "$REQUIRE_SYNCED" -eq 1 ]; then
+  step "检查当前分支与远端同步"
+  git fetch --tags --prune
+  UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+  if [ -z "$UPSTREAM" ]; then
+    echo "error: 当前分支没有 upstream,无法确认 release 是否与远端一致。" >&2
+    exit 1
+  fi
+  read -r AHEAD_COUNT BEHIND_COUNT < <(git rev-list --left-right --count "HEAD...$UPSTREAM")
+  if [ "$AHEAD_COUNT" != "0" ] || [ "$BEHIND_COUNT" != "0" ]; then
+    echo "error: 当前分支与 $UPSTREAM 不同步,禁止正式发版。" >&2
+    echo "ahead:  $AHEAD_COUNT" >&2
+    echo "behind: $BEHIND_COUNT" >&2
+    echo "请先完成 rebase/merge、测试、提交并推送后再发版。" >&2
+    exit 1
+  fi
+fi
+
 step "检查源版本号"
 SOURCE_VERSION=$(plist_value CFBundleShortVersionString Resources/Info.plist)
 SOURCE_BUILD_VERSION=$(plist_value CFBundleVersion Resources/Info.plist)
@@ -101,8 +124,8 @@ scripts/run-logic-tests.sh
 step "运行 SwiftPM 构建"
 swift build
 
-step "构建 app bundle"
-./build.sh
+step "构建 release app bundle"
+SNAPAI_RELEASE=1 ./build.sh --release
 
 step "验证 app 签名"
 codesign --verify --deep --strict --verbose=2 SnapAI.app
@@ -122,14 +145,27 @@ VERSION="$SOURCE_VERSION"
 TAG="v${VERSION#v}"
 ZIP_PATH="dist/SnapAI-${TAG}.zip"
 MANIFEST_PATH="dist/snapai-manifest-${TAG}.json"
+MANIFEST_SIGNATURE_PATH="${MANIFEST_PATH}.sig"
+
+if [ "$REQUIRE_SYNCED" -eq 1 ] && git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+  TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+  HEAD_COMMIT=$(git rev-parse HEAD)
+  if [ "$TAG_COMMIT" != "$HEAD_COMMIT" ]; then
+    echo "error: 本地 tag $TAG 不指向当前 HEAD,禁止覆盖式发版。" >&2
+    echo "tag:  $TAG_COMMIT" >&2
+    echo "HEAD: $HEAD_COMMIT" >&2
+    exit 1
+  fi
+fi
 
 if [ "$RUN_PACKAGE" -eq 1 ]; then
   step "打包 release 资产"
-  scripts/package-release.sh "$VERSION"
+  SNAPAI_RELEASE=1 scripts/package-release.sh "$VERSION"
 
   step "验证 release 资产"
   test -f "$ZIP_PATH"
   test -f "$MANIFEST_PATH"
+  test -f "$MANIFEST_SIGNATURE_PATH"
   ACTUAL_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
   if ! grep -F "\"name\": \"$(basename "$ZIP_PATH")\"" "$MANIFEST_PATH" >/dev/null; then
     echo "error: manifest asset name 与 zip 文件名不一致。" >&2
@@ -148,6 +184,11 @@ if [ "$RUN_PACKAGE" -eq 1 ]; then
     echo "error: manifest version 与 Info.plist 不一致。" >&2
     echo "version:  $TAG" >&2
     echo "manifest: $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  if [ ! -s "$MANIFEST_SIGNATURE_PATH" ]; then
+    echo "error: manifest 签名文件为空或不存在。" >&2
+    echo "signature: $MANIFEST_SIGNATURE_PATH" >&2
     exit 1
   fi
 

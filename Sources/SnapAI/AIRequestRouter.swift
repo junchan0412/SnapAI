@@ -996,7 +996,8 @@ enum AIRequestRouter {
                            action: AIAction,
                            sourceText: String,
                            hasImage: Bool,
-                           routingTextCharacterCount: Int? = nil) -> [AIRequestRoute] {
+                           routingTextCharacterCount: Int? = nil,
+                           routingMetrics: RoutingMetricsTable = .empty) -> [AIRequestRoute] {
         let enabledProviders = settings.providers.filter { $0.isEnabled }
         guard !enabledProviders.isEmpty else { return [] }
         let requestReadyProviders = enabledProviders.filter { isProviderRequestReady($0) }
@@ -1029,7 +1030,8 @@ enum AIRequestRouter {
                                                    hasImage: hasImage,
                                                    action: action,
                                                    prefersLocalRoutes: settings.prefersLocalModelRoutes,
-                                                   preference: settings.routingPreference),
+                                                   preference: settings.routingPreference,
+                                                   routingMetrics: routingMetrics),
                                isLocalEndpoint: provider.isLocalEndpoint)
             }
         }
@@ -1112,7 +1114,8 @@ enum AIRequestRouter {
                           textLength: textLength,
                           hasImage: hasImage,
                           providerOrder: providerOrder,
-                          modelOrder: modelOrder)
+                          modelOrder: modelOrder,
+                          routingMetrics: routingMetrics)
         }
 
         if settings.autoRouteEnabled {
@@ -1283,8 +1286,12 @@ enum AIRequestRouter {
                                     hasImage: Bool,
                                     action: AIAction,
                                     prefersLocalRoutes: Bool,
-                                    preference: AIRoutingPreference) -> String {
+                                    preference: AIRoutingPreference,
+                                    routingMetrics: RoutingMetricsTable = .empty) -> String {
         let capability = ModelCapabilityRegistry.capability(for: model, providerName: provider.name)
+        if let reason = routingMetrics.preferredReason(providerID: provider.id, modelName: model) {
+            return reason
+        }
         if prefersLocalRoutes {
             return provider.isLocalEndpoint ? "本地隐私优先" : "云端备用模型"
         }
@@ -1303,7 +1310,8 @@ enum AIRequestRouter {
                               settings: AppSettings,
                               action: AIAction,
                               textLength: Int,
-                              hasImage: Bool) -> Int {
+                              hasImage: Bool,
+                              routingMetrics: RoutingMetricsTable = .empty) -> Int {
         let capability = ModelCapabilityRegistry.capability(for: route.modelName,
                                                             providerName: route.providerName)
         var value = 0
@@ -1338,6 +1346,7 @@ enum AIRequestRouter {
             value += qualityScore(for: capability) * 30
             if capability.isFast && capability.isEconomical { value -= 15 }
         }
+        value += routingMetrics.scoreAdjustment(for: route)
         return value
     }
 
@@ -1348,17 +1357,20 @@ enum AIRequestRouter {
                                       textLength: Int,
                                       hasImage: Bool,
                                       providerOrder: [String: Int],
-                                      modelOrder: [String: Int]) -> Bool {
+                                      modelOrder: [String: Int],
+                                      routingMetrics: RoutingMetricsTable = .empty) -> Bool {
         let lhsScore = score(route: lhs,
                              settings: settings,
                              action: action,
                              textLength: textLength,
-                             hasImage: hasImage)
+                             hasImage: hasImage,
+                             routingMetrics: routingMetrics)
         let rhsScore = score(route: rhs,
                              settings: settings,
                              action: action,
                              textLength: textLength,
-                             hasImage: hasImage)
+                             hasImage: hasImage,
+                             routingMetrics: routingMetrics)
         if lhsScore != rhsScore { return lhsScore > rhsScore }
 
         let lhsProviderOrder = providerOrder[lhs.providerID] ?? Int.max

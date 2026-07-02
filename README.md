@@ -2,20 +2,24 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 工具。你可以在任意应用里选中文字,一键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入问题。
 
-![SnapAI 1.6.0 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.1 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.0 版本重点
+## 1.6.1 版本重点
 
 - 深度优化“任意应用选中文字 -> SnapAI 理解上下文 -> 执行动作 -> 安全写回”的主链路。
+- 修复部分应用通过右键 Services 触发动作时偶发“未检测到选中文本”的问题。
 - 文本捕获新增结构化结果,可区分 Accessibility 直读、剪贴板兜底、剪贴板保护、复制超时和空内容等状态。
+- macOS 服务菜单取词更稳,会优先读取系统传入的 Services pasteboard,并兼容 UTF-8/UTF-16、RTF/HTML 与部分旧式 pasteboard 文本类型。
 - 权限健康中心和请求诊断会显示捕获方式、失败原因、剪贴板保护原因和等待次数,排查跨应用取词问题更直接。
 - 选区来源上下文会把前台应用归类为浏览器、代码编辑器、终端、文档、聊天、邮件或 PDF 阅读器,并以粗粒度提示帮助 AI 理解语境。
 - 来源上下文不会把窗口标题、文件路径或具体应用名发送给 AI;诊断中的应用名也会经过敏感信息清洗。
+- 自动路由失败时会区分隐藏 thinking 与用户可见输出:只有已经出现可见 partial output 时才阻止静默切换备用模型。
+- 设置保存不再无差别重写整份历史 SQLite,减少编辑设置时的无谓 I/O。
 - 保留 1.5.0 的项目记忆、历史知识库、命令面板主入口和动作模板库,并把这些能力纳入更完整的主链路诊断。
 
-详细发布说明见 [SnapAI 1.6.0 Release Notes](docs/RELEASE_NOTES_1.6.0.md),阶段性复盘和全量审查见 [SnapAI 1.6.0 Iteration Report](docs/ITERATION_REPORT_1.6.0.md)。
+详细发布说明见 [SnapAI 1.6.1 Release Notes](docs/RELEASE_NOTES_1.6.1.md),阶段性复盘和全量审查见 [SnapAI 1.6.1 Iteration Report](docs/ITERATION_REPORT_1.6.1.md)。
 
 ## 快速安装
 
@@ -74,7 +78,7 @@ open ~/Applications/SnapAI.app
 
 ## 选中文字主链路
 
-SnapAI 1.6.0 对跨应用选中文字工作流做了更细的保护和诊断:
+SnapAI 1.6.1 对跨应用选中文字工作流做了更细的保护和诊断:
 
 1. 触发动作时,先记录当前前台应用作为可信写回目标。
 2. 优先通过 Accessibility API 读取选中文字,成功时不会污染剪贴板。
@@ -104,6 +108,8 @@ SnapAI 1.6.0 对跨应用选中文字工作流做了更细的保护和诊断:
 ```
 
 不同应用对 Services 的支持程度不同。如果菜单中暂时没有显示 SnapAI,请确认应用已经移动到固定位置并重新打开 SnapAI;必要时注销或重启一次 macOS 以刷新系统服务索引。
+
+SnapAI 会读取系统服务菜单传入的纯文本、UTF-16 文本、RTF、HTML 和部分旧式 pasteboard 文本类型。若某个应用没有把选区放入 Services pasteboard,SnapAI 会回退到 Accessibility/剪贴板取词路径,并在权限健康中心记录失败原因和恢复建议。
 
 ## 自动化 URL Scheme
 
@@ -267,18 +273,20 @@ SnapAI 的菜单里有“检查更新”。发现新版本后,你可以选择“
 1. 在应用内通过 macOS 网络栈请求 GitHub Releases 最新版本,不依赖终端、`gh` 或 `curl`。
 2. 优先使用 GitHub API；如果 API 返回 403 或临时不可用,会回退到 GitHub 普通 Release 页面获取最新版本标签。
 3. 找到或构造 Release 里的 SnapAI zip 资产下载地址。
-4. 下载到临时目录并解压。
-5. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
-6. 使用 `codesign --verify --deep --strict` 做基础签名校验。
-7. 用脱离当前应用生命周期的临时安装脚本等待当前 SnapAI 进程退出。
-8. 在原安装路径替换应用。
-9. 对替换后的应用执行:
+4. 同时下载 `snapai-manifest-vX.X.X.json` 和 `snapai-manifest-vX.X.X.json.sig`。
+5. 使用应用内置公钥先验证 manifest 签名,再信任 manifest 中的 zip SHA256、bundle id、designated requirement 和证书指纹。
+6. 下载 zip 到临时目录,校验 SHA256 后解压。
+7. 校验解压出的 `SnapAI.app` bundle id 与当前应用一致。
+8. 使用 `codesign --verify --deep --strict` 做基础签名校验,并比较当前 App 与更新包的 designated requirement。
+9. 用脱离当前应用生命周期的临时安装脚本等待当前 SnapAI 进程退出。
+10. 在原安装路径替换应用。
+11. 对替换后的应用执行:
 
 ```bash
 xattr -cr "$APP_PATH"
 ```
 
-10. 使用 `open -n -F` 自动重新打开 SnapAI；如果首次打开失败,会重试并把过程写入临时安装日志。
+12. 使用 `open -n -F` 自动重新打开 SnapAI；如果首次打开失败,会重试并把过程写入临时安装日志。
 
 因此,应用已经正常启动以后,后续应用内更新会尽量自动处理 quarantine。首次从 GitHub 下载时,因为应用尚未运行,仍需要用户手动执行 `xattr -cr`。
 
@@ -291,13 +299,20 @@ macOS 的辅助功能权限和应用的代码身份有关。SnapAI 当前没有 
 当前仓库提供两种构建签名方式:
 
 - 有稳定签名身份时:`build.sh` 会使用 `CODESIGN_IDENTITY` 或 `SnapAI Local Signing`。
-- 没有稳定签名身份时:`build.sh` 会回退到 ad-hoc 签名。
+- 日常开发构建没有稳定签名身份时,`build.sh` 会回退到 ad-hoc 签名。
+- 正式 release 构建必须使用稳定签名身份;`SNAPAI_RELEASE=1` 或 `./build.sh --release` 不会回退到 ad-hoc。
 
 ad-hoc 签名每次构建都可能让代码身份变化,更新后更容易被系统要求重新授予辅助功能权限。为了减少这种情况,可以创建本机自签名代码签名证书:
 
 ```bash
 ./scripts/create-local-signing-identity.sh
 ./build.sh
+```
+
+正式打包请使用:
+
+```bash
+SNAPAI_RELEASE=1 ./build.sh --release
 ```
 
 注意:
@@ -309,7 +324,7 @@ ad-hoc 签名每次构建都可能让代码身份变化,更新后更容易被系
 
 钥匙串访问也遵循同样的代码身份规则。API Key 保存在 macOS Keychain 中,如果某次更新包换了签名证书或 Bundle ID,系统可能会把新版 SnapAI 视为另一个应用,从而重新询问钥匙串访问权限。
 
-为降低误更新风险,应用内更新会在安装前比较当前 App 与更新包的 designated requirement。若发现签名身份不一致,会取消自动安装并提示原因。开源/无 Apple Developer 账号发布时,请务必保留同一个自签名证书的私钥,不要每次 release 重新生成证书。
+为降低误更新风险,应用内更新会在安装前验证签名 manifest,并比较当前 App 与更新包的 designated requirement。若发现 manifest 缺失、签名无法验证、bundle id 不一致或签名身份不一致,会取消自动安装并提示原因。开源/无 Apple Developer 账号发布时,请务必保留同一个自签名证书的私钥,不要每次 release 重新生成证书。
 
 ## 构建
 
@@ -343,7 +358,7 @@ scripts/preflight-release.sh --require-clean
 scripts/preflight-release.sh --skip-package
 ```
 
-`scripts/package-release.sh` 会生成干净的 zip 和 `snapai-manifest-vX.X.X.json`,并写入 zip 的 SHA256。脚本会校验 manifest 的版本、资产名和 SHA256 是否匹配当前 zip,也会解压 zip 验证 `SnapAI.app` 的版本和签名。若设置 `SNAPAI_MANIFEST_PRIVATE_KEY`,脚本还会额外生成 manifest 签名文件。
+`scripts/package-release.sh` 会生成干净的 zip、`snapai-manifest-vX.X.X.json` 和 `snapai-manifest-vX.X.X.json.sig`,并写入 zip 的 SHA256、bundle id、designated requirement 和证书指纹。正式 release 默认要求 manifest 签名私钥可用;脚本会校验 manifest 的版本、资产名、SHA256、签名身份和签名文件是否匹配当前 zip,也会解压 zip 验证 `SnapAI.app` 的版本和签名。
 
 ## 常见问题
 
@@ -392,9 +407,16 @@ Sources/SnapAI/
   ActionTemplateLibrary.swift 动作模板库、导入导出与分享包格式
   SelectionSourceContext.swift 选区来源分类与非敏感上下文提示
   AIClient.swift        OpenAI / Anthropic 流式请求
+  AIRequestRouter.swift AI 路由、fallback 诊断与模型选择
+  RequestSession.swift  请求会话输入快照
+  StreamingAccumulator.swift 流式输出与 thinking 提取
+  FallbackRunner.swift  失败路由与备用模型决策
   TextCapture.swift     Accessibility 取词与复制兜底
+  ServicePasteboardText.swift macOS 服务菜单文本解析
   ResultViewModel.swift 结果窗状态机
   ResultView.swift      结果窗 UI
+  ResultPersistence.swift 结果历史保存
+  ResultWriteBackCoordinator.swift 结果替换/追加协调
   TextEditTransaction.swift 替换/追加事务与剪贴板保护
   TextDiff.swift        替换前 Diff 计算
   DiffPreviewWindow.swift 替换前预览窗口
@@ -402,10 +424,17 @@ Sources/SnapAI/
   FloatingPanel.swift   浮动面板
   QuickInput.swift      快捷提问面板
   SettingsView.swift    设置界面
+  HistoryStore.swift    SQLite 历史记录与 FTS 搜索
+  HistoryWindow.swift   历史记录独立窗口
   ContextProfile.swift  上下文包
+  RoutingMetrics.swift  本机路由表现数据
   ModelCapability.swift 模型能力推断与路由依据
+  MenuCoordinator.swift 菜单构建辅助
+  HotKeyCoordinator.swift 全局快捷键注册协调
   HotKeyManager.swift   Carbon 全局快捷键注册
   HotKeyRecorder.swift  快捷键录制控件
+  AutomationRouter.swift 自动化 URL 路由辅助
+  WindowCoordinator.swift 设置窗口与置顶状态管理
   Keychain.swift        API Key 存储
   iCloudSync.swift      iCloud 配置同步
   UpdateChecker.swift   GitHub Release 检查与应用内更新

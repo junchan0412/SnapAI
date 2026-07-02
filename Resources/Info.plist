@@ -9,9 +9,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.snapai.app</string>
     <key>CFBundleVersion</key>
-    <string>1.6.0</string>
+    <string>1.6.1</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.6.0</string>
+    <string>1.6.1</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -48,7 +48,18 @@
             <key>NSSendTypes</key>
             <array>
                 <string>NSStringPboardType</string>
+                <string>NeXT plain ascii pasteboard type</string>
+                <string>com.apple.traditional-mac-plain-text</string>
                 <string>public.utf8-plain-text</string>
+                <string>public.utf16-plain-text</string>
+                <string>public.utf16-external-plain-text</string>
+                <string>public.plain-text</string>
+                <string>public.text</string>
+                <string>public.rtf</string>
+                <string>public.html</string>
+                <string>NSRTFPboardType</string>
+                <string>NSHTMLPboardType</string>
+                <string>Apple HTML pasteboard type</string>
             </array>
         </dict>
         <dict>
@@ -64,7 +75,18 @@
             <key>NSSendTypes</key>
             <array>
                 <string>NSStringPboardType</string>
+                <string>NeXT plain ascii pasteboard type</string>
+                <string>com.apple.traditional-mac-plain-text</string>
                 <string>public.utf8-plain-text</string>
+                <string>public.utf16-plain-text</string>
+                <string>public.utf16-external-plain-text</string>
+                <string>public.plain-text</string>
+                <string>public.text</string>
+                <string>public.rtf</string>
+                <string>public.html</string>
+                <string>NSRTFPboardType</string>
+                <string>NSHTMLPboardType</string>
+                <string>Apple HTML pasteboard type</string>
             </array>
         </dict>
         <dict>
@@ -80,7 +102,18 @@
             <key>NSSendTypes</key>
             <array>
                 <string>NSStringPboardType</string>
+                <string>NeXT plain ascii pasteboard type</string>
+                <string>com.apple.traditional-mac-plain-text</string>
                 <string>public.utf8-plain-text</string>
+                <string>public.utf16-plain-text</string>
+                <string>public.utf16-external-plain-text</string>
+                <string>public.plain-text</string>
+                <string>public.text</string>
+                <string>public.rtf</string>
+                <string>public.html</string>
+                <string>NSRTFPboardType</string>
+                <string>NSHTMLPboardType</string>
+                <string>Apple HTML pasteboard type</string>
             </array>
         </dict>
     </array>

@@ -3,7 +3,7 @@
 #
 # 注意:本机仅安装了 Command Line Tools,其 SwiftPM (swift build) 存在缺陷
 # (缺少 BuildServerProtocol.framework),因此这里直接用 swiftc 编译,稳定可靠。
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")"
 
@@ -13,6 +13,35 @@ UPDATER_BIN="/tmp/${APP_NAME}Updater.bin"
 APP_BUNDLE="${APP_NAME}.app"
 LOCAL_IDENTITY_NAME="SnapAI Local Signing"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
+RELEASE_BUILD="${SNAPAI_RELEASE:-0}"
+
+usage() {
+  cat <<'USAGE'
+Usage: ./build.sh [--release]
+
+Options:
+  --release  Build an official release bundle. Requires a stable code-signing
+             identity and never falls back to ad-hoc signing.
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --release)
+      RELEASE_BUILD=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "error: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 echo "==> 编译 (swiftc -O) ..."
 swiftc -O \
@@ -21,7 +50,8 @@ swiftc -O \
   -framework AppKit \
   -framework SwiftUI \
   -framework Carbon \
-  -framework ApplicationServices
+  -framework ApplicationServices \
+  -lsqlite3
 
 echo "==> 编译 updater helper ..."
 swiftc -O \
@@ -41,6 +71,7 @@ cp "Resources/AppIconLight.png" "${APP_BUNDLE}/Contents/Resources/AppIconLight.p
 cp "Resources/AppIconDark.png" "${APP_BUNDLE}/Contents/Resources/AppIconDark.png"
 cp "Resources/AppIconLight.icns" "${APP_BUNDLE}/Contents/Resources/AppIconLight.icns"
 cp "Resources/AppIconDark.icns" "${APP_BUNDLE}/Contents/Resources/AppIconDark.icns"
+cp "Resources/ManifestPublicKey.pem" "${APP_BUNDLE}/Contents/Resources/ManifestPublicKey.pem"
 echo -n "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
 
 if [ -z "${SIGN_IDENTITY}" ]; then
@@ -50,10 +81,20 @@ if [ -z "${SIGN_IDENTITY}" ]; then
 fi
 
 if [ -n "${SIGN_IDENTITY}" ]; then
+  if [ "${RELEASE_BUILD}" = "1" ] && [ "${SIGN_IDENTITY}" = "-" ]; then
+    echo "error: 正式 release 构建禁止 ad-hoc 签名(CODESIGN_IDENTITY=-)。" >&2
+    echo "请使用固定自签名证书,例如 ${LOCAL_IDENTITY_NAME}。" >&2
+    exit 1
+  fi
   echo "==> 稳定签名 (${SIGN_IDENTITY}) ..."
   codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}" \
     && echo "    已使用稳定签名"
 else
+  if [ "${RELEASE_BUILD}" = "1" ]; then
+    echo "error: 正式 release 构建禁止 ad-hoc 签名,但未找到稳定签名身份。" >&2
+    echo "请先运行 ./scripts/create-local-signing-identity.sh,或设置 CODESIGN_IDENTITY。" >&2
+    exit 1
+  fi
   echo "==> ad-hoc 签名 ..."
   codesign --force --deep --sign - "${APP_BUNDLE}" 2>/dev/null \
     && echo "    已 ad-hoc 签名" \

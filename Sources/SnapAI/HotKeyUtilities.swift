@@ -22,17 +22,41 @@ extension HotKeyCombo {
 }
 
 enum HotKeyConflictDetector {
+    struct Conflict: Equatable {
+        enum Target: Equatable {
+            case action(id: String)
+            case quickPanel
+        }
+
+        var title: String
+        var target: Target
+    }
+
     static func conflict(for combo: HotKeyCombo,
                          actions: [AIAction],
                          excludingActionID: String?,
                          quickPanelHotKey: HotKeyCombo?,
                          includeQuickPanel: Bool) -> String? {
+        conflictDetail(for: combo,
+                       actions: actions,
+                       excludingActionID: excludingActionID,
+                       quickPanelHotKey: quickPanelHotKey,
+                       includeQuickPanel: includeQuickPanel)?.title
+    }
+
+    static func conflictDetail(for combo: HotKeyCombo,
+                               actions: [AIAction],
+                               excludingActionID: String?,
+                               quickPanelHotKey: HotKeyCombo?,
+                               includeQuickPanel: Bool) -> Conflict? {
         guard !combo.isUnset else { return nil }
         for other in actions where other.id != excludingActionID {
-            if other.hotKey == combo { return other.name }
+            if other.hotKey == combo {
+                return Conflict(title: other.name, target: .action(id: other.id))
+            }
         }
         if includeQuickPanel, let quickPanelHotKey, quickPanelHotKey == combo {
-            return "快捷提问面板"
+            return Conflict(title: "快捷提问面板", target: .quickPanel)
         }
         return nil
     }
@@ -65,6 +89,28 @@ enum HotKeyConflictDetector {
             return "⌘⌥Esc 通常用于强制退出应用。"
         }
         return nil
+    }
+}
+
+enum HotKeyRecorderText {
+    static let recordingTitle = "录制中..."
+    static let unsetTitle = "未设置"
+    static let instructions = "点击录制;按 Esc 取消,Delete 清除。建议使用 ⌥ 或 ⌃⌥ 组合,避开系统保留快捷键。"
+    static let recordingHelp = "按下带修饰键的组合键完成录制;Esc 取消本次录制,Delete 清除快捷键。"
+    static let idleHelp = "点击后录制全局快捷键。Esc 取消,Delete 清除。"
+
+    static func title(for combo: HotKeyCombo, recording: Bool) -> String {
+        if recording { return recordingTitle }
+        return combo.isUnset ? unsetTitle : combo.displayString
+    }
+
+    static func help(for combo: HotKeyCombo, recording: Bool) -> String {
+        if recording { return recordingHelp }
+        if combo.isUnset { return "\(idleHelp) 当前未设置快捷键。" }
+        if let warning = HotKeyConflictDetector.systemWarning(for: combo) {
+            return "\(idleHelp) \(warning)"
+        }
+        return "\(idleHelp) 当前为 \(combo.displayString)。"
     }
 }
 

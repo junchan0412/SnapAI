@@ -18,6 +18,14 @@ final class HistoryWindowModel: ObservableObject {
         favoriteOnly = false
     }
 
+    func apply(criteria: HistoryFilterCriteria) {
+        query = criteria.query
+        actionFilter = criteria.actionFilter
+        modelFilter = criteria.modelFilter
+        tagFilter = criteria.tagFilter
+        favoriteOnly = criteria.favoriteOnly
+    }
+
     var criteria: HistoryFilterCriteria {
         HistoryFilterCriteria(query: query,
                               actionFilter: actionFilter,
@@ -73,19 +81,28 @@ struct HistoryWindowView: View {
     @FocusState private var focusedTagID: String?
 
     private var actionNames: [String] {
-        [HistoryFilterCriteria.allActions] + HistoryFilterCriteria.facetValues(settings.history.map(\.displayActionName))
+        facetOptions(allValue: HistoryFilterCriteria.allActions,
+                     values: settings.history.map(\.displayActionName),
+                     currentValue: model.actionFilter)
     }
 
     private var modelNames: [String] {
-        [HistoryFilterCriteria.allModels] + HistoryFilterCriteria.facetValues(settings.history.map(\.displayModelFilterName))
+        facetOptions(allValue: HistoryFilterCriteria.allModels,
+                     values: settings.history.map(\.displayModelFilterName),
+                     currentValue: model.modelFilter)
     }
 
     private var tagNames: [String] {
-        [HistoryFilterCriteria.allTags] + HistoryFilterCriteria.facetValues(settings.history.flatMap(\.displayTags))
+        facetOptions(allValue: HistoryFilterCriteria.allTags,
+                     values: settings.history.flatMap(\.displayTags),
+                     currentValue: model.tagFilter)
     }
 
     private var filtered: [HistoryEntry] {
-        model.criteria.apply(to: settings.history)
+        HistorySearch.filteredEntries(criteria: model.criteria,
+                                      memoryEntries: settings.history,
+                                      limit: settings.historyLimit,
+                                      searchStore: HistoryStore.shared.search)
     }
 
     private var contextProfileDraft: HistoryContextProfileDraft? {
@@ -170,6 +187,7 @@ struct HistoryWindowView: View {
 
     private var historyToolbarActions: some View {
         HStack(spacing: 6) {
+            savedFilterMenu
             Button {
                 copyFilteredHistory()
             } label: {
@@ -195,6 +213,45 @@ struct HistoryWindowView: View {
             .disabled(contextProfileDraft == nil)
             .help(contextProfileDraft == nil ? "当前筛选没有可写入上下文的历史内容" : "从当前筛选创建上下文包")
         }
+    }
+
+    private var savedFilterMenu: some View {
+        Menu {
+            Button {
+                saveCurrentFilter()
+            } label: {
+                Label("保存当前筛选…", systemImage: "plus")
+            }
+            .disabled(model.criteria.isDefault)
+
+            if !settings.savedHistoryFilters.isEmpty {
+                Divider()
+                ForEach(settings.savedHistoryFilters) { filter in
+                    Button {
+                        applySavedFilter(filter)
+                    } label: {
+                        Label(filter.displayName, systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                    .help(filter.subtitle)
+                }
+
+                Divider()
+                Menu("删除已保存筛选") {
+                    ForEach(settings.savedHistoryFilters) { filter in
+                        Button(role: .destructive) {
+                            settings.deleteSavedHistoryFilter(id: filter.id)
+                        } label: {
+                            Text(filter.displayName)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "bookmark")
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 26, height: 26)
+        .help("已保存筛选")
     }
 
     private var filterSummaryBar: some View {
@@ -325,6 +382,33 @@ struct HistoryWindowView: View {
         }
     }
 
+    private func saveCurrentFilter() {
+        let alert = NSAlert()
+        alert.messageText = "保存历史筛选"
+        alert.informativeText = "为当前筛选组合命名,之后可从历史窗口快速套用。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.stringValue = suggestedSavedFilterName()
+        field.placeholderString = "筛选名称"
+        alert.accessoryView = field
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        _ = settings.upsertSavedHistoryFilter(name: field.stringValue,
+                                              criteria: model.criteria)
+    }
+
+    private func applySavedFilter(_ filter: SavedHistoryFilter) {
+        commitTagDrafts(except: nil)
+        model.apply(criteria: filter.criteria)
+    }
+
+    private func suggestedSavedFilterName() -> String {
+        AppSettings.sanitizedSavedHistoryFilterName(model.criteria.summaryText)
+    }
+
     private func createContextProfileFromFilteredHistory() {
         guard let draft = contextProfileDraft else { return }
         let willUpdate = settings.hasContextProfile(named: draft.name)
@@ -362,6 +446,18 @@ struct HistoryWindowView: View {
         return text.components(separatedBy: separators)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func facetOptions(allValue: String,
+                              values: [String],
+                              currentValue: String) -> [String] {
+        var options = [allValue] + HistoryFilterCriteria.facetValues(values)
+        if currentValue != allValue,
+           HistoryFilterCriteria.normalizedFacetValue(currentValue) != nil,
+           !options.contains(currentValue) {
+            options.append(currentValue)
+        }
+        return options
     }
 
     private func tagBinding(for entry: HistoryEntry) -> Binding<String> {

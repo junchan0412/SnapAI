@@ -16,7 +16,8 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AppKit"),
-                .linkedFramework("SwiftUI")
+                .linkedFramework("SwiftUI"),
+                .linkedLibrary("sqlite3")
             ]
         ),
         .executableTarget(

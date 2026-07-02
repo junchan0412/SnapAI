@@ -28,6 +28,12 @@ enum TextWriteBackTargetState: Equatable {
     }
 }
 
+enum TextWriteBackPayload {
+    static func appendPayload(for text: String) -> String {
+        "\n" + text
+    }
+}
+
 enum TextWriteBackUndoState: Equatable {
     case available
     case expired
@@ -353,7 +359,7 @@ struct TextEditTransaction {
     func append(_ text: String,
                 completion: (() -> Void)? = nil,
                 failure: ((PasteboardSnapshot) -> Void)? = nil) {
-        paste("\n" + text) {
+        paste(TextWriteBackPayload.appendPayload(for: text)) {
             TextCapture.sendRightArrow()
             return 0.05
         } completion: {
