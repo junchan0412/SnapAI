@@ -8,6 +8,7 @@
 - `TextCapture.captureDetailed` 在切回 `MainActor` 前先固定不可变捕获值,避免后台可变结果被并发闭包引用。
 - `ResultViewModel` 的打字机计时器使用显式弱引用 capture list 进入 `MainActor`。
 - `QuickInputController` 的截图完成回调显式捕获结果和窗口列表,消除 Swift 6 并发预警。
+- `SnapAILogicTests` 的手工 runner 改为条件编译下的 `@main` 入口,兼容脚本使用 `-parse-as-library` 编译,避免标准 `swift test` 看到顶层执行语句。
 - 版本、README、UI 总览图、Release Notes 和 Iteration Report 更新到 1.6.6。
 
 ## 验证
@@ -24,4 +25,3 @@
 - `SnapAI-v1.6.6.zip`
 - `snapai-manifest-v1.6.6.json`
 - `snapai-manifest-v1.6.6.json.sig`
-

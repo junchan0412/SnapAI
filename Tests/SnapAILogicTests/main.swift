@@ -953,12 +953,17 @@ final class SnapAILogicTests: XCTestCase {
     }
 }
 #else
-let logicFailures = runAllLogicTests()
-if logicFailures.isEmpty {
-    print("SnapAILogicTests passed")
-} else {
-    print("SnapAILogicTests failed:")
-    logicFailures.forEach { print("- \($0)") }
-    exit(1)
+@main
+struct SnapAILogicManualTestRunner {
+    static func main() {
+        let logicFailures = runAllLogicTests()
+        if logicFailures.isEmpty {
+            print("SnapAILogicTests passed")
+        } else {
+            print("SnapAILogicTests failed:")
+            logicFailures.forEach { print("- \($0)") }
+            exit(1)
+        }
+    }
 }
 #endif

@@ -20,7 +20,7 @@ while IFS= read -r file; do
   TEST_SOURCES+=("$file")
 done < <(find Tests/SnapAILogicTests -name '*.swift' -type f | sort)
 
-swiftc -D SNAPAI_MANUAL_TEST_MAIN \
+swiftc -parse-as-library -D SNAPAI_MANUAL_TEST_MAIN \
   "${LOGIC_SOURCES[@]}" \
   "${TEST_SOURCES[@]}" \
   -o "$OUT" \
