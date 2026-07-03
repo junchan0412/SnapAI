@@ -325,7 +325,7 @@ struct HistoryFilterCriteria: Codable, Equatable {
 
     static func facetValues(_ values: [String]) -> [String] {
         Array(Set(values.compactMap(normalizedFacetValue)))
-            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            .sorted(by: facetValuePrecedes)
     }
 
     static func rankedFacetCounts(_ values: [String]) -> [(value: String, count: Int)] {
@@ -337,8 +337,15 @@ struct HistoryFilterCriteria: Codable, Equatable {
             .map { (value: $0.key, count: $0.value) }
             .sorted {
                 if $0.count != $1.count { return $0.count > $1.count }
-                return $0.value.localizedStandardCompare($1.value) == .orderedAscending
+                return facetValuePrecedes($0.value, $1.value)
             }
+    }
+
+    private static func facetValuePrecedes(_ lhs: String, _ rhs: String) -> Bool {
+        lhs.compare(rhs,
+                    options: [.numeric],
+                    range: nil,
+                    locale: Locale(identifier: "zh_Hans_CN")) == .orderedAscending
     }
 
     static func isQuerySeparator(_ character: Character) -> Bool {

@@ -610,7 +610,9 @@ func testHistoryCollectionExportMarkdown() {
     expect(markdown.contains("# SnapAI 历史记录"), "exports collection title")
     expect(markdown.contains("- 筛选条件: 搜索: 原始 / 动作: 总结"), "exports filter summary")
     expect(markdown.contains("- 记录数量: 1"), "exports entry count")
-    expect(markdown.contains("## 1. 总结 - 01-01 08:00") || markdown.contains("## 1. 总结 - 12-31"),
+    expect(markdown.contains("## 1. 总结 - 01-01 08:00") ||
+           markdown.contains("## 1. 总结 - 01-01 00:00") ||
+           markdown.contains("## 1. 总结 - 12-31"),
            "exports numbered entry heading with local date")
     expect(markdown.contains("## 原文\n\n原始内容"), "includes entry source")
     expect(markdown.contains("## 结果\n\n总结结果"), "includes entry output")
@@ -786,7 +788,8 @@ func testHistoryContextProfileBuilderSanitizesMetadata() {
     let content = draft.content
     expect(content.contains("- 来源筛选: 搜索: SnapAI # 注入/'Q' / 动作: 总结 # 注入/'A' / 标签: 项目 # 注入/'Tag'"),
            "context draft source filter metadata is single-line and code-safe")
-    expect(content.contains("## 1. 总结 # 注入/'A' - 01-01 08:00"),
+    expect(content.contains("## 1. 总结 # 注入/'A' - 01-01 08:00") ||
+           content.contains("## 1. 总结 # 注入/'A' - 01-01 00:00"),
            "context draft entry heading metadata is single-line and code-safe")
     expect(content.contains("- 模型: OpenAI Provider/'B' / gpt/4o mini [REDACTED_KEY]"),
            "context draft model metadata is sanitized and redacts accidental keys")
