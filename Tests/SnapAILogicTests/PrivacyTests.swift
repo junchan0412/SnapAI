@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+@testable import SnapAILogic
+#endif
 
 func testSensitiveTextSanitizerRedactsSensitiveErrorFragments() {
     let slackToken = "xoxb-" + "123456789012-" + "abcdefghijklmnopqrstuvwxyz"

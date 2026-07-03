@@ -1,0 +1,1 @@
+../SnapAI/ModelSwitchCommand.swift

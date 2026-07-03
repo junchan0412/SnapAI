@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+@testable import SnapAILogic
+#endif
 
 func testTextDiffSummary() {
     let rows = TextDiff.rows(original: "A\nB\nD", revised: "A\nC\nD\nE")

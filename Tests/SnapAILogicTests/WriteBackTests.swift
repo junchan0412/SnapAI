@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+@testable import SnapAILogic
+#endif
 
 func testTextReplacementSelectionDelay() {
     expect(TextEditTransaction.selectionDelay(forCharacterCount: 0) == 0.03, "uses short delay for existing selections")

@@ -1,0 +1,1 @@
+../SnapAI/SettingsToggleCommand.swift

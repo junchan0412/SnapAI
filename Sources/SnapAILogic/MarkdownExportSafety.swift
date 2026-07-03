@@ -1,0 +1,1 @@
+../SnapAI/MarkdownExportSafety.swift

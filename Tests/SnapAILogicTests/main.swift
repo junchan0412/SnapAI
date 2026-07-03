@@ -2,6 +2,10 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+import XCTest
+@testable import SnapAILogic
+#endif
 
 var failures: [String] = []
 
@@ -733,6 +737,9 @@ func legacyDefaultRedactionRulesForTests() -> [PrivacyRedactionRule] {
 }
 
 
+func runAllLogicTests() -> [String] {
+    failures = []
+
 testVersionNormalizationAndCompare()
 testReleaseTagParsing()
 testReleaseAssetSelectionUsesExactVersionedNames()
@@ -935,10 +942,23 @@ testHistoryExportCommandIDsAreStableSlugs()
 testConversationExportMarkdown()
 testResultPersistenceAndWriteBackCoordinator()
 
-if failures.isEmpty {
+    return failures
+}
+
+#if !SNAPAI_MANUAL_TEST_MAIN
+final class SnapAILogicTests: XCTestCase {
+    func testLogicSuite() {
+        let failures = runAllLogicTests()
+        XCTAssertTrue(failures.isEmpty, failures.joined(separator: "\n"))
+    }
+}
+#else
+let logicFailures = runAllLogicTests()
+if logicFailures.isEmpty {
     print("SnapAILogicTests passed")
 } else {
     print("SnapAILogicTests failed:")
-    failures.forEach { print("- \($0)") }
+    logicFailures.forEach { print("- \($0)") }
     exit(1)
 }
+#endif

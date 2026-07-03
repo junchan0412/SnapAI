@@ -6,7 +6,23 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    products: [
+        .library(name: "SnapAILogic", targets: ["SnapAILogic"])
+    ],
     targets: [
+        .target(
+            name: "SnapAILogic",
+            path: "Sources/SnapAILogic",
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+                .linkedFramework("AppKit"),
+                .linkedFramework("SwiftUI"),
+                .linkedFramework("ApplicationServices"),
+                .linkedFramework("ServiceManagement"),
+                .linkedFramework("Security"),
+                .linkedLibrary("sqlite3")
+            ]
+        ),
         .executableTarget(
             name: "SnapAI",
             path: "Sources/SnapAI",
@@ -23,6 +39,19 @@ let package = Package(
         .executableTarget(
             name: "SnapAIUpdater",
             path: "Sources/SnapAIUpdater"
+        ),
+        .testTarget(
+            name: "SnapAILogicTests",
+            dependencies: ["SnapAILogic"],
+            path: "Tests/SnapAILogicTests",
+            linkerSettings: [
+                .linkedFramework("Carbon"),
+                .linkedFramework("AppKit"),
+                .linkedFramework("ApplicationServices"),
+                .linkedFramework("ServiceManagement"),
+                .linkedFramework("Security"),
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

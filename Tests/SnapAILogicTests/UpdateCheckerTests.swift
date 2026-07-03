@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+@testable import SnapAILogic
+#endif
 
 func testVersionNormalizationAndCompare() {
     expect(UpdateChecker.normalizedVersion("v1.2.3") == "1.2.3", "normalizes v prefix")

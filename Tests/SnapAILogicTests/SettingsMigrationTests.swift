@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+#if !SNAPAI_MANUAL_TEST_MAIN
+@testable import SnapAILogic
+#endif
 
 func testBaseURLNormalization() {
     expect(AIClient.normalizedBase("api.openai.com", proto: .openAI) == "https://api.openai.com/v1",
