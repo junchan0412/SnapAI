@@ -1,12 +1,38 @@
 import AppKit
 
 enum CaptureTargetSource: String, Equatable {
+    case serviceInvocation
     case frontmost
     case lastExternal
     case none
 }
 
 enum CaptureTargetResolver {
+    static func preferredDeferredSource(serviceInvocationPID: pid_t?,
+                                        serviceInvocationIsTerminated: Bool,
+                                        serviceInvocationBundleIdentifier: String? = nil,
+                                        frontmostPID: pid_t?,
+                                        frontmostIsTerminated: Bool,
+                                        frontmostBundleIdentifier: String? = nil,
+                                        lastExternalPID: pid_t?,
+                                        lastExternalIsTerminated: Bool,
+                                        lastExternalBundleIdentifier: String? = nil,
+                                        currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> CaptureTargetSource {
+        if isUsableExternalApp(pid: serviceInvocationPID,
+                               isTerminated: serviceInvocationIsTerminated,
+                               bundleIdentifier: serviceInvocationBundleIdentifier,
+                               currentPID: currentPID) {
+            return .serviceInvocation
+        }
+        return preferredSource(frontmostPID: frontmostPID,
+                               frontmostIsTerminated: frontmostIsTerminated,
+                               frontmostBundleIdentifier: frontmostBundleIdentifier,
+                               lastExternalPID: lastExternalPID,
+                               lastExternalIsTerminated: lastExternalIsTerminated,
+                               lastExternalBundleIdentifier: lastExternalBundleIdentifier,
+                               currentPID: currentPID)
+    }
+
     static func preferredSource(frontmostPID: pid_t?,
                                 frontmostIsTerminated: Bool,
                                 frontmostBundleIdentifier: String? = nil,
@@ -39,6 +65,33 @@ enum CaptureTargetResolver {
                                lastExternalIsTerminated: lastExternal?.isTerminated ?? true,
                                lastExternalBundleIdentifier: lastExternal?.bundleIdentifier,
                                currentPID: currentPID) {
+        case .serviceInvocation:
+            return nil
+        case .frontmost:
+            return frontmost
+        case .lastExternal:
+            return lastExternal
+        case .none:
+            return nil
+        }
+    }
+
+    static func resolveDeferred(serviceInvocation: NSRunningApplication?,
+                                frontmost: NSRunningApplication?,
+                                lastExternal: NSRunningApplication?,
+                                currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> NSRunningApplication? {
+        switch preferredDeferredSource(serviceInvocationPID: serviceInvocation?.processIdentifier,
+                                       serviceInvocationIsTerminated: serviceInvocation?.isTerminated ?? true,
+                                       serviceInvocationBundleIdentifier: serviceInvocation?.bundleIdentifier,
+                                       frontmostPID: frontmost?.processIdentifier,
+                                       frontmostIsTerminated: frontmost?.isTerminated ?? true,
+                                       frontmostBundleIdentifier: frontmost?.bundleIdentifier,
+                                       lastExternalPID: lastExternal?.processIdentifier,
+                                       lastExternalIsTerminated: lastExternal?.isTerminated ?? true,
+                                       lastExternalBundleIdentifier: lastExternal?.bundleIdentifier,
+                                       currentPID: currentPID) {
+        case .serviceInvocation:
+            return serviceInvocation
         case .frontmost:
             return frontmost
         case .lastExternal:

@@ -472,45 +472,6 @@ struct SettingsView: View {
         .padding(.horizontal, 2)
     }
 
-    private var routeSettingsColumn: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            settingsMiniHeader("路由策略", systemImage: "point.3.connected.trianglepath.dotted")
-            Toggle("自动选择模型", isOn: $settings.autoRouteEnabled)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .onChange(of: settings.autoRouteEnabled) { commit() }
-            HStack(spacing: 8) {
-                Text("偏好")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34, alignment: .leading)
-                Picker("", selection: $settings.routingPreference) {
-                    ForEach(AIRoutingPreference.allCases) { preference in
-                        Text(preference.rawValue).tag(preference)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .onChange(of: settings.routingPreference) { commit() }
-            }
-            .frame(maxWidth: .infinity)
-            Toggle("失败时切换备用模型", isOn: $settings.fallbackEnabled)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .onChange(of: settings.fallbackEnabled) { commit() }
-            Text(routingPreviewText)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(settings.routingPreference.description)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(minHeight: 112, alignment: .topLeading)
-    }
-
     private var routingPreviewText: String {
         let action = settings.enabledActions.first ?? settings.actions.first ?? AIAction(name: "提问")
         let sampleText = settings.activeContextProfile?.content ?? ""

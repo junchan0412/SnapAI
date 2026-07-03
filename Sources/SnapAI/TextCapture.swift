@@ -127,6 +127,7 @@ enum TextCapture {
 
     static func captureDetailed(preferAX: Bool,
                                 targetApp: NSRunningApplication? = nil,
+                                forceDismissTransientUIBeforeCopy: Bool = false,
                                 completion: @escaping @MainActor (TextCaptureOutcome) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             var outcome = TextCaptureOutcome(text: nil,
@@ -161,7 +162,8 @@ enum TextCapture {
             }
             if outcome.usableText == nil {
                 outcome.clipboardAttempted = true
-                let copyResult = captureViaCopyDetailed(targetApp: targetApp)
+                let copyResult = captureViaCopyDetailed(targetApp: targetApp,
+                                                        forceDismissTransientUI: forceDismissTransientUIBeforeCopy)
                 outcome.text = copyResult.text
                 outcome.clipboardWaitAttempts = copyResult.waitAttempts
                 outcome.pasteboardReasonCode = copyResult.pasteboardReasonCode
@@ -434,6 +436,15 @@ enum TextCapture {
                                                                                            failureReason: TextCaptureFailureReason?,
                                                                                            pasteboardReasonCode: String?,
                                                                                            waitAttempts: Int) {
+        captureViaCopyDetailed(targetApp: targetApp,
+                               forceDismissTransientUI: false)
+    }
+
+    private static func captureViaCopyDetailed(targetApp: NSRunningApplication? = nil,
+                                               forceDismissTransientUI: Bool) -> (text: String?,
+                                                                                 failureReason: TextCaptureFailureReason?,
+                                                                                 pasteboardReasonCode: String?,
+                                                                                 waitAttempts: Int) {
         clearSelectionSnapshot()
         let pasteboard = NSPasteboard.general
         let previousSnapshot = snapshotPasteboard(pasteboard)
@@ -444,7 +455,8 @@ enum TextCapture {
         let frontmostPIDBeforeCopy = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let shouldDismissTransientMenu = shouldDismissTransientMenusBeforeCopy(
             targetPID: targetApp?.processIdentifier,
-            frontmostPID: frontmostPIDBeforeCopy
+            frontmostPID: frontmostPIDBeforeCopy,
+            forceDismissal: forceDismissTransientUI
         )
 
         if let targetApp,
@@ -510,11 +522,17 @@ enum TextCapture {
 
     static func shouldDismissTransientMenusBeforeCopy(targetPID: pid_t?,
                                                       frontmostPID: pid_t?,
-                                                      currentPID: pid_t = ProcessInfo.processInfo.processIdentifier) -> Bool {
+                                                      currentPID: pid_t = ProcessInfo.processInfo.processIdentifier,
+                                                      forceDismissal: Bool = false) -> Bool {
         guard let targetPID,
               targetPID > 0,
-              targetPID != currentPID,
-              let frontmostPID,
+              targetPID != currentPID else {
+            return false
+        }
+        if forceDismissal {
+            return true
+        }
+        guard let frontmostPID,
               frontmostPID != targetPID else {
             return false
         }

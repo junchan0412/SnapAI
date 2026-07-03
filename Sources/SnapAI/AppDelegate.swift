@@ -153,14 +153,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         menu.addItem(.separator())
 
         let paletteItem = menu.addItem(withTitle: "命令面板",
-                                       action: #selector(openCommandPalette),
+                                       action: #selector(openCommandPaletteFromMenu(_:)),
                                        keyEquivalent: "k")
         paletteItem.target = self
         paletteItem.keyEquivalentModifierMask = [.command]
 
         // 快捷提问面板
         let quickItem = menu.addItem(withTitle: "快捷提问 (\(settings.quickPanelHotKey.displayString))",
-                                     action: #selector(toggleQuickInput), keyEquivalent: "")
+                                     action: #selector(toggleQuickInputFromMenu(_:)), keyEquivalent: "")
         quickItem.target = self
         MenuCoordinator.configureShortcut(quickItem, combo: settings.quickPanelHotKey)
         menu.addItem(.separator())
@@ -212,16 +212,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         menu.addItem(.separator())
         let undoWriteBack = menu.addItem(withTitle: undoWriteBackMenuTitle(),
-                                         action: #selector(undoLastWriteBack),
+                                         action: #selector(undoLastWriteBackFromMenu(_:)),
                                          keyEquivalent: "")
         undoWriteBack.target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealth), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "设置…", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealthFromMenu(_:)), keyEquivalent: "").target = self
         menu.addItem(withTitle: PermissionRecoveryCommand.title,
-                     action: #selector(copyPermissionRecoverySuggestions),
+                     action: #selector(copyPermissionRecoverySuggestionsFromMenu(_:)),
                      keyEquivalent: "").target = self
-        menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出 SnapAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -259,7 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func buildHistoryMenu() -> NSMenu {
         let sub = NSMenu()
-        let open = sub.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindow), keyEquivalent: "")
+        let open = sub.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindowFromMenu(_:)), keyEquivalent: "")
         open.target = self
         sub.addItem(.separator())
         if settings.history.isEmpty {
@@ -293,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
 
         let pin = menu.addItem(withTitle: ResultPinCommand.title(isPinned: resultVM.isPinned),
-                               action: #selector(togglePinResult),
+                               action: #selector(togglePinResultFromMenu(_:)),
                                keyEquivalent: ResultPinCommand.keyEquivalent)
         pin.target = self
         pin.keyEquivalentModifierMask = nsModifierFlags(for: ResultPinCommand.modifiers)
@@ -302,25 +302,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func selector(for action: ResultCommandAction) -> Selector {
         switch action {
         case .copyOutput:
-            return #selector(copyResult)
+            return #selector(copyResultFromMenu(_:))
         case .copyMarkdown:
-            return #selector(copyConversationMarkdown)
+            return #selector(copyConversationMarkdownFromMenu(_:))
         case .exportConversation:
-            return #selector(exportResult)
+            return #selector(exportResultFromMenu(_:))
         case .copyBriefDiagnostics:
-            return #selector(copyBriefRequestDiagnostics)
+            return #selector(copyBriefRequestDiagnosticsFromMenu(_:))
         case .copyDiagnostics:
-            return #selector(copyRequestDiagnostics)
+            return #selector(copyRequestDiagnosticsFromMenu(_:))
         case .openAISettings:
-            return #selector(openAISettingsFromResult)
+            return #selector(openAISettingsFromResultMenu(_:))
         case .replaceOriginal:
-            return #selector(replaceResult)
+            return #selector(replaceResultFromMenu(_:))
         case .appendToDocument:
-            return #selector(appendResult)
+            return #selector(appendResultFromMenu(_:))
         case .stop:
-            return #selector(stopResult)
+            return #selector(stopResultFromMenu(_:))
         case .regenerate:
-            return #selector(regenerateResult)
+            return #selector(regenerateResultFromMenu(_:))
         }
     }
 
@@ -390,11 +390,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                         keyEquivalent: "")
         appMenu.addItem(.separator())
         let prefItem = appMenu.addItem(withTitle: "设置…",
-                                       action: #selector(openSettings),
+                                       action: #selector(openSettingsFromMenu(_:)),
                                        keyEquivalent: ",")
         prefItem.target = self
         let updateItem = appMenu.addItem(withTitle: "检查更新…",
-                                         action: #selector(checkForUpdates),
+                                         action: #selector(checkForUpdatesFromMenu(_:)),
                                          keyEquivalent: "")
         updateItem.target = self
         appMenu.addItem(.separator())
@@ -418,12 +418,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         mainMenu.addItem(operationMenuItem)
         let operationMenu = NSMenu(title: "操作")
         let palette = operationMenu.addItem(withTitle: "命令面板",
-                                            action: #selector(openCommandPalette),
+                                            action: #selector(openCommandPaletteFromMenu(_:)),
                                             keyEquivalent: "k")
         palette.target = self
         palette.keyEquivalentModifierMask = [.command]
         let quick = operationMenu.addItem(withTitle: "快捷提问",
-                                          action: #selector(toggleQuickInput),
+                                          action: #selector(toggleQuickInputFromMenu(_:)),
                                           keyEquivalent: "")
         quick.target = self
         MenuCoordinator.configureShortcut(quick, combo: settings.quickPanelHotKey)
@@ -443,17 +443,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         operationMenu.addItem(.separator())
         addResultCommandItems(to: operationMenu)
         let undoWriteBack = operationMenu.addItem(withTitle: undoWriteBackMenuTitle(),
-                                                  action: #selector(undoLastWriteBack),
+                                                  action: #selector(undoLastWriteBackFromMenu(_:)),
                                                   keyEquivalent: "z")
         undoWriteBack.target = self
         undoWriteBack.keyEquivalentModifierMask = [.command, .option]
         operationMenu.addItem(.separator())
-        operationMenu.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindow), keyEquivalent: "").target = self
-        operationMenu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealth), keyEquivalent: "").target = self
+        operationMenu.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindowFromMenu(_:)), keyEquivalent: "").target = self
+        operationMenu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealthFromMenu(_:)), keyEquivalent: "").target = self
         operationMenu.addItem(withTitle: PermissionRecoveryCommand.title,
-                              action: #selector(copyPermissionRecoverySuggestions),
+                              action: #selector(copyPermissionRecoverySuggestionsFromMenu(_:)),
                               keyEquivalent: "").target = self
-        operationMenu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        operationMenu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "").target = self
         operationMenuItem.submenu = operationMenu
 
         let editMenuItem = NSMenuItem()
@@ -868,6 +868,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func handleSnapAIService(_ pasteboard: NSPasteboard,
                              userData: String?,
                              error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        let serviceInvocationTarget = currentCaptureTargetApp()
         let action = actionForAutomation(query: userData) ?? settings.enabledActions.first
         guard let action else {
             error.pointee = "SnapAI 还没有可用动作,请先打开设置完成配置。" as NSString
@@ -875,10 +876,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return
         }
         guard let text = serviceText(from: pasteboard) else {
-            triggerCapturedSelection(action: action)
+            triggerCapturedSelection(action: action,
+                                     preferredTarget: serviceInvocationTarget,
+                                     forceDismissTransientUIBeforeCopy: true)
             return
         }
-        previousApp = currentCaptureTargetApp()
+        previousApp = serviceInvocationTarget
         previousSelectionSnapshot = nil
         recordTextCaptureOutcome(TextCaptureOutcome(text: text,
                                                     method: .service,
@@ -934,11 +937,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         triggerCapturedSelection(action: action)
     }
 
-    private func triggerCapturedSelection(action: AIAction) {
-        previousApp = currentCaptureTargetApp()
+    private func triggerCapturedSelection(action: AIAction,
+                                          preferredTarget: NSRunningApplication? = nil,
+                                          forceDismissTransientUIBeforeCopy: Bool = false) {
+        previousApp = captureTargetApp(preferredTarget: preferredTarget)
         previousSelectionSnapshot = nil
         TextCapture.captureDetailed(preferAX: settings.useAXFirst,
-                                    targetApp: previousApp) { [weak self] outcome in
+                                    targetApp: previousApp,
+                                    forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy) { [weak self] outcome in
             guard let self = self else { return }
             let text = outcome.usableText
             guard let text = text, !text.isEmpty else {
@@ -962,7 +968,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    @objc private func toggleQuickInput() {
+    private func captureTargetApp(preferredTarget: NSRunningApplication?) -> NSRunningApplication? {
+        guard preferredTarget != nil else {
+            return currentCaptureTargetApp()
+        }
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        rememberExternalFrontmostApp(frontmost)
+        return CaptureTargetResolver.resolveDeferred(serviceInvocation: preferredTarget,
+                                                     frontmost: frontmost,
+                                                     lastExternal: lastExternalFrontmostApp)
+    }
+
+    @objc private func toggleQuickInputFromMenu(_ sender: Any?) {
+        toggleQuickInput()
+    }
+
+    private func toggleQuickInput() {
         previousApp = currentCaptureTargetApp()
         previousSelectionSnapshot = nil
         quickInput.toggle()
@@ -1228,7 +1249,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         WriteBackCommandFactory.undoMenuTitle(for: lastWriteBackRecord)
     }
 
-    @objc private func undoLastWriteBack() {
+    @objc private func undoLastWriteBackFromMenu(_ sender: Any?) {
+        undoLastWriteBack()
+    }
+
+    private func undoLastWriteBack() {
         guard let record = lastWriteBackRecord else {
             lastWriteBackRecord = nil
             buildMenu()
@@ -1337,12 +1362,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
+    @objc private func openCommandPaletteFromMenu(_ sender: Any?) {
+        openCommandPalette()
+    }
+
     @objc private func openCommandPalette() {
         commandPalette.show()
     }
 
+    @objc private func openHistoryWindowFromMenu(_ sender: Any?) {
+        openHistoryWindow()
+    }
+
     @objc private func openHistoryWindow() {
         historyWindow.show()
+    }
+
+    @objc private func openPermissionHealthFromMenu(_ sender: Any?) {
+        openPermissionHealth()
     }
 
     @objc private func openPermissionHealth() {
@@ -1378,7 +1415,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSPasteboard.general.setString(full ? snapshot.diagnosticText : snapshot.briefDiagnosticText, forType: .string)
     }
 
-    @objc private func copyPermissionRecoverySuggestions() {
+    @objc private func copyPermissionRecoverySuggestionsFromMenu(_ sender: Any?) {
+        copyPermissionRecoverySuggestions()
+    }
+
+    private func copyPermissionRecoverySuggestions() {
         let snapshot = currentPermissionHealthSnapshot(includeSigningSummary: false)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(snapshot.recoverySuggestionClipboardText, forType: .string)
@@ -1405,47 +1446,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         windowCoordinator.toggleSettingsWindowPinnedAndShow()
     }
 
-    @objc private func copyResult() {
+    @objc private func copyResultFromMenu(_ sender: Any?) {
+        copyResult()
+    }
+
+    private func copyResult() {
         resultVM.copyOutput()
     }
 
-    @objc private func copyConversationMarkdown() {
+    @objc private func copyConversationMarkdownFromMenu(_ sender: Any?) {
+        copyConversationMarkdown()
+    }
+
+    private func copyConversationMarkdown() {
         resultVM.copyConversationMarkdown()
     }
 
-    @objc private func copyRequestDiagnostics() {
+    @objc private func copyRequestDiagnosticsFromMenu(_ sender: Any?) {
+        copyRequestDiagnostics()
+    }
+
+    private func copyRequestDiagnostics() {
         resultVM.copyRequestDiagnostics()
     }
 
-    @objc private func copyBriefRequestDiagnostics() {
+    @objc private func copyBriefRequestDiagnosticsFromMenu(_ sender: Any?) {
+        copyBriefRequestDiagnostics()
+    }
+
+    private func copyBriefRequestDiagnostics() {
         resultVM.copyBriefRequestDiagnostics()
     }
 
-    @objc private func openAISettingsFromResult() {
+    @objc private func openAISettingsFromResultMenu(_ sender: Any?) {
+        openAISettingsFromResult()
+    }
+
+    private func openAISettingsFromResult() {
         showSettings(section: .ai)
     }
 
-    @objc private func replaceResult() {
+    @objc private func replaceResultFromMenu(_ sender: Any?) {
+        replaceResult()
+    }
+
+    private func replaceResult() {
         resultVM.replaceOriginal()
     }
 
-    @objc private func appendResult() {
+    @objc private func appendResultFromMenu(_ sender: Any?) {
+        appendResult()
+    }
+
+    private func appendResult() {
         resultVM.appendToDocument()
     }
 
-    @objc private func exportResult() {
+    @objc private func exportResultFromMenu(_ sender: Any?) {
+        exportResult()
+    }
+
+    private func exportResult() {
         resultVM.exportConversation()
     }
 
-    @objc private func regenerateResult() {
+    @objc private func regenerateResultFromMenu(_ sender: Any?) {
+        regenerateResult()
+    }
+
+    private func regenerateResult() {
         resultVM.regenerate()
     }
 
-    @objc private func stopResult() {
+    @objc private func stopResultFromMenu(_ sender: Any?) {
+        stopResult()
+    }
+
+    private func stopResult() {
         resultVM.cancel()
     }
 
-    @objc private func togglePinResult() {
+    @objc private func togglePinResultFromMenu(_ sender: Any?) {
+        togglePinResult()
+    }
+
+    private func togglePinResult() {
         resultVM.isPinned.toggle()
         panelController.show()
     }
@@ -1459,10 +1544,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return ResultCommandFactory.isEnabled(action, in: state)
         }
         switch menuItem.action {
-        case #selector(togglePinResult):
+        case #selector(togglePinResultFromMenu(_:)):
             menuItem.title = ResultPinCommand.title(isPinned: resultVM.isPinned)
             return true
-        case #selector(undoLastWriteBack):
+        case #selector(undoLastWriteBackFromMenu(_:)):
             return lastWriteBackRecord?.isUndoAvailable == true
         default:
             return true
@@ -1942,7 +2027,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     // MARK: - 设置窗口
 
-    @objc private func openSettings() {
+    @objc private func openSettingsFromMenu(_ sender: Any?) {
+        openSettings()
+    }
+
+    private func openSettings() {
         windowCoordinator.openSettings()
     }
 
@@ -1950,7 +2039,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         windowCoordinator.showSettings(section: section)
     }
 
-    @objc private func checkForUpdates() {
+    @objc private func checkForUpdatesFromMenu(_ sender: Any?) {
+        checkForUpdates()
+    }
+
+    private func checkForUpdates() {
         UpdateChecker.check()
     }
 

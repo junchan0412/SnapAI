@@ -75,7 +75,7 @@ swiftc \
   Sources/SnapAI/AIRequestRouter.swift \
   Sources/SnapAI/AIClient.swift \
   Sources/SnapAI/UpdateChecker.swift \
-  Tests/SnapAILogicTests/main.swift \
+  Tests/SnapAILogicTests/*.swift \
   -o "$OUT" \
   -framework AppKit \
   -framework Carbon \

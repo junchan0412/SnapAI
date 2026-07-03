@@ -38,6 +38,7 @@ final class WindowCoordinator {
         if let window = settingsWindow {
             applySettingsWindowPinnedState(to: window)
             window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -54,14 +55,17 @@ final class WindowCoordinator {
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "SnapAI 设置"
+        window.identifier = NSUserInterfaceItemIdentifier("SnapAI.SettingsWindow")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
+        window.isRestorable = false
         window.setContentSize(NSSize(width: 840, height: 620))
         window.minSize = NSSize(width: 760, height: 560)
         applySettingsWindowPinnedState(to: window)
         window.center()
         settingsWindow = window
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
