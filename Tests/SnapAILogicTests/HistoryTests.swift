@@ -429,6 +429,63 @@ func testHistorySearchFallsBackToMemoryForCompactMatching() {
            "history search keeps facet-only filtering in memory")
 }
 
+func testHistorySearchIncludesLocalSemanticMatches() {
+    let keychain = HistoryEntry(id: "keychain",
+                                date: Date(timeIntervalSince1970: 3),
+                                actionName: "诊断",
+                                source: "Keychain prompts after updating a self-signed certificate",
+                                output: "Keep the codesign identity and bundle identifier stable",
+                                provider: "OpenAI",
+                                model: "gpt-4o-mini",
+                                isFavorite: true,
+                                tags: ["发布"])
+    let routing = HistoryEntry(id: "routing",
+                               date: Date(timeIntervalSince1970: 2),
+                               actionName: "路由",
+                               source: "Fallback provider has a faster first token time",
+                               output: "Routing metrics should prefer the reliable model",
+                               provider: "OpenAI",
+                               model: "gpt-4o-mini",
+                               tags: ["AI"])
+    let unrelated = HistoryEntry(id: "unrelated",
+                                 date: Date(timeIntervalSince1970: 1),
+                                 actionName: "翻译",
+                                 source: "Translate a short email",
+                                 output: "Done",
+                                 provider: "OpenAI",
+                                 model: "gpt-4o-mini")
+
+    let semantic = HistorySearch.filteredEntries(
+        criteria: HistoryFilterCriteria(query: "钥匙串重复授权"),
+        memoryEntries: [unrelated, routing, keychain],
+        limit: 50,
+        searchStore: { _, _ in [] }
+    )
+    let semanticIDs = semantic.map(\.id)
+    expect(semanticIDs == ["keychain"],
+           "history semantic search maps Chinese Keychain permission wording to English signing records, got \(semanticIDs)")
+
+    let routed = HistorySearch.filteredEntries(
+        criteria: HistoryFilterCriteria(query: "首 token 备用模型"),
+        memoryEntries: [unrelated, routing, keychain],
+        limit: 50,
+        searchStore: { _, _ in [] }
+    )
+    let routedIDs = routed.map(\.id)
+    expect(routedIDs == ["routing"],
+           "history semantic search maps first-token fallback wording to routing records, got \(routedIDs)")
+
+    let faceted = HistorySearch.filteredEntries(
+        criteria: HistoryFilterCriteria(query: "钥匙串重复授权",
+                                        actionFilter: "翻译"),
+        memoryEntries: [unrelated, routing, keychain],
+        limit: 50,
+        searchStore: { _, _ in [] }
+    )
+    expect(faceted.isEmpty,
+           "history semantic matches still respect action/model/tag/favorite facets")
+}
+
 func testHistoryFilterCriteriaMatchesMultipleTermsAndFacets() {
     let favorite = HistoryEntry(date: Date(timeIntervalSince1970: 0),
                                 actionName: " 总结 ",

@@ -256,6 +256,10 @@ struct HistoryFilterCriteria: Codable, Equatable {
     }
 
     func matches(_ entry: HistoryEntry) -> Bool {
+        matchesFacets(entry) && matchesQuery(entry)
+    }
+
+    func matchesFacets(_ entry: HistoryEntry) -> Bool {
         if favoriteOnly && !entry.isFavorite { return false }
         if let action = Self.normalizedSelectedFacet(actionFilter, allValue: Self.allActions),
            !Self.facetValue(entry.displayActionName, matches: action) {
@@ -269,7 +273,10 @@ struct HistoryFilterCriteria: Codable, Equatable {
            !entry.displayTags.contains(where: { Self.facetValue($0, matches: tag) }) {
             return false
         }
+        return true
+    }
 
+    func matchesQuery(_ entry: HistoryEntry) -> Bool {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return true }
         let searchable = [
@@ -334,7 +341,7 @@ struct HistoryFilterCriteria: Codable, Equatable {
             }
     }
 
-    private static func isQuerySeparator(_ character: Character) -> Bool {
+    static func isQuerySeparator(_ character: Character) -> Bool {
         if character.isWhitespace { return true }
         return ["+", "-", "_", "/", "\\", ",", ".", ":", ";", "|", "(", ")", "[", "]", "{", "}", "\"", "'"]
             .contains(character)
@@ -415,7 +422,143 @@ enum HistorySearch {
             append(entry)
         }
 
-        return criteria.apply(to: candidates)
+        for entry in HistorySemanticSearch.search(query: query,
+                                                  entries: memoryEntries,
+                                                  limit: storeLimit) {
+            append(entry)
+        }
+
+        return candidates.filter { criteria.matchesFacets($0) }
+    }
+}
+
+enum HistorySemanticSearch {
+    private struct Concept {
+        var triggers: [String]
+        var matches: [String]
+        var weight: Int = 10
+    }
+
+    private static let concepts: [Concept] = [
+        Concept(
+            triggers: ["钥匙串", "keychain", "密码", "密钥", "secret", "api key", "apikey", "credential", "credentials"],
+            matches: ["钥匙串", "keychain", "password", "secret", "api key", "apikey", "credential", "credentials", "ksec", "secitem"]
+        ),
+        Concept(
+            triggers: ["权限", "授权", "permission", "permissions", "accessibility", "辅助功能", "屏幕录制", "screen recording"],
+            matches: ["权限", "授权", "permission", "permissions", "accessibility", "辅助功能", "screen recording", "屏幕录制", "privacy"]
+        ),
+        Concept(
+            triggers: ["签名", "证书", "自签名", "codesign", "certificate", "identity", "公证", "notarization", "gatekeeper"],
+            matches: ["签名", "证书", "自签名", "codesign", "certificate", "identity", "designated requirement", "fingerprint", "spctl", "gatekeeper", "notarization"]
+        ),
+        Concept(
+            triggers: ["更新", "升级", "安装", "release", "manifest", "updater", "xattr", "quarantine"],
+            matches: ["更新", "升级", "安装", "release", "manifest", "updater", "zip", "sha256", "xattr", "quarantine", "download", "github"]
+        ),
+        Concept(
+            triggers: ["路由", "模型选择", "fallback", "备用", "供应商", "首 token", "first token"],
+            matches: ["路由", "模型", "fallback", "备用", "供应商", "provider", "route", "routing", "first token", "首 token", "metrics"]
+        ),
+        Concept(
+            triggers: ["图片", "截图", "视觉", "识图", "vision", "image", "screenshot", "ocr"],
+            matches: ["图片", "截图", "视觉", "识图", "vision", "image", "screenshot", "ocr", "screen capture", "屏幕"]
+        ),
+        Concept(
+            triggers: ["写回", "替换", "追加", "剪贴板", "粘贴", "pasteboard", "clipboard", "replace", "append"],
+            matches: ["写回", "替换", "追加", "剪贴板", "粘贴", "pasteboard", "clipboard", "replace", "append", "selection"]
+        ),
+        Concept(
+            triggers: ["润色", "改写", "优化表达", "polish", "rewrite", "proofread"],
+            matches: ["润色", "改写", "优化表达", "polish", "rewrite", "proofread", "style"]
+        ),
+        Concept(
+            triggers: ["翻译", "中英", "英文", "中文", "translation", "translate", "localization"],
+            matches: ["翻译", "中英", "英文", "中文", "translation", "translate", "localization", "language"]
+        ),
+        Concept(
+            triggers: ["历史", "记忆", "上下文", "项目", "知识库", "history", "memory", "context", "project"],
+            matches: ["历史", "记忆", "上下文", "项目", "知识库", "history", "memory", "context", "project", "profile", "tag"]
+        )
+    ]
+
+    static func search(query: String,
+                       entries: [HistoryEntry],
+                       limit: Int) -> [HistoryEntry] {
+        let activeConcepts = conceptsForQuery(query)
+        guard !activeConcepts.isEmpty else { return [] }
+        let cappedLimit = max(0, limit)
+        guard cappedLimit > 0 else { return [] }
+
+        return entries
+            .compactMap { entry -> (entry: HistoryEntry, score: Int)? in
+                let score = semanticScore(entry: entry, concepts: activeConcepts)
+                guard score >= 10 else { return nil }
+                return (entry, score)
+            }
+            .sorted {
+                if $0.score != $1.score { return $0.score > $1.score }
+                return $0.entry.date > $1.entry.date
+            }
+            .prefix(cappedLimit)
+            .map(\.entry)
+    }
+
+    private static func conceptsForQuery(_ query: String) -> [Concept] {
+        let normalized = normalizedSearchText(query)
+        let compact = compactSearchText(query)
+        guard !normalized.isEmpty else { return [] }
+        return concepts.filter { concept in
+            concept.triggers.contains { trigger in
+                normalized.contains(normalizedSearchText(trigger)) ||
+                compact.contains(compactSearchText(trigger))
+            }
+        }
+    }
+
+    private static func semanticScore(entry: HistoryEntry, concepts: [Concept]) -> Int {
+        let text = searchableText(for: entry)
+        let compact = compactSearchText(text)
+        var score = 0
+        for concept in concepts {
+            let matchedCount = concept.matches.reduce(0) { count, match in
+                let normalizedMatch = normalizedSearchText(match)
+                let compactMatch = compactSearchText(match)
+                if text.contains(normalizedMatch) || compact.contains(compactMatch) {
+                    return count + 1
+                }
+                return count
+            }
+            guard matchedCount > 0 else { continue }
+            score += concept.weight + min(matchedCount, 4) * 2
+        }
+        if entry.isFavorite {
+            score += 2
+        }
+        return score
+    }
+
+    private static func searchableText(for entry: HistoryEntry) -> String {
+        normalizedSearchText([
+            entry.displayActionName,
+            entry.source,
+            entry.output,
+            entry.displayProviderName ?? "",
+            entry.displayModelFilterName,
+            entry.displayTags.joined(separator: " ")
+        ].joined(separator: " "))
+    }
+
+    private static func normalizedSearchText(_ text: String) -> String {
+        text
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+    }
+
+    private static func compactSearchText(_ text: String) -> String {
+        normalizedSearchText(text)
+            .split(whereSeparator: HistoryFilterCriteria.isQuerySeparator)
+            .joined()
     }
 }
 

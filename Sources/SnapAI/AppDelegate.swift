@@ -741,7 +741,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func copyHistoryMarkdown(criteria: HistoryFilterCriteria) {
-        let export = HistoryCollectionExport(entries: criteria.apply(to: settings.history),
+        let export = HistoryCollectionExport(entries: filteredHistoryEntries(criteria: criteria),
                                              criteria: criteria)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(export.markdown, forType: .string)
@@ -750,7 +750,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func createHistoryContextProfile(criteria: HistoryFilterCriteria,
                                              requiresConfirmation: Bool = true,
                                              options: AutomationHistoryContextOptions = .empty) {
-        let entries = criteria.apply(to: settings.history)
+        let entries = filteredHistoryEntries(criteria: criteria)
         guard var draft = HistoryContextProfileBuilder.draft(entries: entries,
                                                              criteria: criteria,
                                                              maxEntries: options.maxEntries ?? HistoryContextProfileBuilder.defaultMaxEntries,
@@ -782,6 +782,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         iCloudSync.shared.scheduleUpload(settings)
         buildMenu()
         installMainMenu()
+    }
+
+    private func filteredHistoryEntries(criteria: HistoryFilterCriteria) -> [HistoryEntry] {
+        HistorySearch.filteredEntries(criteria: criteria,
+                                      memoryEntries: settings.history,
+                                      limit: settings.historyLimit,
+                                      searchStore: HistoryStore.shared.search)
     }
 
     private func setToggleFromAutomation(commandQuery: String?, enabled: Bool?) {

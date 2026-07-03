@@ -147,7 +147,7 @@ struct HistoryWindowView: View {
     private var historyToolbar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                TextField("搜索历史、原文、结果或模型…", text: $model.query)
+                TextField("搜索历史、语义、原文、结果或模型…", text: $model.query)
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 220)
                 Toggle(isOn: $model.favoriteOnly) {
