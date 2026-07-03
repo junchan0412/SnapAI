@@ -48,11 +48,12 @@ enum ActionCommandFactory {
                     usageCount: usageCount
                 ))
             }
-            .sorted {
-                if $0.descriptor.usageCount != $1.descriptor.usageCount {
-                    return $0.descriptor.usageCount > $1.descriptor.usageCount
+            .sorted { (lhs: (index: Int, descriptor: ActionCommandDescriptor),
+                       rhs: (index: Int, descriptor: ActionCommandDescriptor)) in
+                if lhs.descriptor.usageCount != rhs.descriptor.usageCount {
+                    return lhs.descriptor.usageCount > rhs.descriptor.usageCount
                 }
-                return $0.index < $1.index
+                return lhs.index < rhs.index
             }
             .map(\.descriptor)
     }

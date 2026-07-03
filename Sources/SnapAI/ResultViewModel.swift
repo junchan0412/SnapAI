@@ -644,7 +644,9 @@ final class ResultViewModel: ObservableObject {
     private func startTypewriter() {
         stopTypewriter()
         let timer = Timer(timeInterval: tickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor [weak self] in
+                self?.tick()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         typewriterTimer = timer

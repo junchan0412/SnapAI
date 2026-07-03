@@ -174,8 +174,9 @@ enum TextCapture {
                     outcome.failureReason = copyResult.failureReason
                 }
             }
+            let capturedOutcome = outcome
             Task { @MainActor in
-                completion(outcome)
+                completion(capturedOutcome)
             }
         }
     }

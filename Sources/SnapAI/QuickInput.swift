@@ -258,7 +258,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             }
             try? FileManager.default.removeItem(at: tmpURL)
 
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self, result, visibleWindows] in
                 self?.finishScreenCapture(result, visibleWindows: visibleWindows)
             }
         }
