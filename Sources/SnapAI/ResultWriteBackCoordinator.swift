@@ -1,6 +1,6 @@
 import Foundation
 
-enum ResultWriteBackCoordinator {
+enum WriteBackCoordinator {
     static func replace(original: String,
                         replacement: String,
                         handler: ((String, String) -> Void)?) {
@@ -26,3 +26,5 @@ enum ResultWriteBackCoordinator {
         errorMessage == nil
     }
 }
+
+typealias ResultWriteBackCoordinator = WriteBackCoordinator
