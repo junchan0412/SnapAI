@@ -3,6 +3,14 @@ import SQLite3
 
 final class HistoryStore {
     static let shared = HistoryStore()
+    private static let statusLock = NSLock()
+    private static var latestStatus = "ok"
+
+    static var latestStatusLine: String {
+        statusLock.lock()
+        defer { statusLock.unlock() }
+        return latestStatus
+    }
 
     private let url: URL
     private let lock = NSLock()
@@ -15,28 +23,37 @@ final class HistoryStore {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return [] }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return [] }
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
 
-        let sql = """
-        SELECT id, date, actionName, source, output, provider, model, isFavorite, tagsJSON
-        FROM history_entries
-        ORDER BY date DESC
-        LIMIT ?;
-        """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_int(statement, 1, Int32(max(0, limit)))
-
-        var entries: [HistoryEntry] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            if let entry = entry(from: statement) {
-                entries.append(entry)
+            let sql = """
+            SELECT id, date, actionName, source, output, provider, model, isFavorite, tagsJSON
+            FROM history_entries
+            ORDER BY date DESC
+            LIMIT ?;
+            """
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw error(db, prefix: "history SQL prepare failed")
             }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_int(statement, 1, Int32(max(0, limit)))
+
+            var entries: [HistoryEntry] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let entry = entry(from: statement) {
+                    entries.append(entry)
+                }
+            }
+            Self.recordSuccess()
+            return entries
+        } catch {
+            Self.recordFailure(error)
+            return []
         }
-        return entries
     }
 
     func search(_ query: String, limit: Int) -> [HistoryEntry] {
@@ -45,105 +62,162 @@ final class HistoryStore {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return [] }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return [] }
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
 
-        let sql = """
-        SELECT h.id, h.date, h.actionName, h.source, h.output, h.provider, h.model, h.isFavorite, h.tagsJSON
-        FROM history_fts f
-        JOIN history_entries h ON h.id = f.id
-        WHERE history_fts MATCH ?
-        ORDER BY bm25(history_fts), h.date DESC
-        LIMIT ?;
-        """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, ftsQuery(normalized), -1, SQLITE_TRANSIENT)
-        sqlite3_bind_int(statement, 2, Int32(max(0, limit)))
-
-        var entries: [HistoryEntry] = []
-        while sqlite3_step(statement) == SQLITE_ROW {
-            if let entry = entry(from: statement) {
-                entries.append(entry)
+            let sql = """
+            SELECT h.id, h.date, h.actionName, h.source, h.output, h.provider, h.model, h.isFavorite, h.tagsJSON
+            FROM history_fts f
+            JOIN history_entries h ON h.id = f.id
+            WHERE history_fts MATCH ?
+            ORDER BY bm25(history_fts), h.date DESC
+            LIMIT ?;
+            """
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw error(db, prefix: "history SQL prepare failed")
             }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_text(statement, 1, ftsQuery(normalized), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(statement, 2, Int32(max(0, limit)))
+
+            var entries: [HistoryEntry] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                if let entry = entry(from: statement) {
+                    entries.append(entry)
+                }
+            }
+            Self.recordSuccess()
+            return entries
+        } catch {
+            Self.recordFailure(error)
+            return []
         }
-        return entries
     }
 
-    func replaceAll(_ entries: [HistoryEntry], limit: Int) {
+    @discardableResult
+    func replaceAll(_ entries: [HistoryEntry], limit: Int) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return }
-        execute(db, "BEGIN IMMEDIATE;")
-        execute(db, "DELETE FROM history_fts;")
-        execute(db, "DELETE FROM history_entries;")
-        for entry in entries.prefix(max(0, limit)) {
-            upsert(entry, db: db)
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
+            try transaction(db) {
+                try execute(db, "DELETE FROM history_fts;")
+                try execute(db, "DELETE FROM history_entries;")
+                for entry in entries.prefix(max(0, limit)) {
+                    try upsert(entry, db: db)
+                }
+            }
+            Self.recordSuccess()
+            return true
+        } catch {
+            Self.recordFailure(error)
+            return false
         }
-        execute(db, "COMMIT;")
     }
 
-    func upsert(_ entry: HistoryEntry, limit: Int) {
+    @discardableResult
+    func upsert(_ entry: HistoryEntry, limit: Int) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return }
-        execute(db, "BEGIN IMMEDIATE;")
-        upsert(entry, db: db)
-        prune(db, limit: limit)
-        execute(db, "COMMIT;")
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
+            try transaction(db) {
+                try upsert(entry, db: db)
+                try prune(db, limit: limit)
+            }
+            Self.recordSuccess()
+            return true
+        } catch {
+            Self.recordFailure(error)
+            return false
+        }
     }
 
-    func delete(id: String) {
+    @discardableResult
+    func delete(id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return }
-        execute(db, "DELETE FROM history_fts WHERE id = ?;", [id])
-        execute(db, "DELETE FROM history_entries WHERE id = ?;", [id])
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
+            try transaction(db) {
+                try execute(db, "DELETE FROM history_fts WHERE id = ?;", [id])
+                try execute(db, "DELETE FROM history_entries WHERE id = ?;", [id])
+            }
+            Self.recordSuccess()
+            return true
+        } catch {
+            Self.recordFailure(error)
+            return false
+        }
     }
 
-    func deleteAll() {
+    @discardableResult
+    func deleteAll() -> Bool {
         lock.lock()
         defer { lock.unlock() }
         var db: OpaquePointer?
-        guard open(&db) else { return }
-        defer { sqlite3_close(db) }
-        guard migrate(db) else { return }
-        execute(db, "DELETE FROM history_fts;")
-        execute(db, "DELETE FROM history_entries;")
+        do {
+            try open(&db)
+            guard let db else { throw HistoryStoreFailure("failed to open history store: database unavailable") }
+            defer { sqlite3_close(db) }
+            try migrate(db)
+            try transaction(db) {
+                try execute(db, "DELETE FROM history_fts;")
+                try execute(db, "DELETE FROM history_entries;")
+            }
+            Self.recordSuccess()
+            return true
+        } catch {
+            Self.recordFailure(error)
+            return false
+        }
     }
 
-    private func open(_ db: inout OpaquePointer?) -> Bool {
+    private func open(_ db: inout OpaquePointer?) throws {
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
         } catch {
-            NSLog("SnapAI: failed to create history store directory: \(error.localizedDescription)")
-            return false
+            throw HistoryStoreFailure("failed to create history store directory: \(error.localizedDescription)")
         }
         guard sqlite3_open(url.path, &db) == SQLITE_OK else {
-            if let db {
-                NSLog("SnapAI: failed to open history store: \(String(cString: sqlite3_errmsg(db)))")
+            let failure = error(db, prefix: "failed to open history store")
+            if db != nil {
+                sqlite3_close(db)
+                db = nil
             }
-            return false
+            throw failure
         }
-        execute(db, "PRAGMA journal_mode=WAL;")
-        execute(db, "PRAGMA foreign_keys=ON;")
-        return true
+        do {
+            try execute(db, "PRAGMA journal_mode=WAL;")
+            try execute(db, "PRAGMA foreign_keys=ON;")
+        } catch {
+            if db != nil {
+                sqlite3_close(db)
+                db = nil
+            }
+            throw error
+        }
     }
 
-    private func migrate(_ db: OpaquePointer?) -> Bool {
-        execute(db, """
+    private func migrate(_ db: OpaquePointer?) throws {
+        try execute(db, """
         CREATE TABLE IF NOT EXISTS history_entries (
             id TEXT PRIMARY KEY NOT NULL,
             date REAL NOT NULL,
@@ -156,7 +230,7 @@ final class HistoryStore {
             tagsJSON TEXT NOT NULL
         );
         """)
-        execute(db, """
+        try execute(db, """
         CREATE VIRTUAL TABLE IF NOT EXISTS history_fts USING fts5(
             id UNINDEXED,
             actionName,
@@ -167,12 +241,11 @@ final class HistoryStore {
             tags
         );
         """)
-        return true
     }
 
-    private func upsert(_ entry: HistoryEntry, db: OpaquePointer?) {
+    private func upsert(_ entry: HistoryEntry, db: OpaquePointer?) throws {
         let tagsJSON = (try? String(data: JSONEncoder().encode(entry.displayTags), encoding: .utf8)) ?? "[]"
-        execute(db, """
+        try execute(db, """
         INSERT OR REPLACE INTO history_entries
         (id, date, actionName, source, output, provider, model, isFavorite, tagsJSON)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -187,8 +260,8 @@ final class HistoryStore {
             entry.isFavorite ? 1 : 0,
             tagsJSON
         ])
-        execute(db, "DELETE FROM history_fts WHERE id = ?;", [entry.id])
-        execute(db, """
+        try execute(db, "DELETE FROM history_fts WHERE id = ?;", [entry.id])
+        try execute(db, """
         INSERT INTO history_fts (id, actionName, source, output, provider, model, tags)
         VALUES (?, ?, ?, ?, ?, ?, ?);
         """, [
@@ -202,9 +275,9 @@ final class HistoryStore {
         ])
     }
 
-    private func prune(_ db: OpaquePointer?, limit: Int) {
+    private func prune(_ db: OpaquePointer?, limit: Int) throws {
         guard limit >= 0 else { return }
-        execute(db, """
+        try execute(db, """
         DELETE FROM history_fts
         WHERE id IN (
             SELECT id FROM history_entries
@@ -212,7 +285,7 @@ final class HistoryStore {
             LIMIT -1 OFFSET ?
         );
         """, [limit])
-        execute(db, """
+        try execute(db, """
         DELETE FROM history_entries
         WHERE id IN (
             SELECT id FROM history_entries
@@ -222,27 +295,51 @@ final class HistoryStore {
         """, [limit])
     }
 
-    @discardableResult
     private func execute(_ db: OpaquePointer?,
                          _ sql: String,
-                         _ values: [Any] = []) -> Bool {
+                         _ values: [Any] = []) throws {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            if let db {
-                NSLog("SnapAI: history SQL prepare failed: \(String(cString: sqlite3_errmsg(db)))")
-            }
-            return false
+            throw error(db, prefix: "history SQL prepare failed")
         }
         defer { sqlite3_finalize(statement) }
         bind(values, to: statement)
         let status = sqlite3_step(statement)
         if status != SQLITE_DONE && status != SQLITE_ROW {
-            if let db {
-                NSLog("SnapAI: history SQL failed: \(String(cString: sqlite3_errmsg(db)))")
-            }
-            return false
+            throw error(db, prefix: "history SQL failed")
         }
-        return true
+    }
+
+    private func transaction(_ db: OpaquePointer?, _ block: () throws -> Void) throws {
+        do {
+            try execute(db, "BEGIN IMMEDIATE;")
+            try block()
+            try execute(db, "COMMIT;")
+        } catch {
+            try? execute(db, "ROLLBACK;")
+            throw error
+        }
+    }
+
+    private func error(_ db: OpaquePointer?, prefix: String) -> HistoryStoreFailure {
+        if let db {
+            return HistoryStoreFailure("\(prefix): \(String(cString: sqlite3_errmsg(db)))")
+        }
+        return HistoryStoreFailure("\(prefix): database unavailable")
+    }
+
+    private static func recordSuccess() {
+        statusLock.lock()
+        latestStatus = "ok"
+        statusLock.unlock()
+    }
+
+    private static func recordFailure(_ error: Error) {
+        let message = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription, limit: 240)
+        NSLog("SnapAI: history store failure: \(message)")
+        statusLock.lock()
+        latestStatus = "error: \(message)"
+        statusLock.unlock()
     }
 
     private func bind(_ values: [Any], to statement: OpaquePointer?) {
@@ -308,6 +405,18 @@ final class HistoryStore {
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base.appendingPathComponent("SnapAI", isDirectory: true)
             .appendingPathComponent("history.sqlite")
+    }
+}
+
+private struct HistoryStoreFailure: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
     }
 }
 

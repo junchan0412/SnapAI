@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import CryptoKit
 #if !SNAPAI_MANUAL_TEST_MAIN
 @testable import SnapAILogic
 #endif
@@ -543,4 +544,27 @@ func testDesignatedRequirementParsing() {
         UpdateChecker.designatedRequirementLine(from: output) == "identifier \"com.snapai.app\" and certificate leaf = H\"547f9e9ccbac459f1ae9db2644e819edeb2e766e\"",
         "parses designated requirement from codesign output"
     )
+}
+
+func testUpdateCheckerSHA256ReadsFilesCorrectly() {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("SnapAI-SHA256-\(UUID().uuidString).bin")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let data = Data((0..<(2 * 1024 * 1024 + 333)).map { UInt8($0 % 251) })
+    do {
+        try data.write(to: url)
+    } catch {
+        expect(false, "writes temporary SHA256 fixture: \(error.localizedDescription)")
+        return
+    }
+
+    let expected = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    do {
+        let actual = try UpdateChecker.sha256Hex(for: url)
+        expect(actual == expected,
+               "update checker computes SHA256 for multi-megabyte files without changing digest")
+    } catch {
+        expect(false, "computes SHA256 for temporary fixture: \(error.localizedDescription)")
+    }
 }

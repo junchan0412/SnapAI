@@ -25,6 +25,7 @@ struct ScreenCaptureFailureDiagnostic: Error, LocalizedError, Equatable {
         case outputEmpty
         case unreadableOutput
         case invalidImage
+        case optimizedImageTooLarge
 
         var diagnosticCode: String {
             switch self {
@@ -40,6 +41,8 @@ struct ScreenCaptureFailureDiagnostic: Error, LocalizedError, Equatable {
                 return "unreadable-output"
             case .invalidImage:
                 return "invalid-image"
+            case .optimizedImageTooLarge:
+                return "optimized-image-too-large"
             }
         }
 
@@ -79,6 +82,8 @@ struct ScreenCaptureFailureDiagnostic: Error, LocalizedError, Equatable {
             return "截图文件无法读取。请重试；如果持续失败，请复制诊断信息排查。"
         case .invalidImage:
             return "截图文件无法解析为图片。请重试；如果持续失败，请复制诊断信息排查。"
+        case .optimizedImageTooLarge:
+            return "截图压缩后仍超过 AI 请求体限制。请截取更小区域,或裁剪图片后重试。"
         }
     }
 

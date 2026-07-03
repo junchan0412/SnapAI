@@ -69,6 +69,28 @@ func testAIClientEffectiveRuntimeParametersAreSanitized() {
     expect(decoded?.temperature == 1, "settings decode clamps global temperature")
 }
 
+func testAIClientEncodedImagePayloadSizing() {
+    let prefixBytes = "data:image/png;base64,".utf8.count
+    expect(AIClient.encodedImagePayloadByteCount(dataByteCount: 0,
+                                                 mimeType: "image/png") == prefixBytes,
+           "encoded image payload includes the data URL prefix for empty images")
+    expect(AIClient.encodedImagePayloadByteCount(dataByteCount: 1,
+                                                 mimeType: "image/png") == prefixBytes + 4,
+           "encoded image payload rounds one raw byte up to one base64 quartet")
+    expect(AIClient.encodedImagePayloadByteCount(dataByteCount: 3,
+                                                 mimeType: "image/png") == prefixBytes + 4,
+           "encoded image payload maps three raw bytes to four base64 bytes")
+    expect(AIClient.encodedImagePayloadByteCount(dataByteCount: 4,
+                                                 mimeType: "image/png") == prefixBytes + 8,
+           "encoded image payload maps four raw bytes to two base64 quartets")
+
+    let encodedLimit = AIClient.maxEncodedImagePayloadBytes
+    let error = AIClient.AIError.encodedImageTooLarge(encodedBytes: encodedLimit + 1,
+                                                      limitBytes: encodedLimit)
+    expect(error.localizedDescription.contains("编码后的请求体过大"),
+           "encoded image payload errors explain that base64 data URL size exceeded the limit")
+}
+
 func testAIClientStreamErrorParsing() {
     let openAIError: [String: Any] = [
         "error": [

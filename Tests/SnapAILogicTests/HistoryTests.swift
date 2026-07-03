@@ -343,6 +343,35 @@ func testHistoryStorePersistsAndSearchesWithFTS() {
     expect(store.load(limit: 20).isEmpty, "history store clears all entries")
 }
 
+func testHistoryStoreReportsWriteFailures() {
+    let parentFile = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("SnapAI-HistoryStore-Blocked-\(UUID().uuidString)")
+    let blockedURL = parentFile.appendingPathComponent("history.sqlite")
+    defer { try? FileManager.default.removeItem(at: parentFile) }
+
+    do {
+        try Data("not a directory".utf8).write(to: parentFile)
+    } catch {
+        expect(false, "creates blocked parent file for history store test: \(error.localizedDescription)")
+        return
+    }
+
+    let store = HistoryStore(url: blockedURL)
+    let entry = HistoryEntry(actionName: "测试",
+                             source: "原文",
+                             output: "结果",
+                             provider: "OpenAI",
+                             model: "gpt")
+    expect(!store.upsert(entry, limit: 20),
+           "history store write failures return false instead of silently succeeding")
+    expect(HistoryStore.latestStatusLine.contains("error:"),
+           "history store records write failures for diagnostics")
+    expect(store.load(limit: 20).isEmpty,
+           "history store load returns an empty result after open failure")
+    expect(HistoryStore.latestStatusLine.contains("error:"),
+           "history store records load failures for diagnostics")
+}
+
 func testHistorySearchUsesStoreResultsBeforeFacetFiltering() {
     let summary = HistoryEntry(id: "summary",
                                date: Date(timeIntervalSince1970: 3),

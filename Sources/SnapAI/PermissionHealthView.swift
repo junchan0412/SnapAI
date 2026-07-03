@@ -149,6 +149,8 @@ struct PermissionHealthView: View {
                         detailLine("隐私预览", snapshot.privacyPreviewEnabled ? "开启" : "关闭")
                         detailLine("本地脱敏", redactionStatusText)
                         detailLine("历史内容", snapshot.historyContentStorage.rawValue)
+                        detailLine("历史数据库", snapshot.historyStoreStatus, lineLimit: 2)
+                        detailLine("iCloud 同步", snapshot.iCloudSyncStatus, lineLimit: 3)
                         detailLine("签名", snapshot.signingSummary, lineLimit: 3)
                     }
                     .font(.caption)

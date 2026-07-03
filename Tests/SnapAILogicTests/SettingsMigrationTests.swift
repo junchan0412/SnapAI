@@ -1203,6 +1203,110 @@ func testCloudSettingsPayloadDecodeRemapsActionsAfterProviderIDRepair() {
            "cloud payload decode trims action model override before mapping")
 }
 
+func testCloudSettingsPayloadMetadataAndLegacyDefaults() {
+    let source = AppSettings()
+    source.iCloudDeviceID = "device-A"
+    source.iCloudRevision = 42
+    source.iCloudUpdatedAt = Date(timeIntervalSince1970: 1_234)
+
+    let payload = CloudSettingsPayload(settings: source)
+    expect(payload.schemaVersion == CloudSettingsPayload.currentSchemaVersion,
+           "cloud payload records the current schema version")
+    expect(payload.deviceID == "device-A", "cloud payload records a stable device identifier")
+    expect(payload.revision == 42, "cloud payload records the local revision")
+    expect(payload.updatedAt == Date(timeIntervalSince1970: 1_234),
+           "cloud payload records the last local update time")
+
+    guard let encoded = try? JSONEncoder().encode(payload),
+          var object = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+        expect(false, "cloud payload encodes for legacy compatibility test")
+        return
+    }
+    object.removeValue(forKey: "schemaVersion")
+    object.removeValue(forKey: "updatedAt")
+    object.removeValue(forKey: "deviceID")
+    object.removeValue(forKey: "revision")
+    guard let legacyData = try? JSONSerialization.data(withJSONObject: object),
+          let legacyPayload = try? JSONDecoder().decode(CloudSettingsPayload.self, from: legacyData) else {
+        expect(false, "legacy cloud payload without metadata still decodes")
+        return
+    }
+
+    expect(legacyPayload.schemaVersion == 1, "legacy cloud payload defaults to schema version 1")
+    expect(legacyPayload.revision == 1, "legacy cloud payload defaults to revision 1")
+    expect(legacyPayload.updatedAt == Date(timeIntervalSince1970: 0),
+           "legacy cloud payload defaults to an epoch update timestamp")
+    expect(!legacyPayload.deviceID.isEmpty,
+           "legacy cloud payload receives a sanitized local device id fallback")
+}
+
+func testICloudPullDecisionProtectsLocalChangesAndConflicts() {
+    let settings = AppSettings()
+    settings.iCloudSyncEnabled = true
+    settings.iCloudDeviceID = "local-device"
+    settings.iCloudRevision = 3
+    settings.iCloudLastRemoteDeviceID = "previous-remote"
+    settings.iCloudHasLocalChanges = false
+
+    var remotePayload = CloudSettingsPayload(settings: settings)
+    remotePayload.deviceID = "remote-device"
+    remotePayload.revision = 4
+    switch iCloudSync.pullDecision(payload: remotePayload, settings: settings) {
+    case .apply:
+        break
+    case .skip(let reason):
+        expect(false, "newer remote iCloud payload should apply instead of skipping: \(reason)")
+    }
+
+    var sameDevicePayload = remotePayload
+    sameDevicePayload.deviceID = "local-device"
+    sameDevicePayload.revision = 3
+    switch iCloudSync.pullDecision(payload: sameDevicePayload, settings: settings) {
+    case .apply:
+        expect(false, "same-device synced payload should not overwrite local settings")
+    case .skip(let reason):
+        expect(reason.contains("本机已同步"), "same-device payload skip explains the local sync state")
+    }
+
+    settings.iCloudHasLocalChanges = true
+    switch iCloudSync.pullDecision(payload: remotePayload, settings: settings) {
+    case .apply:
+        expect(false, "remote payload should not overwrite unsynced local changes")
+    case .skip(let reason):
+        expect(reason.contains("本机有未上传修改"),
+               "iCloud conflict skip explains that local changes are pending")
+    }
+
+    settings.iCloudHasLocalChanges = false
+    remotePayload.revision = 2
+    switch iCloudSync.pullDecision(payload: remotePayload, settings: settings) {
+    case .apply:
+        expect(false, "older remote payload should not overwrite newer local settings")
+    case .skip(let reason):
+        expect(reason.contains("旧于本机 revision"),
+               "older remote payload skip explains revision ordering")
+    }
+
+    remotePayload.revision = 3
+    remotePayload.deviceID = "other-device"
+    switch iCloudSync.pullDecision(payload: remotePayload, settings: settings) {
+    case .apply:
+        expect(false, "same-revision payload from another device should be treated as a conflict")
+    case .skip(let reason):
+        expect(reason.contains("同 revision"),
+               "same-revision remote payload skip explains the conflict")
+    }
+
+    settings.iCloudLastSyncStatus = "检测到远端 revision 3,但本机有未上传修改,已保留本机配置"
+    settings.iCloudHasLocalChanges = true
+    let summary = ICloudStatusSummary.make(settings: settings)
+    expect(summary.contains("enabled") &&
+           summary.contains("revision=3") &&
+           summary.contains("localChanges=yes") &&
+           summary.contains("本机有未上传修改"),
+           "permission diagnostics summarize iCloud revision, dirty state, and last sync status")
+}
+
 func testWorkModePresetsApplyCoherentSettings() {
     let settings = AppSettings()
 

@@ -78,6 +78,11 @@ func testScreenCaptureFailureDiagnosticsDescribeOutputProblems() {
         permissionGranted: true,
         output: ScreenCaptureOutputSnapshot(exists: true, byteCount: 128)
     )
+    let optimizedTooLarge = ScreenCaptureFailureDiagnostic(
+        reason: .optimizedImageTooLarge,
+        permissionGranted: true,
+        output: ScreenCaptureOutputSnapshot(exists: true, byteCount: 9_000_000)
+    )
 
     expect(emptyOutput.userMessage.contains("空图片文件"),
            "screen capture diagnostics explain empty output files")
@@ -87,6 +92,10 @@ func testScreenCaptureFailureDiagnosticsDescribeOutputProblems() {
            "screen capture diagnostics explain invalid image output")
     expect(invalidImage.shareableText.contains("Output File Bytes: 128"),
            "screen capture diagnostics include invalid output size")
+    expect(optimizedTooLarge.userMessage.contains("压缩后仍超过"),
+           "screen capture diagnostics explain images that remain too large after optimization")
+    expect(optimizedTooLarge.shareableText.contains("Reason: optimized-image-too-large"),
+           "screen capture diagnostics expose a stable reason code for encoded payload overflow")
 }
 
 func testWriteBackUndoRecordAvailability() {

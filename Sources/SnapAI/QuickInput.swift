@@ -8,6 +8,7 @@ final class QuickInputModel: ObservableObject {
     @Published var actionID: String = ""
     @Published var imageData: Data? = nil   // #3 截图/粘贴的图片
     @Published var imageMimeType: String = "image/png"
+    @Published var imageWarning: String? = nil
     let settings: AppSettings
     var onSubmit: ((String, AIAction, Data?, String) -> Void)?
 
@@ -23,6 +24,7 @@ final class QuickInputModel: ObservableObject {
         text = ""
         imageData = nil
         imageMimeType = "image/png"
+        imageWarning = nil
     }
 
     /// 从剪贴板读取图片(#3)
@@ -31,6 +33,13 @@ final class QuickInputModel: ObservableObject {
             if let payload = image.snapAIOptimizedData() {
                 imageData = payload.data
                 imageMimeType = payload.mimeType
+                imageWarning = QuickInputImageStatus.optimizedMessage(payload: payload)
+            } else {
+                imageWarning = ScreenCaptureFailureDiagnostic(
+                    reason: .optimizedImageTooLarge,
+                    permissionGranted: true,
+                    output: .missing
+                ).userMessage
             }
         }
     }
@@ -95,6 +104,13 @@ struct QuickInputView: View {
                     }
                     .buttonStyle(.plain).padding(2)
                 }
+            }
+            if let warning = model.imageWarning {
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             QuickPromptEditor(
@@ -247,7 +263,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
                 }
                 guard let image = NSImage(data: data),
                       let payload = image.snapAIOptimizedData() else {
-                    throw ScreenCaptureFailureDiagnostic(reason: .invalidImage,
+                    throw ScreenCaptureFailureDiagnostic(reason: Self.imagePayloadFailureReason(data: data),
                                                          permissionGranted: true,
                                                          output: output)
                 }
@@ -270,10 +286,15 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         case .success(let payload):
             model.imageData = payload.data
             model.imageMimeType = payload.mimeType
+            model.imageWarning = QuickInputImageStatus.optimizedMessage(payload: payload)
         case .failure(let error):
             presentScreenCaptureFailure(error)
         }
         show()
+    }
+
+    private nonisolated static func imagePayloadFailureReason(data: Data) -> ScreenCaptureFailureDiagnostic.Reason {
+        NSImage(data: data) == nil ? .invalidImage : .optimizedImageTooLarge
     }
 
     private func presentScreenCaptureFailure(_ error: Error) {
@@ -491,25 +512,58 @@ struct SnapAIImagePayload {
     var mimeType: String
 }
 
+enum QuickInputImageStatus {
+    static func optimizedMessage(payload: SnapAIImagePayload) -> String {
+        let format = payload.mimeType == "image/jpeg" ? "JPEG" : "PNG"
+        return "图片已优化为 \(formatByteCount(payload.data.count)) \(format),发送前会按 AI 接口限制校验。"
+    }
+
+    private static func formatByteCount(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(max(0, bytes)),
+                                  countStyle: .file)
+    }
+}
+
 extension NSImage {
     /// 转换为适合 API 上传的图片数据,限制像素和字节数,避免请求体过大。
     func snapAIOptimizedData(maxPixel: CGFloat = 1600,
-                             maxBytes: Int = 2_500_000) -> SnapAIImagePayload? {
+                             maxBytes: Int = 2_500_000,
+                             maxEncodedBytes: Int = AIClient.maxEncodedImagePayloadBytes) -> SnapAIImagePayload? {
         for pixelLimit in [maxPixel, 1200, 900, 640] {
             guard let resized = snapAIResized(maxPixel: pixelLimit) else { continue }
-            if let png = resized.snapAIImageData(type: .png), png.count <= maxBytes {
+            if let png = resized.snapAIImageData(type: .png),
+               png.count <= maxBytes,
+               Self.snapAIEncodedPayloadFits(data: png,
+                                             mimeType: "image/png",
+                                             maxEncodedBytes: maxEncodedBytes) {
                 return SnapAIImagePayload(data: png, mimeType: "image/png")
             }
             for quality in [0.82, 0.68, 0.52, 0.42] {
                 if let jpeg = resized.snapAIImageData(type: .jpeg, compression: quality),
-                   jpeg.count <= maxBytes {
+                   jpeg.count <= maxBytes,
+                   Self.snapAIEncodedPayloadFits(data: jpeg,
+                                                 mimeType: "image/jpeg",
+                                                 maxEncodedBytes: maxEncodedBytes) {
                     return SnapAIImagePayload(data: jpeg, mimeType: "image/jpeg")
                 }
             }
         }
         guard let fallback = snapAIResized(maxPixel: 640)?
             .snapAIImageData(type: .jpeg, compression: 0.36) else { return nil }
+        guard fallback.count <= maxBytes,
+              Self.snapAIEncodedPayloadFits(data: fallback,
+                                            mimeType: "image/jpeg",
+                                            maxEncodedBytes: maxEncodedBytes) else {
+            return nil
+        }
         return SnapAIImagePayload(data: fallback, mimeType: "image/jpeg")
+    }
+
+    private static func snapAIEncodedPayloadFits(data: Data,
+                                                 mimeType: String,
+                                                 maxEncodedBytes: Int) -> Bool {
+        AIClient.encodedImagePayloadByteCount(dataByteCount: data.count,
+                                              mimeType: mimeType) <= maxEncodedBytes
     }
 
     private func snapAIResized(maxPixel: CGFloat) -> NSImage? {

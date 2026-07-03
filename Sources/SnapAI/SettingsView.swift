@@ -15,6 +15,13 @@ struct SettingsView: View {
     @StateObject private var tester = ConnectionTester()
     private let aiLabelWidth: CGFloat = 76
     private var isPinned: Bool { pinState.isPinned }
+    private var iCloudSyncStatusText: String {
+        guard settings.iCloudSyncEnabled else { return "" }
+        let status = settings.iCloudLastSyncStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        let revision = max(0, settings.iCloudRevision)
+        let base = status.isEmpty ? "状态: 未同步" : "状态: \(status)"
+        return " \(base), revision \(revision)。"
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -1381,7 +1388,7 @@ struct SettingsView: View {
                 settingsSection("同步与动效") {
                     settingsToggleRow(
                         title: "iCloud 配置同步",
-                        description: "同步供应商配置、动作和快捷键，不包含 API Key。",
+                        description: "同步供应商配置、动作和快捷键，不包含 API Key。\(iCloudSyncStatusText)",
                         isOn: Binding(
                             get: { settings.iCloudSyncEnabled },
                             set: { enabled in

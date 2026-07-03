@@ -329,6 +329,13 @@ final class AppSettings: ObservableObject, Codable {
     @Published var actionUsageCounts: [String: Int] = [:]
     // iCloud 同步开关(#9)
     @Published var iCloudSyncEnabled: Bool = false
+    @Published var iCloudDeviceID: String = AppSettings.stableICloudDeviceID()
+    @Published var iCloudRevision: Int = 0
+    @Published var iCloudUpdatedAt: Date? = nil
+    @Published var iCloudLastSyncAt: Date? = nil
+    @Published var iCloudLastSyncStatus: String = "未同步"
+    @Published var iCloudLastRemoteDeviceID: String = ""
+    @Published var iCloudHasLocalChanges: Bool = false
 
     // MARK: - 当前激活配置(兼容旧的扁平访问方式,供 AIClient / ModelLoader 使用)
 
@@ -648,6 +655,8 @@ final class AppSettings: ObservableObject, Codable {
         case contextProfiles, activeContextProfileID
         case history, historyLimit, historyContentStorage, savedHistoryFilters, onboardingDone, panelWidth, panelHeight
         case actionUsageCounts, iCloudSyncEnabled
+        case iCloudDeviceID, iCloudRevision, iCloudUpdatedAt, iCloudLastSyncAt, iCloudLastSyncStatus, iCloudLastRemoteDeviceID
+        case iCloudHasLocalChanges
         // 旧:单配置(仅用于迁移,不再写出)
         case apiProtocol, baseURL, apiKey, model
     }
@@ -766,6 +775,21 @@ final class AppSettings: ObservableObject, Codable {
             needsPostLoadSave = true
         }
         iCloudSyncEnabled = (try? c.decode(Bool.self, forKey: .iCloudSyncEnabled)) ?? false
+        iCloudDeviceID = Self.sanitizedICloudDeviceID(try? c.decode(String.self, forKey: .iCloudDeviceID))
+        iCloudRevision = max(0, (try? c.decode(Int.self, forKey: .iCloudRevision)) ?? 0)
+        iCloudUpdatedAt = try? c.decode(Date.self, forKey: .iCloudUpdatedAt)
+        iCloudLastSyncAt = try? c.decode(Date.self, forKey: .iCloudLastSyncAt)
+        iCloudLastSyncStatus = Self.limitedImportedString(
+            (try? c.decode(String.self, forKey: .iCloudLastSyncStatus)) ?? "未同步",
+            maxLength: 160,
+            fallback: "未同步"
+        )
+        iCloudLastRemoteDeviceID = Self.limitedImportedString(
+            (try? c.decode(String.self, forKey: .iCloudLastRemoteDeviceID)) ?? "",
+            maxLength: 80,
+            fallback: ""
+        )
+        iCloudHasLocalChanges = (try? c.decode(Bool.self, forKey: .iCloudHasLocalChanges)) ?? false
 
         if let list = try? c.decode([AIProvider].self, forKey: .providers), !list.isEmpty {
             // 新格式
@@ -842,6 +866,13 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(panelHeight, forKey: .panelHeight)
         try c.encode(actionUsageCounts, forKey: .actionUsageCounts)
         try c.encode(iCloudSyncEnabled, forKey: .iCloudSyncEnabled)
+        try c.encode(iCloudDeviceID, forKey: .iCloudDeviceID)
+        try c.encode(iCloudRevision, forKey: .iCloudRevision)
+        try c.encodeIfPresent(iCloudUpdatedAt, forKey: .iCloudUpdatedAt)
+        try c.encodeIfPresent(iCloudLastSyncAt, forKey: .iCloudLastSyncAt)
+        try c.encode(iCloudLastSyncStatus, forKey: .iCloudLastSyncStatus)
+        try c.encode(iCloudLastRemoteDeviceID, forKey: .iCloudLastRemoteDeviceID)
+        try c.encode(iCloudHasLocalChanges, forKey: .iCloudHasLocalChanges)
     }
 
     static let storeKey = "SnapAI.settings.v1"
@@ -849,6 +880,29 @@ final class AppSettings: ObservableObject, Codable {
     /// 已写入 Keychain 的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
     var keychainCache: [String: String] = [:]
     var needsPostLoadSave = false
+
+    static let iCloudDeviceIDDefaultsKey = "SnapAI.iCloud.deviceID"
+
+    static func stableICloudDeviceID(defaults: UserDefaults = .standard) -> String {
+        if let stored = defaults.string(forKey: iCloudDeviceIDDefaultsKey),
+           isValidICloudDeviceID(stored) {
+            return stored
+        }
+        let value = UUID().uuidString
+        defaults.set(value, forKey: iCloudDeviceIDDefaultsKey)
+        return value
+    }
+
+    static func sanitizedICloudDeviceID(_ value: String?) -> String {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return isValidICloudDeviceID(trimmed) ? trimmed : stableICloudDeviceID()
+    }
+
+    private static func isValidICloudDeviceID(_ value: String) -> Bool {
+        guard value.count >= 8, value.count <= 80 else { return false }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+        return value.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
 
     func applyMigrations(from version: Int) {
         guard version < Self.currentSchemaVersion else { return }
@@ -880,6 +934,12 @@ final class AppSettings: ObservableObject, Codable {
         exportSettings.panelWidth = Self.defaultPanelWidth
         exportSettings.panelHeight = Self.defaultPanelHeight
         exportSettings.iCloudSyncEnabled = false
+        exportSettings.iCloudRevision = 0
+        exportSettings.iCloudUpdatedAt = nil
+        exportSettings.iCloudLastSyncAt = nil
+        exportSettings.iCloudLastSyncStatus = "未同步"
+        exportSettings.iCloudLastRemoteDeviceID = ""
+        exportSettings.iCloudHasLocalChanges = false
         exportSettings.onboardingDone = true
         return try? JSONEncoder().encode(exportSettings)
     }

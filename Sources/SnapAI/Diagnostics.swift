@@ -104,6 +104,21 @@ struct PermissionAPIKeyHealthSummary: Equatable {
     }
 }
 
+enum ICloudStatusSummary {
+    static func make(settings: AppSettings) -> String {
+        guard settings.iCloudSyncEnabled else { return "disabled" }
+        let status = PermissionHealthSnapshot.diagnosticValue(settings.iCloudLastSyncStatus,
+                                                              fallback: "未同步",
+                                                              limit: 120)
+        let remoteDevice = PermissionHealthSnapshot.diagnosticValue(settings.iCloudLastRemoteDeviceID,
+                                                                    fallback: "none",
+                                                                    limit: 80)
+        let updatedAt = settings.iCloudUpdatedAt.map { ISO8601DateFormatter().string(from: $0) } ?? "none"
+        let syncedAt = settings.iCloudLastSyncAt.map { ISO8601DateFormatter().string(from: $0) } ?? "none"
+        return "enabled, revision=\(max(0, settings.iCloudRevision)), localChanges=\(settings.iCloudHasLocalChanges ? "yes" : "no"), updatedAt=\(updatedAt), lastSyncAt=\(syncedAt), remoteDevice=\(remoteDevice), status=\(status)"
+    }
+}
+
 struct PermissionHealthRecoverySuggestion: Equatable, Hashable {
     var title: String
     var detail: String
@@ -160,6 +175,8 @@ struct PermissionHealthSnapshot {
     var redactionRuleCount: Int = 0
     var invalidRedactionRuleCount: Int = 0
     var historyContentStorage: HistoryContentStorage = .full
+    var historyStoreStatus: String = "unknown"
+    var iCloudSyncStatus: String = "disabled"
     var contextProfileCount: Int = 0
     var usableContextProfileCount: Int = 0
     var activeContextProfileName: String = "none"
@@ -205,6 +222,8 @@ struct PermissionHealthSnapshot {
         Local Redaction: \(redactionEnabled ? "enabled" : "disabled")
         Redaction Rules: \(redactionRuleCount) (invalid \(invalidRedactionRuleCount))
         History Content Storage: \(historyContentStorage.rawValue)
+        History Store: \(Self.diagnosticValue(historyStoreStatus, limit: 240))
+        iCloud Sync: \(Self.diagnosticValue(iCloudSyncStatus, limit: 240))
         Context Profiles: \(contextProfileCount) (usable \(usableContextProfileCount))
         Active Context: \(activeContextCharacterCount > 0 ? "set" : "none")
         Active Context Name Characters: \(activeContextCharacterCount > 0 ? activeContextProfileName.count : 0)
@@ -242,6 +261,8 @@ struct PermissionHealthSnapshot {
         Write Back: \(Self.diagnosticValue(writeBackStatus, limit: 180))
         Privacy: preview \(privacyPreviewEnabled ? "enabled" : "disabled"), redaction \(redactionEnabled ? "enabled" : "disabled"), invalid rules \(invalidRedactionRuleCount)/\(redactionRuleCount)
         History Content Storage: \(historyContentStorage.rawValue)
+        History Store: \(Self.diagnosticValue(historyStoreStatus, limit: 180))
+        iCloud Sync: \(Self.diagnosticValue(iCloudSyncStatus, limit: 180))
         Context: \(usableContextProfileCount)/\(contextProfileCount) usable; active \(activeContextCharacterCount > 0 ? "set" : "none"); effective prompt \(effectiveSystemPromptCharacterCount) chars
         Signing: \(Self.diagnosticValue(signingSummary, limit: 240))
         HotKey Failures: \(Self.diagnosticList(hotKeyFailures, limit: 240))
@@ -437,6 +458,8 @@ struct PermissionHealthSnapshot {
             redactionRuleCount: settings.redactionRules.count,
             invalidRedactionRuleCount: invalidRedactionRules,
             historyContentStorage: settings.historyContentStorage,
+            historyStoreStatus: HistoryStore.latestStatusLine,
+            iCloudSyncStatus: ICloudStatusSummary.make(settings: settings),
             contextProfileCount: contextSummary.profileCount,
             usableContextProfileCount: contextSummary.usableProfileCount,
             activeContextProfileName: contextSummary.activeProfileName.isEmpty ? "none" : contextSummary.activeProfileName,

@@ -48,6 +48,7 @@ final class AIClient {
         case insecureHTTPHost(String)
         case invalidURL
         case imageTooLarge(Int)
+        case encodedImageTooLarge(encodedBytes: Int, limitBytes: Int)
         var errorDescription: String? {
             switch self {
             case .missingAPIKey: return "未配置 API Key,请在设置中填写。"
@@ -58,11 +59,14 @@ final class AIClient {
             case .insecureHTTPHost(let host): return "HTTP 明文端点仅允许用于本机地址。当前主机 \(host) 不安全,请改用 HTTPS。"
             case .invalidURL: return "Base URL 无效。"
             case .imageTooLarge(let bytes): return "图片过大(\(bytes / 1024 / 1024) MB),请压缩后重试。"
+            case .encodedImageTooLarge(let encodedBytes, let limitBytes):
+                return "图片编码后的请求体过大(\(encodedBytes / 1024 / 1024) MB),已超过 \(limitBytes / 1024 / 1024) MB 限制,请压缩或裁剪后重试。"
             }
         }
     }
 
-    private static let maxImageBytes = 5_000_000
+    static let maxImageBytes = 5_000_000
+    static let maxEncodedImagePayloadBytes = 6_700_000
     static let defaultMaxTokens = 2048
     static let defaultRequestTimeout: Double = 60
     static let thinkingOutputTokenMargin = 1_024
@@ -413,10 +417,22 @@ final class AIClient {
 
     private func validateImagePayloads(_ messages: [ChatMessage]) throws {
         for message in messages {
-            if let imageData = message.imageData, imageData.count > Self.maxImageBytes {
+            guard let imageData = message.imageData else { continue }
+            if imageData.count > Self.maxImageBytes {
                 throw AIError.imageTooLarge(imageData.count)
             }
+            let encodedBytes = Self.encodedImagePayloadByteCount(dataByteCount: imageData.count,
+                                                                 mimeType: message.imageMimeType)
+            if encodedBytes > Self.maxEncodedImagePayloadBytes {
+                throw AIError.encodedImageTooLarge(encodedBytes: encodedBytes,
+                                                   limitBytes: Self.maxEncodedImagePayloadBytes)
+            }
         }
+    }
+
+    static func encodedImagePayloadByteCount(dataByteCount: Int, mimeType: String) -> Int {
+        let base64ByteCount = ((max(0, dataByteCount) + 2) / 3) * 4
+        return "data:\(mimeType);base64,".utf8.count + base64ByteCount
     }
 
     // MARK: - OpenAI 兼容
