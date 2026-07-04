@@ -31,12 +31,14 @@ extension AppDelegate {
             }
             previousApp = nil
             previousSelectionSnapshot = nil
+            previousCaptureMethod = nil
             runQuickInput(text: text,
                           action: action.applyingAutomationOptions(options, settings: settings),
                           autoReplaceEnabled: AutomationWriteBackPolicy.urlRun(options: options).autoReplaceEnabled)
         case let .openQuickInput(text, actionQuery):
             previousApp = currentCaptureTargetApp()
             previousSelectionSnapshot = nil
+            previousCaptureMethod = nil
             if let action = actionForAutomation(query: actionQuery) {
                 quickInputModel.actionID = action.id
             }

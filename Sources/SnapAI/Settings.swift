@@ -228,6 +228,9 @@ struct HotKeyCombo: Codable, Equatable, Hashable {
 
     static let askDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))
     static let translateDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey))
+    static let polishDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(optionKey))
+    static let summarizeDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_S), modifiers: UInt32(optionKey))
+    static let explainCodeDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_E), modifiers: UInt32(optionKey))
 
     /// 人类可读描述,如 "⌥A"
     var displayString: String {
@@ -914,13 +917,37 @@ final class AppSettings: ObservableObject, Codable {
     }
 
     func applyMissingDefaultHotKeys() {
-        let defaults = Dictionary(uniqueKeysWithValues: AIAction.defaults().compactMap { action in
-            action.hotKey.map { (action.name, $0) }
-        })
         for idx in actions.indices {
             guard actions[idx].hotKey == nil,
-                  let hk = defaults[actions[idx].name] else { continue }
+                  let hk = AIAction.defaultHotKeysByName[actions[idx].name] else { continue }
             actions[idx].hotKey = hk
+        }
+    }
+
+    func restoreDefaultHotKeys() {
+        quickPanelHotKey = .quickPanelDefault
+        var restoredDefaultNames = Set<String>()
+        var reservedCombos = Set<HotKeyCombo>([quickPanelHotKey])
+
+        for idx in actions.indices {
+            let name = actions[idx].name
+            guard let defaultHotKey = AIAction.defaultHotKeysByName[name] else { continue }
+            if restoredDefaultNames.insert(name).inserted {
+                actions[idx].hotKey = defaultHotKey
+                reservedCombos.insert(defaultHotKey)
+            } else if actions[idx].hotKey == defaultHotKey {
+                actions[idx].hotKey = nil
+            }
+        }
+
+        for idx in actions.indices {
+            let name = actions[idx].name
+            guard !AIAction.defaultActionNames.contains(name),
+                  let hotKey = actions[idx].hotKey,
+                  reservedCombos.contains(hotKey) else {
+                continue
+            }
+            actions[idx].hotKey = nil
         }
     }
 

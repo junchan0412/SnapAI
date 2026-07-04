@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var previousApp: NSRunningApplication?
     var lastExternalFrontmostApp: NSRunningApplication?
     var previousSelectionSnapshot: TextSelectionSnapshot?
+    var previousCaptureMethod: TextCaptureMethod?
     var lastTextCaptureStatusSummary: String?
     var lastWriteBackRecord: TextWriteBackRecord?
     var lastWriteBackStatusSummary: String?
@@ -597,6 +598,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                           forceDismissTransientUIBeforeCopy: Bool = false) {
         previousApp = captureTargetApp(preferredTarget: preferredTarget)
         previousSelectionSnapshot = nil
+        previousCaptureMethod = nil
         TextCapture.captureDetailed(preferAX: settings.useAXFirst,
                                     targetApp: previousApp,
                                     forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy) { [weak self] outcome in
@@ -609,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
             self.recordTextCaptureOutcome(outcome)
             self.previousSelectionSnapshot = TextCapture.recentSelectionSnapshot(matching: text)
+            self.previousCaptureMethod = outcome.method
             guard let prepared = self.prepareTextForSubmission(text,
                                                                action: action,
                                                                imageData: nil) else { return }
@@ -641,6 +644,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func toggleQuickInput() {
         previousApp = currentCaptureTargetApp()
         previousSelectionSnapshot = nil
+        previousCaptureMethod = nil
         quickInput.toggle()
     }
 

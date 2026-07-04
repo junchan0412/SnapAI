@@ -6,6 +6,7 @@ extension AppDelegate {
     func replaceSelection(original: String, with replacement: String) {
         defer {
             previousSelectionSnapshot = nil
+            previousCaptureMethod = nil
             TextCapture.clearRecentSelectionSnapshot()
         }
         let decision = DiffPreviewWindowController.present(original: original,
@@ -23,7 +24,8 @@ extension AppDelegate {
             }
             panelController.hide()
             TextEditTransaction(targetApp: writeBackTarget,
-                                selectionSnapshot: previousSelectionSnapshot)
+                                selectionSnapshot: previousSelectionSnapshot,
+                                assumeSelectionIsPreserved: previousCaptureMethod == .clipboard || previousCaptureMethod == .service)
                 .replace(original: original, with: replacement) { [weak self] in
                     self?.recordWriteBack(targetApp: writeBackTarget,
                                           original: original,

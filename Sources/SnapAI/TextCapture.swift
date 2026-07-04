@@ -108,7 +108,12 @@ enum TextCapture {
     private static var recentSnapshot: TextSelectionSnapshot?
     static let targetActivationWaitMicroseconds: useconds_t = 120_000
     static let transientMenuDismissWaitMicroseconds: useconds_t = 60_000
+    static let clipboardRetryWaitMicroseconds: useconds_t = 70_000
     static let clipboardChangePollLimit = 80
+    static let clipboardCopyAttemptLimit = 3
+    static let focusedAXTraversalDepth = 4
+    static let targetAXTraversalDepth = 8
+    static let maxAXTraversalNodes = 500
 
     /// 当前进程是否已被授予辅助功能权限
     static func hasAccessibilityPermission(prompt: Bool = false) -> Bool {
@@ -213,7 +218,7 @@ enum TextCapture {
            isAXUIElementRef(element) {
             let axElement = element as! AXUIElement
             var visited = AXTraversalCounter()
-            if let text = selectedText(in: axElement, depth: 2, visited: &visited) {
+            if let text = selectedText(in: axElement, depth: focusedAXTraversalDepth, visited: &visited) {
                 return text
             }
         }
@@ -224,7 +229,7 @@ enum TextCapture {
                                           isTerminated: targetApp.isTerminated) {
             let appElement = AXUIElementCreateApplication(targetApp.processIdentifier)
             var visited = AXTraversalCounter()
-            if let text = selectedText(in: appElement, depth: 5, visited: &visited) {
+            if let text = selectedText(in: appElement, depth: targetAXTraversalDepth, visited: &visited) {
                 return text
             }
         }
@@ -234,12 +239,15 @@ enum TextCapture {
 
     private struct AXTraversalCounter {
         var count = 0
+        var seenHashes = Set<CFHashCode>()
     }
 
     private static func selectedText(in element: AXUIElement,
                                      depth: Int,
                                      visited: inout AXTraversalCounter) -> String? {
-        guard visited.count < 90 else { return nil }
+        guard visited.count < maxAXTraversalNodes else { return nil }
+        let hash = CFHash(element)
+        guard visited.seenHashes.insert(hash).inserted else { return nil }
         visited.count += 1
 
         var selected: CFTypeRef?
@@ -251,6 +259,9 @@ enum TextCapture {
             storeSelectionSnapshot(element: element, selectedText: text)
             return text
         }
+        if let text = selectedTextFromParameterizedRange(in: element) {
+            return text
+        }
         if let text = selectedTextFromValueRange(in: element) {
             return text
         }
@@ -259,7 +270,8 @@ enum TextCapture {
 
         for attribute in [
             kAXFocusedUIElementAttribute as CFString,
-            kAXFocusedWindowAttribute as CFString
+            kAXFocusedWindowAttribute as CFString,
+            kAXMainWindowAttribute as CFString
         ] {
             var value: CFTypeRef?
             if AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
@@ -273,8 +285,12 @@ enum TextCapture {
         }
 
         for attribute in [
+            kAXWindowsAttribute as CFString,
             kAXChildrenAttribute as CFString,
-            "AXVisibleChildren" as CFString
+            "AXVisibleChildren" as CFString,
+            "AXSelectedChildren" as CFString,
+            "AXSelectedRows" as CFString,
+            "AXSelectedColumns" as CFString
         ] {
             var value: CFTypeRef?
             guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
@@ -292,6 +308,27 @@ enum TextCapture {
         }
 
         return nil
+    }
+
+    private static func selectedTextFromParameterizedRange(in element: AXUIElement) -> String? {
+        guard let range = selectedRange(in: element) else { return nil }
+        var mutableRange = range
+        guard let rangeValue = AXValueCreate(.cfRange, &mutableRange) else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(
+            element,
+            kAXStringForRangeParameterizedAttribute as CFString,
+            rangeValue,
+            &value
+        ) == .success,
+              let text = value as? String,
+              usableCapturedText(text) != nil else {
+            return nil
+        }
+        storeSelectionSnapshot(element: element,
+                               selectedText: text,
+                               selectedRange: range)
+        return text
     }
 
     private static func selectedTextFromValueRange(in element: AXUIElement) -> String? {
@@ -452,7 +489,6 @@ enum TextCapture {
         guard previousSnapshot.canRestore else {
             return (nil, .pasteboardSnapshotUnsafe, previousSnapshot.reasonCode, 0)
         }
-        let previousChangeCount = pasteboard.changeCount
         let frontmostPIDBeforeCopy = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let shouldDismissTransientMenu = shouldDismissTransientMenusBeforeCopy(
             targetPID: targetApp?.processIdentifier,
@@ -468,31 +504,51 @@ enum TextCapture {
             sendEscape()
             usleep(transientMenuDismissWaitMicroseconds)
         }
-        sendCmdC()
 
-        // 轮询等待剪贴板更新(最多约 800ms),给右键菜单和复杂编辑控件更多响应时间。
-        var attempts = 0
-        while pasteboard.changeCount == previousChangeCount && attempts < clipboardChangePollLimit {
-            usleep(10_000) // 10ms
-            attempts += 1
+        var waitAttempts = 0
+        var lastCaptured: String?
+        var lastFailure: TextCaptureFailureReason = .clipboardUnchanged
+        for attempt in 0..<clipboardCopyAttemptLimit {
+            if attempt > 0 {
+                if let targetApp,
+                   activateTargetForCapture(targetApp) {
+                    usleep(targetActivationWaitMicroseconds)
+                } else {
+                    usleep(clipboardRetryWaitMicroseconds)
+                }
+            }
+            let previousChangeCount = pasteboard.changeCount
+            sendCmdC()
+
+            var attemptWaits = 0
+            while pasteboard.changeCount == previousChangeCount && attemptWaits < clipboardChangePollLimit {
+                usleep(10_000) // 10ms
+                attemptWaits += 1
+            }
+            waitAttempts += attemptWaits
+
+            guard pasteboard.changeCount != previousChangeCount else {
+                lastFailure = .clipboardUnchanged
+                continue
+            }
+
+            let capturedChangeCount = pasteboard.changeCount
+            let captured = ServicePasteboardText.text(from: pasteboard)
+                ?? pasteboard.string(forType: .string)
+            lastCaptured = captured
+
+            // 还原剪贴板,避免污染用户原有内容
+            restorePasteboardIfUnchanged(pasteboard,
+                                         snapshot: previousSnapshot,
+                                         expectedChangeCount: capturedChangeCount)
+
+            if usableCapturedText(captured) != nil {
+                return (captured, nil, nil, waitAttempts)
+            }
+            lastFailure = .clipboardEmpty
+            usleep(clipboardRetryWaitMicroseconds)
         }
-
-        guard pasteboard.changeCount != previousChangeCount else {
-            return (nil, .clipboardUnchanged, nil, attempts)
-        }
-
-        let capturedChangeCount = pasteboard.changeCount
-        let captured = pasteboard.string(forType: .string)
-
-        // 还原剪贴板,避免污染用户原有内容
-        restorePasteboardIfUnchanged(pasteboard,
-                                     snapshot: previousSnapshot,
-                                     expectedChangeCount: capturedChangeCount)
-
-        if usableCapturedText(captured) == nil {
-            return (captured, .clipboardEmpty, nil, attempts)
-        }
-        return (captured, nil, nil, attempts)
+        return (lastCaptured, lastFailure, nil, waitAttempts)
     }
 
     static func shouldActivateTargetForCapture(targetPID: pid_t?,
@@ -597,24 +653,6 @@ enum TextCapture {
         right?.post(tap: .cghidEventTap)
         CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_RightArrow), keyDown: false)?
             .post(tap: .cghidEventTap)
-    }
-
-    static func sendShiftLeftArrow(repeat count: Int) {
-        guard count > 0,
-              let source = CGEventSource(stateID: .combinedSessionState) else { return }
-        let cappedCount = min(count, 20_000)
-        for _ in 0..<cappedCount {
-            let down = CGEvent(keyboardEventSource: source,
-                               virtualKey: CGKeyCode(kVK_LeftArrow),
-                               keyDown: true)
-            down?.flags = .maskShift
-            let up = CGEvent(keyboardEventSource: source,
-                             virtualKey: CGKeyCode(kVK_LeftArrow),
-                             keyDown: false)
-            up?.flags = .maskShift
-            down?.post(tap: .cghidEventTap)
-            up?.post(tap: .cghidEventTap)
-        }
     }
 
     static func pasteboardSnapshotRejectionReason(itemCount: Int,

@@ -335,6 +335,7 @@ struct TextWriteBackFallbackDiagnostic: Equatable {
 struct TextEditTransaction {
     var targetApp: NSRunningApplication?
     var selectionSnapshot: TextSelectionSnapshot?
+    var assumeSelectionIsPreserved: Bool = false
     var focusDelay: TimeInterval = 0.18
     var restoreDelay: TimeInterval = 0.35
 
@@ -343,12 +344,11 @@ struct TextEditTransaction {
                  completion: (() -> Void)? = nil,
                  failure: ((PasteboardSnapshot) -> Void)? = nil) {
         paste(text) {
-            guard TextCapture.selectedTextViaAX()?.isEmpty != false else { return 0.03 }
-            if selectionSnapshot?.restoreSelection() == true {
-                return 0.08
-            }
-            TextCapture.sendShiftLeftArrow(repeat: original.count)
-            return Self.selectionDelay(forCharacterCount: original.count)
+            let hasAccessibleSelection = TextCapture.selectedTextViaAX()?.isEmpty == false
+            let restoredSnapshot = hasAccessibleSelection ? false : selectionSnapshot?.restoreSelection() == true
+            return Self.replacementPreparationDelay(hasAccessibleSelection: hasAccessibleSelection,
+                                                    restoredSnapshot: restoredSnapshot,
+                                                    assumeSelectionIsPreserved: assumeSelectionIsPreserved)
         } completion: {
             completion?()
         } failure: { snapshot in
@@ -369,9 +369,13 @@ struct TextEditTransaction {
         }
     }
 
-    nonisolated static func selectionDelay(forCharacterCount count: Int) -> TimeInterval {
-        guard count > 0 else { return 0.03 }
-        return min(0.75, 0.05 + Double(count) * 0.0015)
+    nonisolated static func replacementPreparationDelay(hasAccessibleSelection: Bool,
+                                                        restoredSnapshot: Bool,
+                                                        assumeSelectionIsPreserved: Bool) -> TimeInterval {
+        if hasAccessibleSelection { return 0.03 }
+        if restoredSnapshot { return 0.08 }
+        if assumeSelectionIsPreserved { return 0.05 }
+        return 0.03
     }
 
     private func paste(_ text: String,

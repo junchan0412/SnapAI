@@ -6,10 +6,23 @@ import Carbon.HIToolbox
 @testable import SnapAILogic
 #endif
 
-func testTextReplacementSelectionDelay() {
-    expect(TextEditTransaction.selectionDelay(forCharacterCount: 0) == 0.03, "uses short delay for existing selections")
-    expect(TextEditTransaction.selectionDelay(forCharacterCount: 100) > 0.03, "allows keyboard reselection to settle")
-    expect(TextEditTransaction.selectionDelay(forCharacterCount: 10_000) == 0.75, "caps long reselection delay")
+func testTextReplacementPreparationDelay() {
+    expect(TextEditTransaction.replacementPreparationDelay(hasAccessibleSelection: true,
+                                                           restoredSnapshot: false,
+                                                           assumeSelectionIsPreserved: false) == 0.03,
+           "pastes immediately when AX can still see the selection")
+    expect(TextEditTransaction.replacementPreparationDelay(hasAccessibleSelection: false,
+                                                           restoredSnapshot: true,
+                                                           assumeSelectionIsPreserved: false) == 0.08,
+           "allows a restored AX range to settle before replacement")
+    expect(TextEditTransaction.replacementPreparationDelay(hasAccessibleSelection: false,
+                                                           restoredSnapshot: false,
+                                                           assumeSelectionIsPreserved: true) == 0.05,
+           "clipboard and service captures trust the preserved target selection instead of keyboard reselection")
+    expect(TextEditTransaction.replacementPreparationDelay(hasAccessibleSelection: false,
+                                                           restoredSnapshot: false,
+                                                           assumeSelectionIsPreserved: false) == 0.03,
+           "does not synthesize Shift-Left reselection when no reliable selection handle exists")
 }
 
 func testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath() {
@@ -561,6 +574,14 @@ func testTextCaptureTargetActivationGuards() {
            "keeps a short transient-menu dismissal delay before clipboard fallback")
     expect(TextCapture.clipboardChangePollLimit == 80,
            "allows a longer clipboard fallback wait for context-menu initiated captures")
+    expect(TextCapture.clipboardCopyAttemptLimit == 3,
+           "retries clipboard fallback for apps that update the pasteboard slowly")
+    expect(TextCapture.clipboardRetryWaitMicroseconds == 70_000,
+           "keeps a short pause between clipboard fallback attempts")
+    expect(TextCapture.focusedAXTraversalDepth >= 4 &&
+           TextCapture.targetAXTraversalDepth >= 8 &&
+           TextCapture.maxAXTraversalNodes >= 500,
+           "uses a deeper AX traversal budget for complex app accessibility trees")
     expect(TextCapture.shouldDismissTransientMenusBeforeCopy(targetPID: currentPID + 1,
                                                             frontmostPID: currentPID,
                                                             currentPID: currentPID),

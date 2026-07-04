@@ -829,6 +829,11 @@ struct SettingsView: View {
                     } label: {
                         Label("导出动作库", systemImage: "square.and.arrow.up")
                     }
+                    Button {
+                        restoreDefaultHotKeys()
+                    } label: {
+                        Label("恢复默认快捷键", systemImage: "keyboard.badge.ellipsis")
+                    }
                     Menu {
                         Button("空白动作") {
                             addAction(AIAction(name: "新动作", icon: "wand.and.stars",
@@ -915,6 +920,13 @@ struct SettingsView: View {
         action.hotKey = nil
         settings.actions.append(action)
         ui.expandedActionID = action.id
+        commit()
+    }
+
+    private func restoreDefaultHotKeys() {
+        settings.restoreDefaultHotKeys()
+        ui.hotKeyError = nil
+        ui.hotKeyConflictDestination = nil
         commit()
     }
 

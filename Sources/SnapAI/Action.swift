@@ -30,6 +30,25 @@ enum TargetLanguage: String, Codable, CaseIterable, Identifiable {
 
 /// 一个可自定义的 AI 动作(提问/翻译/润色/总结/解释代码/自定义…)
 struct AIAction: Codable, Identifiable, Equatable {
+    static let askName = "提问"
+    static let translateName = "翻译"
+    static let polishName = "润色"
+    static let summarizeName = "总结"
+    static let explainCodeName = "解释代码"
+    static let defaultActionNames = [
+        askName,
+        translateName,
+        polishName,
+        summarizeName,
+        explainCodeName
+    ]
+    static let defaultHotKeysByName: [String: HotKeyCombo] = [
+        askName: .askDefault,
+        translateName: .translateDefault,
+        polishName: .polishDefault,
+        summarizeName: .summarizeDefault,
+        explainCodeName: .explainCodeDefault
+    ]
     static let defaultThinkingBudget = 8_000
     static let thinkingBudgetRange = 1_024...64_000
     static let maxNameLength = 80
@@ -69,20 +88,23 @@ struct AIAction: Codable, Identifiable, Equatable {
 
     static func defaults() -> [AIAction] {
         [
-            AIAction(name: "提问", icon: "sparkles",
+            AIAction(name: askName, icon: "sparkles",
                      prompt: "请简洁、准确地回答关于以下内容的问题或解释它:\n\n{{text}}",
-                     hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))),
-            AIAction(name: "翻译", icon: "character.bubble",
+                     hotKey: defaultHotKeysByName[askName]),
+            AIAction(name: translateName, icon: "character.bubble",
                      prompt: "请将下面的文字{{lang}}。只输出翻译结果,不要解释:\n\n{{text}}",
-                     hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey)),
+                     hotKey: defaultHotKeysByName[translateName],
                      isTranslation: true, targetLanguage: .auto),
-            AIAction(name: "润色", icon: "wand.and.stars",
+            AIAction(name: polishName, icon: "wand.and.stars",
                      prompt: "请润色下面的文字,使其更通顺、自然、专业,保持原意和原语言。只输出润色后的结果:\n\n{{text}}",
+                     hotKey: defaultHotKeysByName[polishName],
                      replaceByDefault: true),
-            AIAction(name: "总结", icon: "list.bullet.rectangle",
-                     prompt: "请用简洁的要点总结下面的内容,抓住关键信息:\n\n{{text}}"),
-            AIAction(name: "解释代码", icon: "chevron.left.forwardslash.chevron.right",
-                     prompt: "请解释下面这段代码的功能、关键逻辑和潜在问题,用简洁的中文:\n\n{{text}}")
+            AIAction(name: summarizeName, icon: "list.bullet.rectangle",
+                     prompt: "请用简洁的要点总结下面的内容,抓住关键信息:\n\n{{text}}",
+                     hotKey: defaultHotKeysByName[summarizeName]),
+            AIAction(name: explainCodeName, icon: "chevron.left.forwardslash.chevron.right",
+                     prompt: "请解释下面这段代码的功能、关键逻辑和潜在问题,用简洁的中文:\n\n{{text}}",
+                     hotKey: defaultHotKeysByName[explainCodeName])
         ]
     }
 

@@ -182,6 +182,72 @@ func testDefaultPolishActionConfirmsReplacement() {
     expect(polish?.replaceByDefault == true, "polish action enters replacement confirmation by default")
 }
 
+func testDefaultActionsShipDefaultHotKeys() {
+    let defaults = AIAction.defaults()
+    let hotKeysByName = Dictionary(uniqueKeysWithValues: defaults.compactMap { action in
+        action.hotKey.map { (action.name, $0) }
+    })
+    expect(hotKeysByName[AIAction.askName] == .askDefault, "ask action ships option-A by default")
+    expect(hotKeysByName[AIAction.translateName] == .translateDefault, "translate action ships option-T by default")
+    expect(hotKeysByName[AIAction.polishName] == .polishDefault, "polish action ships option-P by default")
+    expect(hotKeysByName[AIAction.summarizeName] == .summarizeDefault, "summarize action ships option-S by default")
+    expect(hotKeysByName[AIAction.explainCodeName] == .explainCodeDefault, "explain-code action ships option-E by default")
+    expect(Set(hotKeysByName.values).count == AIAction.defaultActionNames.count,
+           "default action hotkeys are unique")
+}
+
+func testAppSettingsCanRestoreDefaultHotKeys() {
+    let settings = AppSettings()
+    var actions = AIAction.defaults()
+    for idx in actions.indices {
+        actions[idx].hotKey = nil
+    }
+    var custom = AIAction(name: "自定义冲突动作",
+                          icon: "sparkles",
+                          prompt: "{{text}}",
+                          hotKey: .polishDefault)
+    custom.id = "custom-conflict"
+    actions.append(custom)
+    var customSafe = AIAction(name: "自定义安全动作",
+                              icon: "sparkles",
+                              prompt: "{{text}}",
+                              hotKey: HotKeyCombo(keyCode: UInt32(kVK_ANSI_Y), modifiers: UInt32(optionKey)))
+    customSafe.id = "custom-safe"
+    actions.append(customSafe)
+    settings.actions = actions
+    settings.quickPanelHotKey = HotKeyCombo(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(optionKey))
+
+    settings.restoreDefaultHotKeys()
+
+    let hotKeysByName = Dictionary(uniqueKeysWithValues: settings.actions.compactMap { action in
+        action.hotKey.map { (action.name, $0) }
+    })
+    expect(settings.quickPanelHotKey == .quickPanelDefault,
+           "restores the quick prompt panel hotkey")
+    expect(hotKeysByName[AIAction.askName] == .askDefault, "restores ask default hotkey")
+    expect(hotKeysByName[AIAction.translateName] == .translateDefault, "restores translate default hotkey")
+    expect(hotKeysByName[AIAction.polishName] == .polishDefault, "restores polish default hotkey")
+    expect(hotKeysByName[AIAction.summarizeName] == .summarizeDefault, "restores summarize default hotkey")
+    expect(hotKeysByName[AIAction.explainCodeName] == .explainCodeDefault, "restores explain-code default hotkey")
+    expect(settings.actions.first { $0.id == "custom-conflict" }?.hotKey == nil,
+           "clears custom action hotkeys that conflict with restored defaults")
+    expect(settings.actions.first { $0.id == "custom-safe" }?.hotKey == HotKeyCombo(keyCode: UInt32(kVK_ANSI_Y), modifiers: UInt32(optionKey)),
+           "keeps unrelated custom action hotkeys")
+}
+
+func testAppSettingsMigrationBackfillsMissingDefaultHotKeys() {
+    let settings = AppSettings()
+    settings.actions = AIAction.defaults().map { action in
+        var copy = action
+        copy.hotKey = nil
+        return copy
+    }
+    settings.applyMissingDefaultHotKeys()
+    expect(settings.actions.allSatisfy { action in
+        action.hotKey == AIAction.defaultHotKeysByName[action.name]
+    }, "migration backfills missing default action hotkeys")
+}
+
 func testSettingsModelClearsWhenActiveProviderHasNoEnabledModels() {
     let settings = AppSettings()
     var provider = AIProvider(name: "Primary", apiProtocol: .openAI,
