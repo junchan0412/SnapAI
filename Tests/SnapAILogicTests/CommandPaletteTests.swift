@@ -2423,7 +2423,7 @@ func testHistoryExportCommandsUseDisplayTags() {
                      tags: ["诊断"])
     ]
 
-    let descriptors = HistoryExportCommandFactory.descriptors(for: history)
+    let descriptors = HistoryExportCommandFactory.descriptors(for: historyExportCommandInputs(history))
     let actionDescriptor = descriptors.first { $0.id == "history-copy-action-总结" }
     expect(actionDescriptor?.subtitle.hasPrefix("2 条记录") == true,
            "history export command counts normalized action names")
@@ -2462,7 +2462,7 @@ func testHistoryExportCommandsUseDisplayTags() {
                      model: "gpt|4o\nmini",
                      tags: ["项目|`A`\n标签"])
     ]
-    let unsafeDescriptors = HistoryExportCommandFactory.descriptors(for: unsafeHistory, facetLimit: 4)
+    let unsafeDescriptors = HistoryExportCommandFactory.descriptors(for: historyExportCommandInputs(unsafeHistory), facetLimit: 4)
     let unsafeAction = unsafeDescriptors.first { $0.id.hasPrefix("history-copy-action-") }
     let unsafeModel = unsafeDescriptors.first { $0.id.hasPrefix("history-copy-model-") }
     let unsafeTag = unsafeDescriptors.first { $0.id.hasPrefix("history-copy-tag-") }
@@ -2515,7 +2515,7 @@ func testHistoryExportCommandFactoryBuildsRankedFacetCommands() {
                      tags: ["  ", "诊断"])
     ]
 
-    let descriptors = HistoryExportCommandFactory.descriptors(for: entries, facetLimit: 1)
+    let descriptors = HistoryExportCommandFactory.descriptors(for: historyExportCommandInputs(entries), facetLimit: 1)
 
     expect(descriptors.map(\.id) == [
         "history-copy-markdown",
@@ -2524,11 +2524,11 @@ func testHistoryExportCommandFactoryBuildsRankedFacetCommands() {
         "history-copy-tag-项目A",
         "history-copy-favorites-markdown"
     ], "builds all/action/tag/favorite export commands in stable order")
-    expect(descriptors[0].criteria == HistoryFilterCriteria(), "all history command uses default criteria")
-    expect(descriptors[1].criteria == HistoryFilterCriteria(actionFilter: "翻译"), "action command filters by action")
-    expect(descriptors[2].criteria == HistoryFilterCriteria(modelFilter: "gpt"), "model command filters by model")
-    expect(descriptors[3].criteria == HistoryFilterCriteria(tagFilter: "项目A"), "tag command filters by tag")
-    expect(descriptors[4].criteria == HistoryFilterCriteria(favoriteOnly: true), "favorite command filters favorites")
+    expect(descriptors[0].criteria == HistoryExportCommandCriteria(), "all history command uses default criteria")
+    expect(descriptors[1].criteria == HistoryExportCommandCriteria(actionFilter: "翻译"), "action command filters by action")
+    expect(descriptors[2].criteria == HistoryExportCommandCriteria(modelFilter: "gpt"), "model command filters by model")
+    expect(descriptors[3].criteria == HistoryExportCommandCriteria(tagFilter: "项目A"), "tag command filters by tag")
+    expect(descriptors[4].criteria == HistoryExportCommandCriteria(favoriteOnly: true), "favorite command filters favorites")
     expect(descriptors[1].subtitle == "2 条记录,Markdown", "action command reports count")
     expect(descriptors[2].keywords.contains("模型"), "model command is searchable by model")
     expect(descriptors[3].keywords.contains("项目A"), "tag command is searchable by tag")
@@ -2551,7 +2551,7 @@ func testHistoryExportCommandIDsAreStableSlugs() {
                      tags: ["项目 Alpha"])
     ]
 
-    let descriptors = HistoryExportCommandFactory.descriptors(for: entries, facetLimit: 4)
+    let descriptors = HistoryExportCommandFactory.descriptors(for: historyExportCommandInputs(entries), facetLimit: 4)
     let actionIDs = descriptors
         .filter { $0.id.hasPrefix("history-copy-action-") }
         .map(\.id)

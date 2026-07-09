@@ -291,7 +291,8 @@ extension AppDelegate {
     }
 
     func appendHistoryExportCommandPaletteItems(to items: inout [CommandPaletteItem]) {
-        for descriptor in HistoryExportCommandFactory.descriptors(for: settings.history) {
+        let historyInputs = settings.history.map(\.historyExportCommandInput)
+        for descriptor in HistoryExportCommandFactory.descriptors(for: historyInputs) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,
@@ -299,7 +300,7 @@ extension AppDelegate {
                 systemImage: descriptor.systemImage,
                 keywords: descriptor.keywords,
                 perform: { [weak self] in
-                    self?.copyHistoryMarkdown(criteria: descriptor.criteria)
+                    self?.copyHistoryMarkdown(criteria: descriptor.criteria.historyFilterCriteria)
                 }
             ))
         }

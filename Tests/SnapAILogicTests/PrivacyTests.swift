@@ -726,7 +726,7 @@ func testHistoryExportCommandFactoryKeepsPrivacyTagsBeyondFacetLimit() {
                      tags: ["本地脱敏", "隐私预览", "隐私风险高", "隐私风险中", "仅元信息"])
     ]
 
-    let descriptors = HistoryExportCommandFactory.descriptors(for: entries, facetLimit: 1)
+    let descriptors = HistoryExportCommandFactory.descriptors(for: historyExportCommandInputs(entries), facetLimit: 1)
     expect(descriptors.contains { $0.id == "history-copy-tag-本地脱敏" },
            "history export commands keep local redaction privacy tag beyond facet limit")
     expect(descriptors.contains { $0.id == "history-copy-tag-隐私预览" },

@@ -214,6 +214,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated RoutingContextCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/RoutingContextCommand.swift ] \
   || fail "RoutingContextCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/HistoryExportCommand.swift ] \
+  || fail "SnapAILogic migrated HistoryExportCommand source is missing"
+[ ! -L Sources/SnapAILogic/HistoryExportCommand.swift ] \
+  || fail "SnapAILogic migrated HistoryExportCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/HistoryExportCommand.swift ] \
+  || fail "HistoryExportCommand must not be duplicated in the app target"
+[ -f Sources/SnapAI/HistoryExportCommandAppBridge.swift ] \
+  || fail "HistoryExportCommand app bridge is missing"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

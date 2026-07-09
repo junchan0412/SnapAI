@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.41 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.42 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.41 版本重点
+## 1.6.42 版本重点
 
-- `RoutingContextCommand` 已从 app target 迁移为 `SnapAILogic` 真实源码。
-- 新增 `RoutingPreferenceCommandInput` 和 `ContextProfileCommandInput`,让路由/上下文命令不再公开依赖 app target 的设置模型。
-- `SnapAILogic` 数量基线下调为最多 52 个 symlink、至少 24 个真实源码。
+- `HistoryExportCommand` 已从 app target 迁移为 `SnapAILogic` 真实源码。
+- 新增 `HistoryExportCommandInput` 和 `HistoryExportCommandCriteria`,让历史导出命令不再公开依赖 app target 的历史模型。
+- `SnapAILogic` 数量基线下调为最多 51 个 symlink、至少 25 个真实源码。
 
-详细发布说明见 [SnapAI 1.6.41 Release Notes](docs/RELEASE_NOTES_1.6.41.md),阶段性复盘见 [SnapAI 1.6.41 Iteration Report](docs/ITERATION_REPORT_1.6.41.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.42 Release Notes](docs/RELEASE_NOTES_1.6.42.md),阶段性复盘见 [SnapAI 1.6.42 Iteration Report](docs/ITERATION_REPORT_1.6.42.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.41
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.42
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
