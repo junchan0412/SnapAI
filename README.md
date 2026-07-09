@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.21 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.22 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.21 版本重点
+## 1.6.22 版本重点
 
-- macOS smoke 从热键注册/注销探测升级为 Carbon hotkey handler dispatch 探测,确认 `InstallEventHandler` 能收到并解析 `kEventHotKeyPressed` 事件。
-- release preflight 会继续自动运行热键注册、handler 安装和事件分发探测,进一步补强审计报告指出的快捷键系统交互测试缺口。
-- 继续保留 1.6.20 的真实热键注册 smoke、1.6.19 的供应链扫描、1.6.18 的 SBOM release asset、1.6.17 的 `SnapAILogic` UI-only 边界检查,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
+- 结果面板命令体系新增防回归测试,覆盖菜单 command id、action、快捷键组合唯一性。
+- 新增结果面板“可见命令必须可执行且具备命令面板元数据”的测试,降低继续扩展结果面板快捷键时的冲突风险。
+- 继续保留 1.6.21 的 hotkey handler dispatch smoke、1.6.20 的真实热键注册 smoke、1.6.19 的供应链扫描、1.6.18 的 SBOM release asset,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.21 Release Notes](docs/RELEASE_NOTES_1.6.21.md),阶段性复盘见 [SnapAI 1.6.21 Iteration Report](docs/ITERATION_REPORT_1.6.21.md)。
+详细发布说明见 [SnapAI 1.6.22 Release Notes](docs/RELEASE_NOTES_1.6.22.md),阶段性复盘见 [SnapAI 1.6.22 Iteration Report](docs/ITERATION_REPORT_1.6.22.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.21
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.22
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

@@ -1894,6 +1894,52 @@ func testResultCommandFactoryBuildsStableMenuCommands() {
            "result command help combines title and shortcut")
 }
 
+func testResultCommandFactoryKeepsMenuShortcutsAndVisibleActionsConsistent() {
+    let menuDescriptors = ResultCommandFactory.menuDescriptors()
+    let menuIDs = menuDescriptors.map(\.id)
+    let menuActions = menuDescriptors.map(\.action)
+    let nonEmptyShortcuts = menuDescriptors
+        .filter { !$0.keyEquivalent.isEmpty }
+        .map { descriptor in
+            "\(descriptor.modifiers.map(\.rawValue).joined(separator: "+"))|\(descriptor.keyEquivalent)"
+        }
+
+    expect(Set(menuIDs).count == menuIDs.count,
+           "result menu command ids stay unique")
+    expect(Set(menuActions).count == menuActions.count,
+           "result menu command actions stay unique")
+    expect(Set(nonEmptyShortcuts).count == nonEmptyShortcuts.count,
+           "result menu shortcuts stay conflict-free")
+
+    let fullState = ResultCommandState(resultText: "answer",
+                                       diagnosticsText: "route=ok",
+                                       isStreaming: false,
+                                       sourceText: "source")
+    let visibleActions = ResultCommandFactory.descriptors(state: fullState).map(\.action)
+    let menuActionSet = Set(menuActions)
+
+    expect(visibleActions.allSatisfy { menuActionSet.contains($0) },
+           "every visible result command has a formal menu command")
+    expect(visibleActions.allSatisfy { ResultCommandFactory.isEnabled($0, in: fullState) },
+           "every visible result command is enabled in the state that produced it")
+    expect(ResultCommandFactory.descriptors(state: fullState).allSatisfy { descriptor in
+        !descriptor.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !descriptor.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !descriptor.keywords.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }, "visible result commands keep command palette metadata complete")
+
+    let streamingState = ResultCommandState(resultText: "partial",
+                                            diagnosticsText: "",
+                                            isStreaming: true,
+                                            sourceText: "source")
+    let streamingActions = ResultCommandFactory.descriptors(state: streamingState).map(\.action)
+    expect(streamingActions.contains(.stop), "streaming result command list exposes stop")
+    expect(!streamingActions.contains(.replaceOriginal) &&
+           !streamingActions.contains(.appendToDocument) &&
+           !streamingActions.contains(.regenerate),
+           "streaming result command list hides write-back and regenerate actions")
+}
+
 func testResultCommandFactoryExplainsProtectedConversationExports() {
     let normalCopy = ResultCommandFactory.descriptor(for: .copyMarkdown)
     expect(normalCopy.subtitle == "Markdown,含原文、结果、模型和路由摘要",
