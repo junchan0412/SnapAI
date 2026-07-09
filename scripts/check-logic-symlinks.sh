@@ -42,6 +42,9 @@ FORBIDDEN_IMPORTS=(
   "Quartz"
 )
 
+MAX_LOGIC_SYMLINKS=58
+MIN_LOGIC_REAL_SOURCES=18
+
 find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
 
 if ! diff -u "$MANIFEST" "$CURRENT"; then
@@ -84,4 +87,19 @@ while IFS= read -r file; do
   done
 done < "$MANIFEST"
 
-echo "SnapAILogic source manifest verified."
+symlink_count=$(find Sources/SnapAILogic -maxdepth 1 -type l -name '*.swift' | wc -l | tr -d ' ')
+real_source_count=$(find Sources/SnapAILogic -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')
+
+if [ "$symlink_count" -gt "$MAX_LOGIC_SYMLINKS" ]; then
+  echo "error: Sources/SnapAILogic has $symlink_count symlink sources; expected at most $MAX_LOGIC_SYMLINKS." >&2
+  echo "Migrate shared logic as real library sources instead of increasing app-source mirrors." >&2
+  exit 1
+fi
+
+if [ "$real_source_count" -lt "$MIN_LOGIC_REAL_SOURCES" ]; then
+  echo "error: Sources/SnapAILogic has $real_source_count real sources; expected at least $MIN_LOGIC_REAL_SOURCES." >&2
+  echo "Do not regress migrated library sources back to symlinks." >&2
+  exit 1
+fi
+
+echo "SnapAILogic source manifest verified ($symlink_count symlinks, $real_source_count real sources)."
