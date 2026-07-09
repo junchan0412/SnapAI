@@ -13,12 +13,13 @@ Usage: scripts/preflight-release.sh [--skip-package] [--require-clean] [--requir
 
 Runs the release readiness gate:
   1. git diff --check
-  2. logic tests
-  3. swift build
-  4. app bundle build
-  5. codesign verification
-  6. app bundle launch smoke
-  7. release package + manifest verification
+  2. supply-chain scan
+  3. logic tests
+  4. swift build
+  5. app bundle build
+  6. codesign verification
+  7. app bundle launch smoke
+  8. release package + manifest verification
 
 Options:
   --skip-package   Skip release zip/manifest packaging.
@@ -121,6 +122,9 @@ git diff --check
 
 step "检查逻辑测试 target 边界"
 scripts/check-logic-symlinks.sh
+
+step "运行供应链扫描"
+scripts/run-supply-chain-scan.sh
 
 step "运行逻辑测试"
 scripts/run-logic-tests.sh

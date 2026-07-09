@@ -27,6 +27,9 @@ jobs:
       - name: Logic Target Boundary Check
         run: scripts/check-logic-symlinks.sh
 
+      - name: Supply Chain Scan
+        run: scripts/run-supply-chain-scan.sh
+
       - name: SwiftPM Build
         run: swift build
 
