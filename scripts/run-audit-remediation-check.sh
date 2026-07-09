@@ -194,6 +194,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated WorkModeCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/WorkModeCommand.swift ] \
   || fail "WorkModeCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/SettingsToggleCommand.swift ] \
+  || fail "SnapAILogic migrated SettingsToggleCommand source is missing"
+[ ! -L Sources/SnapAILogic/SettingsToggleCommand.swift ] \
+  || fail "SnapAILogic migrated SettingsToggleCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/SettingsToggleCommand.swift ] \
+  || fail "SettingsToggleCommand must not be duplicated in the app target"
+[ -f Sources/SnapAI/SettingsToggleCommandAppSettings.swift ] \
+  || fail "SettingsToggleCommand AppSettings bridge is missing"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

@@ -1463,34 +1463,32 @@ private func workModeCommandInputs(currentID: String) -> [WorkModeCommandInput] 
 }
 
 func testSettingsToggleCommandReflectsCurrentState() {
-    let settings = AppSettings()
-    settings.privacyPreviewEnabled = false
-    settings.redactionEnabled = true
-    settings.historyContentStorage = .full
-    settings.autoRouteEnabled = false
-    settings.fallbackEnabled = true
+    let state = SettingsToggleCommandState(privacyPreviewEnabled: false,
+                                           redactionEnabled: true,
+                                           historyMetadataOnly: false,
+                                           autoRouteEnabled: false,
+                                           fallbackEnabled: true)
 
-    expect(SettingsToggleCommand.privacyPreview.title(isEnabled: SettingsToggleCommand.privacyPreview.isEnabled(in: settings)) == "开启发送前预览",
+    expect(SettingsToggleCommand.privacyPreview.title(isEnabled: SettingsToggleCommand.privacyPreview.isEnabled(in: state)) == "开启发送前预览",
            "privacy preview command opens disabled feature")
-    expect(SettingsToggleCommand.redaction.title(isEnabled: SettingsToggleCommand.redaction.isEnabled(in: settings)) == "关闭本地脱敏",
+    expect(SettingsToggleCommand.redaction.title(isEnabled: SettingsToggleCommand.redaction.isEnabled(in: state)) == "关闭本地脱敏",
            "redaction command closes enabled feature")
-    expect(SettingsToggleCommand.historyMetadataOnly.title(isEnabled: SettingsToggleCommand.historyMetadataOnly.isEnabled(in: settings)) == "开启历史仅元信息",
+    expect(SettingsToggleCommand.historyMetadataOnly.title(isEnabled: SettingsToggleCommand.historyMetadataOnly.isEnabled(in: state)) == "开启历史仅元信息",
            "history metadata command opens full history storage")
-    expect(SettingsToggleCommand.autoRoute.subtitle(isEnabled: SettingsToggleCommand.autoRoute.isEnabled(in: settings)).contains("当前已关闭"),
+    expect(SettingsToggleCommand.autoRoute.subtitle(isEnabled: SettingsToggleCommand.autoRoute.isEnabled(in: state)).contains("当前已关闭"),
            "auto route subtitle reflects disabled state")
-    expect(SettingsToggleCommand.fallback.subtitle(isEnabled: SettingsToggleCommand.fallback.isEnabled(in: settings)).contains("当前已开启"),
+    expect(SettingsToggleCommand.fallback.subtitle(isEnabled: SettingsToggleCommand.fallback.isEnabled(in: state)).contains("当前已开启"),
            "fallback subtitle reflects enabled state")
     expect(SettingsToggleCommand.allCases.map(\.id).count == Set(SettingsToggleCommand.allCases.map(\.id)).count,
            "toggle commands use unique ids")
 }
 
 func testSettingsToggleCommandResolvesAliasesAndSetsState() {
-    let settings = AppSettings()
-    settings.privacyPreviewEnabled = false
-    settings.redactionEnabled = false
-    settings.historyContentStorage = .full
-    settings.autoRouteEnabled = false
-    settings.fallbackEnabled = true
+    var state = SettingsToggleCommandState(privacyPreviewEnabled: false,
+                                           redactionEnabled: false,
+                                           historyMetadataOnly: false,
+                                           autoRouteEnabled: false,
+                                           fallbackEnabled: true)
 
     expect(SettingsToggleCommand.resolve("privacy-preview") == .privacyPreview,
            "resolves privacy preview alias")
@@ -1523,20 +1521,20 @@ func testSettingsToggleCommandResolvesAliasesAndSetsState() {
     expect(SettingsToggleCommand.resolve("missing") == nil,
            "rejects unknown toggle command")
 
-    SettingsToggleCommand.privacyPreview.setEnabled(true, in: settings)
-    SettingsToggleCommand.redaction.setEnabled(true, in: settings)
-    SettingsToggleCommand.historyMetadataOnly.setEnabled(true, in: settings)
-    SettingsToggleCommand.autoRoute.setEnabled(true, in: settings)
-    SettingsToggleCommand.fallback.setEnabled(false, in: settings)
+    state = SettingsToggleCommand.privacyPreview.settingEnabled(true, in: state)
+    state = SettingsToggleCommand.redaction.settingEnabled(true, in: state)
+    state = SettingsToggleCommand.historyMetadataOnly.settingEnabled(true, in: state)
+    state = SettingsToggleCommand.autoRoute.settingEnabled(true, in: state)
+    state = SettingsToggleCommand.fallback.settingEnabled(false, in: state)
 
-    expect(settings.privacyPreviewEnabled, "sets privacy preview state")
-    expect(settings.redactionEnabled, "sets redaction state")
-    expect(settings.historyContentStorage == .metadataOnly, "sets history metadata-only state")
-    expect(settings.autoRouteEnabled, "sets auto route state")
-    expect(!settings.fallbackEnabled, "sets fallback state")
+    expect(state.privacyPreviewEnabled, "sets privacy preview state")
+    expect(state.redactionEnabled, "sets redaction state")
+    expect(state.historyMetadataOnly, "sets history metadata-only state")
+    expect(state.autoRouteEnabled, "sets auto route state")
+    expect(!state.fallbackEnabled, "sets fallback state")
 
-    SettingsToggleCommand.historyMetadataOnly.setEnabled(false, in: settings)
-    expect(settings.historyContentStorage == .full, "restores full history storage state")
+    state = SettingsToggleCommand.historyMetadataOnly.settingEnabled(false, in: state)
+    expect(!state.historyMetadataOnly, "restores full history storage state")
 }
 
 func testSettingsWindowPinCommandReflectsCurrentState() {
