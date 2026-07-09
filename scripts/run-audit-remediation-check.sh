@@ -170,6 +170,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated CommandPaletteMatcher must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/CommandPaletteMatcher.swift ] \
   || fail "CommandPaletteMatcher must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/CommandIdentifier.swift ] \
+  || fail "SnapAILogic migrated CommandIdentifier source is missing"
+[ ! -L Sources/SnapAILogic/CommandIdentifier.swift ] \
+  || fail "SnapAILogic migrated CommandIdentifier must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/CommandIdentifier.swift ] \
+  || fail "CommandIdentifier must not be duplicated in the app target"
 [ -f Sources/SnapAILogic/CaptureCoordinator.swift ] \
   || fail "SnapAILogic migrated CaptureCoordinator source is missing"
 [ ! -L Sources/SnapAILogic/CaptureCoordinator.swift ] \
