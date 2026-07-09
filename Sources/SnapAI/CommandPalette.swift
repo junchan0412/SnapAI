@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SnapAILogic
 
 struct CommandPaletteItem: Identifiable {
     var id: String
