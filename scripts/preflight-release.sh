@@ -124,6 +124,9 @@ scripts/check-logic-symlinks.sh
 step "运行逻辑测试"
 scripts/run-logic-tests.sh
 
+step "运行 macOS smoke 测试"
+scripts/run-macos-smoke-tests.sh --skip-logic
+
 step "运行 SwiftPM 构建"
 swift build
 

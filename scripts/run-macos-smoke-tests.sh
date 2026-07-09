@@ -3,6 +3,25 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+RUN_LOGIC=1
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skip-logic)
+      RUN_LOGIC=0
+      ;;
+    -h|--help)
+      echo "Usage: scripts/run-macos-smoke-tests.sh [--skip-logic]"
+      exit 0
+      ;;
+    *)
+      echo "error: unknown option: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
 step() {
   echo ""
   echo "==> $1"
@@ -11,8 +30,10 @@ step() {
 step "检查逻辑 target 边界"
 scripts/check-logic-symlinks.sh
 
-step "运行逻辑测试"
-scripts/run-logic-tests.sh
+if [ "$RUN_LOGIC" -eq 1 ]; then
+  step "运行逻辑测试"
+  scripts/run-logic-tests.sh
+fi
 
 step "探测 macOS 剪贴板与隐私权限"
 SWIFT_FILE=$(mktemp "${TMPDIR:-/tmp}/snapai-macos-smoke.XXXXXX.swift")
