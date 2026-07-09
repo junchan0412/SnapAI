@@ -1,249 +1,5 @@
 import Foundation
-import Carbon.HIToolbox
 import Combine
-
-/// AI 协议类型
-enum APIProtocol: String, Codable, CaseIterable, Identifiable {
-    case openAI = "OpenAI 兼容"
-    case anthropic = "Anthropic 原生"
-    var id: String { rawValue }
-}
-
-/// 打字机动画速度
-enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
-    case off = "关闭"
-    case slow = "慢"
-    case normal = "标准"
-    case fast = "快"
-    var id: String { rawValue }
-
-    /// 每次 tick 揭示的字符数
-    var charsPerTick: Int {
-        switch self {
-        case .off: return 0       // 0 表示不走打字机,直接整段显示
-        case .slow: return 1
-        case .normal: return 2
-        case .fast: return 5
-        }
-    }
-
-    /// tick 间隔(秒)
-    var tickInterval: TimeInterval {
-        switch self {
-        case .off: return 0
-        case .slow: return 0.03
-        case .normal: return 0.012
-        case .fast: return 0.008
-        }
-    }
-}
-
-/// AI 自动路由偏好。
-enum AIRoutingPreference: String, Codable, CaseIterable, Identifiable {
-    case fastest = "最快"
-    case balanced = "均衡"
-    case quality = "最佳质量"
-
-    var id: String { rawValue }
-
-    var description: String {
-        switch self {
-        case .fastest:
-            return "优先低延迟和低成本模型"
-        case .balanced:
-            return "兼顾速度、成本和任务适配"
-        case .quality:
-            return "优先长上下文、推理和复杂任务能力"
-        }
-    }
-}
-
-/// 历史记录内容保存策略。
-enum HistoryContentStorage: String, Codable, CaseIterable, Identifiable {
-    case full = "完整保存"
-    case metadataOnly = "仅元信息"
-
-    var id: String { rawValue }
-
-    var description: String {
-        switch self {
-        case .full:
-            return "保存原文和结果,便于搜索与回看"
-        case .metadataOnly:
-            return "只保存动作、模型、时间和隐私标签"
-        }
-    }
-}
-
-struct WorkModeBehavior: Equatable {
-    var privacyPreviewEnabled: Bool
-    var redactionEnabled: Bool
-    var historyContentStorage: HistoryContentStorage
-    var autoRouteEnabled: Bool
-    var fallbackEnabled: Bool
-    var routingPreference: AIRoutingPreference
-}
-
-enum WorkModePreset: String, Codable, CaseIterable, Identifiable {
-    case standard
-    case privacy
-    case speed
-    case quality
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .standard: return "标准模式"
-        case .privacy: return "隐私模式"
-        case .speed: return "极速模式"
-        case .quality: return "质量模式"
-        }
-    }
-
-    var shortTitle: String {
-        switch self {
-        case .standard: return "标准"
-        case .privacy: return "隐私"
-        case .speed: return "极速"
-        case .quality: return "质量"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .standard: return "slider.horizontal.3"
-        case .privacy: return "hand.raised"
-        case .speed: return "bolt"
-        case .quality: return "sparkles"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .standard:
-            return "平衡日常效率与完整历史记录。"
-        case .privacy:
-            return "发送前确认、本地脱敏,历史仅保存元信息。"
-        case .speed:
-            return "自动路由到低延迟模型,减少确认步骤。"
-        case .quality:
-            return "自动路由并优先质量,适合长文和复杂任务。"
-        }
-    }
-
-    var keywords: String {
-        switch self {
-        case .standard:
-            return "work mode standard default balanced settings 模式 标准 默认 均衡"
-        case .privacy:
-            return "work mode privacy preview redaction metadata history safe 隐私 预览 脱敏 元信息"
-        case .speed:
-            return "work mode speed fastest route low latency quick 极速 快速 路由 低延迟"
-        case .quality:
-            return "work mode quality best route reasoning long context 质量 最佳 长文 推理"
-        }
-    }
-
-    var behavior: WorkModeBehavior {
-        switch self {
-        case .standard:
-            return WorkModeBehavior(privacyPreviewEnabled: false,
-                                    redactionEnabled: false,
-                                    historyContentStorage: .full,
-                                    autoRouteEnabled: false,
-                                    fallbackEnabled: true,
-                                    routingPreference: .balanced)
-        case .privacy:
-            return WorkModeBehavior(privacyPreviewEnabled: true,
-                                    redactionEnabled: true,
-                                    historyContentStorage: .metadataOnly,
-                                    autoRouteEnabled: true,
-                                    fallbackEnabled: true,
-                                    routingPreference: .balanced)
-        case .speed:
-            return WorkModeBehavior(privacyPreviewEnabled: false,
-                                    redactionEnabled: false,
-                                    historyContentStorage: .full,
-                                    autoRouteEnabled: true,
-                                    fallbackEnabled: true,
-                                    routingPreference: .fastest)
-        case .quality:
-            return WorkModeBehavior(privacyPreviewEnabled: false,
-                                    redactionEnabled: false,
-                                    historyContentStorage: .full,
-                                    autoRouteEnabled: true,
-                                    fallbackEnabled: true,
-                                    routingPreference: .quality)
-        }
-    }
-}
-
-struct ContextStatusSummary: Equatable {
-    var profileCount: Int
-    var usableProfileCount: Int
-    var activeProfileName: String
-    var activeContextCharacterCount: Int
-    var globalSystemPromptCharacterCount: Int
-    var effectiveSystemPromptCharacterCount: Int
-
-    var hasActiveContext: Bool {
-        activeContextCharacterCount > 0
-    }
-
-    var activeProfileDisplayName: String {
-        activeProfileName.isEmpty ? "无" : activeProfileName
-    }
-
-    var shareableActiveContextState: String {
-        hasActiveContext ? "set" : "none"
-    }
-
-    var shareableActiveProfileNameCharacterCount: Int {
-        hasActiveContext ? activeProfileName.count : 0
-    }
-
-    static func make(settings: AppSettings) -> ContextStatusSummary {
-        let usableProfiles = settings.contextProfiles.filter {
-            $0.isEnabled && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-        let activeProfile = settings.activeContextProfile
-        let activeName = activeProfile?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let activeCharacters = activeProfile?.content.trimmingCharacters(in: .whitespacesAndNewlines).count ?? 0
-        return ContextStatusSummary(
-            profileCount: settings.contextProfiles.count,
-            usableProfileCount: usableProfiles.count,
-            activeProfileName: activeName,
-            activeContextCharacterCount: activeCharacters,
-            globalSystemPromptCharacterCount: settings.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).count,
-            effectiveSystemPromptCharacterCount: settings.effectiveSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).count
-        )
-    }
-}
-
-/// 一个可配置的快捷键(键码 + 修饰键)
-struct HotKeyCombo: Codable, Equatable, Hashable {
-    var keyCode: UInt32
-    var modifiers: UInt32   // Carbon 修饰键掩码 (cmdKey/optionKey/...)
-
-    static let askDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey))
-    static let translateDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(optionKey))
-    static let polishDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_P), modifiers: UInt32(optionKey))
-    static let summarizeDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_S), modifiers: UInt32(optionKey))
-    static let explainCodeDefault = HotKeyCombo(keyCode: UInt32(kVK_ANSI_E), modifiers: UInt32(optionKey))
-
-    /// 人类可读描述,如 "⌥A"
-    var displayString: String {
-        if modifiers == 0 { return "未设置" }
-        var s = ""
-        if modifiers & UInt32(controlKey) != 0 { s += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { s += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { s += "⌘" }
-        s += KeyCodeMap.name(for: keyCode)
-        return s
-    }
-}
 
 /// 全局设置,持久化到 UserDefaults
 final class AppSettings: ObservableObject, Codable {
@@ -364,130 +120,6 @@ final class AppSettings: ObservableObject, Codable {
         model.isEmpty ? "选择模型" : model
     }
 
-    var activeContextProfile: ContextProfile? {
-        contextProfiles.first {
-            $0.id == activeContextProfileID &&
-            $0.isEnabled &&
-            !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-    }
-
-    var effectiveSystemPrompt: String {
-        let base = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let profile = activeContextProfile else { return base }
-        let context = profile.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !context.isEmpty else { return base }
-        let profileName = MarkdownExportSafety.metadata(profile.name,
-                                                         fallback: "未命名上下文",
-                                                         maxLength: 80)
-        let block = """
-        当前上下文包: \(profileName)
-        \(context)
-        """
-        return [base, block].filter { !$0.isEmpty }.joined(separator: "\n\n")
-    }
-
-    var effectiveSystemPromptMarkdownExport: String {
-        let prompt = effectiveSystemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let contextName = MarkdownExportSafety.metadata(activeContextProfile?.name,
-                                                        fallback: "无",
-                                                        maxLength: 80)
-        return """
-        # SnapAI 实际系统提示
-
-        - 当前上下文包: \(contextName)
-        - 字符数: \(prompt.count)
-
-        ## 内容
-
-        \(prompt.isEmpty ? "无内容" : prompt)
-        """
-    }
-
-    var contextStatusSummary: ContextStatusSummary {
-        ContextStatusSummary.make(settings: self)
-    }
-
-    var currentWorkModeBehavior: WorkModeBehavior {
-        WorkModeBehavior(privacyPreviewEnabled: privacyPreviewEnabled,
-                         redactionEnabled: redactionEnabled,
-                         historyContentStorage: historyContentStorage,
-                         autoRouteEnabled: autoRouteEnabled,
-                         fallbackEnabled: fallbackEnabled,
-                         routingPreference: routingPreference)
-    }
-
-    var matchingWorkModePreset: WorkModePreset? {
-        WorkModePreset.allCases.first { $0.behavior == currentWorkModeBehavior }
-    }
-
-    var prefersLocalModelRoutes: Bool {
-        matchingWorkModePreset == .privacy ||
-        (privacyPreviewEnabled && redactionEnabled && historyContentStorage == .metadataOnly)
-    }
-
-    var workModeStatusTitle: String {
-        matchingWorkModePreset?.title ?? "自定义模式"
-    }
-
-    var workModeStatusDetail: String {
-        if let mode = matchingWorkModePreset {
-            return mode.summary
-        }
-        return "当前隐私、历史或路由设置已偏离预设。"
-    }
-
-    func applyWorkMode(_ mode: WorkModePreset) {
-        let behavior = mode.behavior
-        workModePreset = mode
-        privacyPreviewEnabled = behavior.privacyPreviewEnabled
-        redactionEnabled = behavior.redactionEnabled
-        historyContentStorage = behavior.historyContentStorage
-        autoRouteEnabled = behavior.autoRouteEnabled
-        fallbackEnabled = behavior.fallbackEnabled
-        routingPreference = behavior.routingPreference
-    }
-
-    var contextStatusMarkdownExport: String {
-        let summary = contextStatusSummary
-        return """
-        # SnapAI 上下文状态
-
-        - 上下文包总数: \(summary.profileCount)
-        - 可用上下文包: \(summary.usableProfileCount)
-        - 当前上下文包: \(MarkdownExportSafety.metadata(summary.activeProfileName, fallback: "无", maxLength: 80))
-        - 当前上下文字符数: \(summary.activeContextCharacterCount)
-        - 全局 System Prompt 字符数: \(summary.globalSystemPromptCharacterCount)
-        - 实际 System Prompt 字符数: \(summary.effectiveSystemPromptCharacterCount)
-        """
-    }
-
-    func hasContextProfile(named name: String) -> Bool {
-        contextProfileIndex(named: name) != nil
-    }
-
-    @discardableResult
-    func upsertContextProfile(from draft: HistoryContextProfileDraft) -> ContextProfileUpsertResult {
-        let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedName = trimmedName.isEmpty ? "历史上下文" : trimmedName
-        if let index = contextProfileIndex(named: resolvedName) {
-            contextProfiles[index].name = resolvedName
-            contextProfiles[index].content = draft.content
-            contextProfiles[index].isEnabled = true
-            activeContextProfileID = contextProfiles[index].id
-            save()
-            return ContextProfileUpsertResult(profile: contextProfiles[index], didUpdate: true)
-        }
-
-        let profile = ContextProfile(name: resolvedName,
-                                     content: draft.content,
-                                     isEnabled: true)
-        contextProfiles.append(profile)
-        activeContextProfileID = profile.id
-        save()
-        return ContextProfileUpsertResult(profile: profile, didUpdate: false)
-    }
-
     /// 选中某个供应商的某个模型为当前激活
     func activate(providerID: String, model: String, recordManualPreference: Bool = false) {
         activeProviderID = providerID
@@ -522,14 +154,6 @@ final class AppSettings: ObservableObject, Codable {
         }
     }
 
-    private func contextProfileIndex(named name: String) -> Int? {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedName.isEmpty else { return nil }
-        return contextProfiles.firstIndex {
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedName
-        }
-    }
-
     /// 所有「启用供应商 → 启用模型」的扁平条目,用于菜单栏快速切换
     var switchableEntries: [(provider: AIProvider, model: String)] {
         var result: [(AIProvider, String)] = []
@@ -543,107 +167,6 @@ final class AppSettings: ObservableObject, Codable {
 
     /// 启用的动作(用于菜单/快捷键注册)
     var enabledActions: [AIAction] { actions.filter { $0.isEnabled } }
-
-    // MARK: - 历史记录
-
-    /// 追加一条历史并裁剪到上限
-    func addHistory(action: String, source: String, output: String,
-                    provider: String, model: String, tags: [String] = [],
-                    contentStorage: HistoryContentStorage? = nil) {
-        guard historyLimit > 0 else { return }
-        let payload = historyPayload(source: source,
-                                     output: output,
-                                     tags: tags,
-                                     contentStorage: contentStorage ?? historyContentStorage)
-        let entry = HistoryEntry(actionName: Self.limitedImportedString(action.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                        maxLength: AIAction.maxNameLength,
-                                                                        fallback: "未命名动作"),
-                                 source: payload.source,
-                                 output: payload.output,
-                                 provider: Self.limitedImportedString(provider.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                      maxLength: Self.importedProviderNameLimit,
-                                                                      fallback: ""),
-                                 model: Self.limitedImportedString(model.trimmingCharacters(in: .whitespacesAndNewlines),
-                                                                   maxLength: Self.importedModelNameLimit,
-                                                                   fallback: ""),
-                                 tags: payload.tags)
-        history.insert(entry, at: 0)
-        if history.count > historyLimit {
-            history = Array(history.prefix(historyLimit))
-        }
-        HistoryStore.shared.upsert(entry, limit: historyLimit)
-        save()
-    }
-
-    func clearHistory() {
-        history.removeAll()
-        HistoryStore.shared.deleteAll()
-        save()
-    }
-
-    func deleteHistory(id: String) {
-        history.removeAll { $0.id == id }
-        HistoryStore.shared.delete(id: id)
-        save()
-    }
-
-    func toggleHistoryFavorite(id: String) {
-        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
-        history[idx].isFavorite.toggle()
-        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
-        save()
-    }
-
-    func updateHistoryTags(id: String, tags: [String]) {
-        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
-        history[idx].tags = Self.historyTags(tags)
-        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
-        save()
-    }
-
-    @discardableResult
-    func upsertSavedHistoryFilter(name: String,
-                                  criteria: HistoryFilterCriteria,
-                                  date: Date = Date()) -> SavedHistoryFilter? {
-        let safeName = Self.sanitizedSavedHistoryFilterName(name)
-        guard !safeName.isEmpty else { return nil }
-        let safeCriteria = Self.sanitizedHistoryFilterCriteria(criteria)
-        let nameKey = Self.savedHistoryFilterNameKey(safeName)
-
-        var filter: SavedHistoryFilter
-        if let index = savedHistoryFilters.firstIndex(where: { Self.savedHistoryFilterNameKey($0.name) == nameKey }) {
-            filter = savedHistoryFilters[index]
-            filter.name = safeName
-            filter.criteria = safeCriteria
-            filter.updatedAt = date
-            savedHistoryFilters.remove(at: index)
-        } else {
-            filter = SavedHistoryFilter(name: safeName,
-                                        criteria: safeCriteria,
-                                        createdAt: date,
-                                        updatedAt: date)
-        }
-        savedHistoryFilters.insert(filter, at: 0)
-        savedHistoryFilters = Self.sanitizedStoredSavedHistoryFilters(savedHistoryFilters)
-        save()
-        return savedHistoryFilters.first { $0.id == filter.id }
-    }
-
-    func deleteSavedHistoryFilter(id: String) {
-        savedHistoryFilters.removeAll { $0.id == id }
-        save()
-    }
-
-    func recordActionUsage(actionName: String) {
-        let name = Self.limitedImportedString(actionName.trimmingCharacters(in: .whitespacesAndNewlines),
-                                              maxLength: AIAction.maxNameLength,
-                                              fallback: "未命名动作")
-        let current = actionUsageCounts[name] ?? 0
-        actionUsageCounts[name] = current >= Self.importedActionUsageCountRange.upperBound
-            ? Self.importedActionUsageCountRange.upperBound
-            : max(0, current) + 1
-        actionUsageCounts = Self.sanitizedStoredActionUsageCounts(actionUsageCounts)
-    }
 
     enum CodingKeys: String, CodingKey {
         // 新:多供应商
@@ -880,8 +403,9 @@ final class AppSettings: ObservableObject, Codable {
 
     static let storeKey = "SnapAI.settings.v1"
 
-    /// 已写入 Keychain 的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
-    var keychainCache: [String: String] = [:]
+    /// 已写入本地加密密钥存储的 Key 快照,避免每次 save() 都重复写(打字时 commit 很频繁)
+    var secretStoreCache: [String: String] = [:]
+    var secretStoreStatus: String = "not-checked"
     var needsPostLoadSave = false
 
     static let iCloudDeviceIDDefaultsKey = "SnapAI.iCloud.deviceID"
@@ -972,7 +496,7 @@ final class AppSettings: ObservableObject, Codable {
     }
 
     static func providersForImportedConfiguration(_ providers: [AIProvider],
-                                                  keyResolver: (String) -> String = { Keychain.apiKey(for: $0) }) -> [AIProvider] {
+                                                  keyResolver: (String) -> String = { LocalSecretStore.apiKey(for: $0) }) -> [AIProvider] {
         var seenProviderIDs = Set<String>()
         return providers.prefix(importedProviderLimit).map { provider in
             let originalID = provider.id.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -996,7 +520,7 @@ final class AppSettings: ObservableObject, Codable {
     static func importedProviderConfiguration(_ providers: [AIProvider],
                                               activeProviderID: String,
                                               activeModel: String,
-                                              keyResolver: (String) -> String = { Keychain.apiKey(for: $0) })
+                                              keyResolver: (String) -> String = { LocalSecretStore.apiKey(for: $0) })
     -> (providers: [AIProvider], activeProviderID: String, activeModel: String) {
         let sanitizedProviders = providersForImportedConfiguration(providers, keyResolver: keyResolver)
         let sanitizedActiveModel = sanitizedActiveModelName(activeModel)
@@ -1233,7 +757,7 @@ final class AppSettings: ObservableObject, Codable {
         return limited.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? allValue : limited
     }
 
-    private static func savedHistoryFilterNameKey(_ name: String) -> String {
+    static func savedHistoryFilterNameKey(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .split(whereSeparator: { $0.isWhitespace })
@@ -1425,9 +949,9 @@ final class AppSettings: ObservableObject, Codable {
         return replacement
     }
 
-    private static func limitedImportedString(_ value: String,
-                                              maxLength: Int,
-                                              fallback: String) -> String {
+    static func limitedImportedString(_ value: String,
+                                      maxLength: Int,
+                                      fallback: String) -> String {
         let resolved = value.isEmpty ? fallback : value
         guard resolved.count > maxLength else { return resolved }
         return String(resolved.prefix(maxLength))
@@ -1473,90 +997,4 @@ final class AppSettings: ObservableObject, Codable {
         return pairs[0].1.id
     }
 
-    private func historyPayload(source: String,
-                                output: String,
-                                tags: [String],
-                                contentStorage: HistoryContentStorage) -> (source: String, output: String, tags: [String]) {
-        switch contentStorage {
-        case .full:
-            let sourcePayload = Self.limitedHistoryText(source,
-                                                        maxLength: Self.historySourceCharacterLimit)
-            let outputPayload = Self.limitedHistoryText(output,
-                                                        maxLength: Self.historyOutputCharacterLimit)
-            var appendedTags: [String] = []
-            if sourcePayload.wasTruncated {
-                appendedTags.append(PrivacyHistoryTag.sourceTruncated)
-            }
-            if outputPayload.wasTruncated {
-                appendedTags.append(PrivacyHistoryTag.outputTruncated)
-            }
-            return (sourcePayload.text, outputPayload.text, Self.historyTags(tags, appending: appendedTags))
-        case .metadataOnly:
-            return ("", "", Self.historyTags(tags, appending: [PrivacyHistoryTag.metadataOnly]))
-        }
-    }
-
-    private static func limitedHistoryText(_ text: String,
-                                           maxLength: Int) -> (text: String, wasTruncated: Bool) {
-        guard text.count > maxLength else {
-            return (text, false)
-        }
-        let marker = "\n\n[SnapAI: 历史记录已截断, 原始字符数 \(text.count)]"
-        let visibleLimit = max(0, maxLength - marker.count)
-        return (String(text.prefix(visibleLimit)) + marker, true)
-    }
-
-    private static func historyTags(_ tags: [String], appending appendedTags: [String] = []) -> [String] {
-        var seen = Set<String>()
-        var result: [String] = []
-        let requiredTags = normalizedHistoryTags(appendedTags)
-        let userTagLimit = max(0, historyTagLimit - requiredTags.count)
-        for value in normalizedHistoryTags(tags) where result.count < userTagLimit {
-            guard !seen.contains(value) else { continue }
-            seen.insert(value)
-            result.append(value)
-        }
-        for value in requiredTags where result.count < historyTagLimit {
-            guard !seen.contains(value) else { continue }
-            seen.insert(value)
-            result.append(value)
-        }
-        return result
-    }
-
-    private static func normalizedHistoryTags(_ tags: [String]) -> [String] {
-        tags.compactMap { value in
-            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            let limited = limitedImportedString(normalized,
-                                                maxLength: historyTagCharacterLimit,
-                                                fallback: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return limited.isEmpty ? nil : limited
-        }
-    }
-
-    private static func historyTags(_ tags: [String], appending tag: String) -> [String] {
-        historyTags(tags, appending: [tag])
-    }
-}
-
-/// 键码 → 名称 的最小映射(用于显示快捷键)
-enum KeyCodeMap {
-    static func name(for keyCode: UInt32) -> String {
-        let map: [Int: String] = [
-            kVK_ANSI_A: "A", kVK_ANSI_B: "B", kVK_ANSI_C: "C", kVK_ANSI_D: "D",
-            kVK_ANSI_E: "E", kVK_ANSI_F: "F", kVK_ANSI_G: "G", kVK_ANSI_H: "H",
-            kVK_ANSI_I: "I", kVK_ANSI_J: "J", kVK_ANSI_K: "K", kVK_ANSI_L: "L",
-            kVK_ANSI_M: "M", kVK_ANSI_N: "N", kVK_ANSI_O: "O", kVK_ANSI_P: "P",
-            kVK_ANSI_Q: "Q", kVK_ANSI_R: "R", kVK_ANSI_S: "S", kVK_ANSI_T: "T",
-            kVK_ANSI_U: "U", kVK_ANSI_V: "V", kVK_ANSI_W: "W", kVK_ANSI_X: "X",
-            kVK_ANSI_Y: "Y", kVK_ANSI_Z: "Z",
-            kVK_ANSI_0: "0", kVK_ANSI_1: "1", kVK_ANSI_2: "2", kVK_ANSI_3: "3",
-            kVK_ANSI_4: "4", kVK_ANSI_5: "5", kVK_ANSI_6: "6", kVK_ANSI_7: "7",
-            kVK_ANSI_8: "8", kVK_ANSI_9: "9",
-            kVK_Space: "Space", kVK_Return: "↩", kVK_Escape: "⎋",
-            kVK_Delete: "Delete", kVK_ForwardDelete: "⌦"
-        ]
-        return map[Int(keyCode)] ?? "Key\(keyCode)"
-    }
 }

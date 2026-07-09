@@ -5,7 +5,7 @@ extension AppSettings {
         if let data = UserDefaults.standard.data(forKey: Self.storeKey),
            let s = try? JSONDecoder().decode(AppSettings.self, from: data) {
             let hadPlaintext = String(data: data, encoding: .utf8)?.contains("\"apiKey\"") ?? false
-            s.loadKeysFromKeychain()
+            s.loadKeysFromLocalSecretStore()
             s.loadHistoryFromLocalStoreOrMigrate()
             // 旧版本可能把明文 Key 存在 JSON 里;迁移后立即重写一次以彻底清除明文
             if hadPlaintext || s.needsPostLoadSave { s.save() }
@@ -16,25 +16,32 @@ extension AppSettings {
         return settings
     }
 
-    /// 从 Keychain 回填各供应商的 apiKey(decode 后它们都是空字符串)
-    private func loadKeysFromKeychain() {
+    /// 从本地加密密钥存储回填各供应商的 apiKey(decode 后它们都是空字符串)
+    private func loadKeysFromLocalSecretStore() {
+        var writeFailures = 0
         for i in providers.indices {
-            // 迁移分支可能已在内存里带了明文 key(来自旧 JSON),优先保留并落 Keychain
+            // 迁移分支可能已在内存里带了明文 key(来自旧 JSON),优先保留并落本地加密存储。
             if providers[i].apiKey.isEmpty {
-                providers[i].apiKey = Keychain.apiKey(for: providers[i].id)
-            } else {
-                Keychain.setAPIKey(providers[i].apiKey, for: providers[i].id)
+                providers[i].apiKey = LocalSecretStore.apiKey(for: providers[i].id)
+            } else if !LocalSecretStore.setAPIKey(providers[i].apiKey, for: providers[i].id) {
+                writeFailures += 1
             }
-            keychainCache[providers[i].id] = providers[i].apiKey
+            secretStoreCache[providers[i].id] = providers[i].apiKey
         }
+        updateSecretStoreStatus(writeFailures: writeFailures)
     }
 
     func save() {
-        // 仅当 Key 发生变化时才写 Keychain(避免打字时频繁写入)
-        for p in providers where keychainCache[p.id] != p.apiKey {
-            Keychain.setAPIKey(p.apiKey, for: p.id)
-            keychainCache[p.id] = p.apiKey
+        // 仅当 Key 发生变化时才写本地加密存储(避免打字时频繁写入)
+        var writeFailures = 0
+        for p in providers where secretStoreCache[p.id] != p.apiKey {
+            if LocalSecretStore.setAPIKey(p.apiKey, for: p.id) {
+                secretStoreCache[p.id] = p.apiKey
+            } else {
+                writeFailures += 1
+            }
         }
+        updateSecretStoreStatus(writeFailures: writeFailures)
         let sanitizedHistory = Self.sanitizedStoredHistory(history, limit: historyLimit)
         if sanitizedHistory != history {
             history = sanitizedHistory
@@ -53,6 +60,15 @@ extension AppSettings {
         }
         if !history.isEmpty {
             HistoryStore.shared.replaceAll(history, limit: historyLimit)
+        }
+    }
+
+    private func updateSecretStoreStatus(writeFailures: Int) {
+        let summary = LocalSecretStore.diagnosticSummary()
+        if writeFailures > 0 {
+            secretStoreStatus = "\(summary), writeFailures=\(writeFailures)"
+        } else {
+            secretStoreStatus = summary
         }
     }
 }

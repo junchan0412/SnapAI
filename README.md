@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.8 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.9 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.8 版本重点
+## 1.6.9 版本重点
 
-- 五个默认动作都内置默认快捷键:提问、翻译、润色、总结、解释代码开箱即可全局触发。
-- 设置页新增“恢复默认快捷键”,可一键恢复默认动作和快捷提问面板的快捷键,并清理与默认组合冲突的自定义动作快捷键。
-- 跨应用取词重构:Accessibility 读取会遍历更深的应用可访问性树,并支持常见的参数化 range 文本读取。
-- 剪贴板兜底更稳:复制兜底最多重试 3 次,并支持更多纯文本、RTF、HTML 和旧式 pasteboard 文本类型。
-- 文本替换更安全:移除按原文字符数模拟 `Shift + Left` 的旧重选策略,避免在不兼容应用中把润色/翻译结果追加到错误位置。
+- API Key 改为本地 AES.GCM 加密密钥存储,避免非 Apple Developer ID 分发时每次更新后反复触发 Keychain 授权。
+- 权限健康中心会显示本地密钥存储状态,保存失败会进入诊断文本,更容易定位配置持久化问题。
+- 设置页继续拆分职责,隐私、上下文包和配置迁移已独立为小组件,降低后续 UI 回归风险。
+- CI 和 release preflight 新增 SnapAILogic symlink 清单校验,防止 UI 文件误入逻辑测试 target。
+- 新增 prompt/privacy/fallback eval 语料测试,覆盖本地优先、云端 fallback、高风险隐私预览和历史保护。
 
-详细发布说明见 [SnapAI 1.6.8 Release Notes](docs/RELEASE_NOTES_1.6.8.md),阶段性复盘见 [SnapAI 1.6.8 Iteration Report](docs/ITERATION_REPORT_1.6.8.md)。
+详细发布说明见 [SnapAI 1.6.9 Release Notes](docs/RELEASE_NOTES_1.6.9.md),阶段性复盘见 [SnapAI 1.6.9 Iteration Report](docs/ITERATION_REPORT_1.6.9.md)。
 
 ## 系统要求
 
@@ -52,7 +52,7 @@ open ~/Applications/SnapAI.app
 
 SnapAI 当前没有 Apple Developer ID,也没有 Apple notarization。浏览器从 GitHub 下载后,macOS 会给应用添加 quarantine 隔离属性。未公证应用在隔离状态下可能被 Gatekeeper 拦截,表现为“应用已损坏”或“无法打开”。
 
-`xattr -cr /Applications/SnapAI.app` 会递归清除应用 bundle 上的 quarantine 等扩展属性。它只解决 Gatekeeper 隔离问题,不会替代辅助功能权限、屏幕录制权限或钥匙串访问确认。
+`xattr -cr /Applications/SnapAI.app` 会递归清除应用 bundle 上的 quarantine 等扩展属性。它只解决 Gatekeeper 隔离问题,不会替代辅助功能权限或屏幕录制权限。
 
 应用内自动更新会在替换后自动执行 `xattr -cr`,所以这个命令主要用于首次手动安装或手动覆盖安装。
 
@@ -127,7 +127,7 @@ SnapAI 的主链路是:
 
 - 非本机 HTTP 端点会被拒绝,避免 API Key 通过明文网络发送。
 - 本机 HTTP 仅允许 `localhost`、`127.0.0.1` 和 `::1`。
-- API Key 存入 macOS Keychain,不会写入导出的动作库。
+- API Key 使用本地 AES.GCM 加密存储,不会写入 UserDefaults、iCloud payload 或导出的动作库。
 - Ollama 或 LM Studio 这类本地兼容服务通常也需要填写一个非空 API Key 占位符,例如 `ollama` 或 `lm-studio`。
 
 ## 隐私与历史
@@ -186,9 +186,9 @@ snapai://update
 
 若安装目录不可写,建议把应用移动到 `~/Applications` 后再更新。
 
-## 签名、辅助功能和钥匙串
+## 签名、辅助功能和本地密钥
 
-macOS 的辅助功能权限和 Keychain 访问确认都与应用代码签名身份有关。若每次发布都使用 ad-hoc 签名或重新生成自签名证书,系统可能把新版本视为另一个应用,从而反复要求授权。
+macOS 的辅助功能权限与应用代码签名身份有关。若每次发布都使用 ad-hoc 签名或重新生成自签名证书,系统可能把新版本视为另一个应用,从而反复要求授权。
 
 SnapAI 的推荐发布方式是:
 
@@ -196,6 +196,7 @@ SnapAI 的推荐发布方式是:
 2. 使用长期固定的自签名 Code Signing 证书。
 3. 每个 release 都使用同一个证书签名。
 4. 继续使用签名 manifest 校验更新包。
+5. API Key 不再依赖 macOS Keychain,改由本机 Application Support 中的本地加密密钥存储保护。
 
 本仓库提供本机自签名证书脚本:
 
@@ -209,7 +210,18 @@ SnapAI 的推荐发布方式是:
 SNAPAI_RELEASE=1 ./build.sh --release
 ```
 
-注意:自签名不是 Apple Developer ID,也不是 notarization。首次从旧 ad-hoc 版本切换到稳定自签名版本时,用户仍可能需要重新授权一次;之后只要证书和 bundle id 稳定,重复授权会明显减少。
+注意:自签名不是 Apple Developer ID,也不是 notarization。首次从旧 ad-hoc 版本切换到稳定自签名版本时,用户仍可能需要重新授予辅助功能权限一次;之后只要证书和 bundle id 稳定,重复授权会明显减少。
+
+### 本地加密密钥存储
+
+SnapAI 不再把 API Key 写入 macOS Keychain,以避免非 Apple Developer ID 分发场景中每次更新后反复弹出钥匙串访问确认。新的密钥存储行为:
+
+- master key 保存在 `~/Library/Application Support/SnapAI/Secrets/snapai-secrets.key`。
+- provider API Key 以 AES.GCM 加密后保存在同目录的 `provider-secrets.json`。
+- `Secrets` 目录权限会收紧到 `0700`,key 文件和密文文件权限会收紧到 `0600`。
+- 配置导出、动作库导出、iCloud 同步和诊断文本都不会包含 API Key 明文。
+
+这个方案主要解决“更新后反复授权钥匙串”的体验问题,并避免明文落盘。它不等同于 Keychain 的系统级隔离:如果同一 macOS 用户下的恶意进程可以读取你的 Application Support 目录,理论上也能同时读取 master key 和密文文件。请仍然保护好本机账户和磁盘。
 
 ## 常见问题
 
@@ -237,9 +249,11 @@ SNAPAI_RELEASE=1 ./build.sh --release
 3. 权限健康中心是否显示快捷键注册失败。
 4. 必要时使用“恢复默认快捷键”。
 
-### 每次更新后都要重新授权钥匙串或辅助功能
+### 每次更新后都要重新授权辅助功能
 
 请确认 release 是否使用同一个固定自签名证书。不要每次用 `codesign --sign -` ad-hoc 签名,也不要每次重新生成证书。旧 ad-hoc 版本升级到稳定自签名版本时,第一次重新授权是正常现象。
+
+API Key 已改为本地加密存储,不再依赖 macOS Keychain。旧版本保存在 Keychain 中的 API Key 不会在启动时自动读取,以免继续触发钥匙串授权弹窗;升级后请在设置页重新填写一次 API Key,之后会保存到本地加密存储。
 
 ## 开发与测试
 
@@ -249,6 +263,14 @@ SNAPAI_RELEASE=1 ./build.sh --release
 swift build
 scripts/run-logic-tests.sh
 ```
+
+本机 macOS smoke 检查:
+
+```bash
+scripts/run-macos-smoke-tests.sh
+```
+
+这组检查会运行逻辑测试、校验 `SnapAILogic` target 边界,并临时写入后恢复系统剪贴板,同时探测辅助功能和屏幕录制权限状态。它用于本机发版前验证,不建议放进无 GUI session 的默认 CI。
 
 本地构建 `.app`:
 
@@ -266,7 +288,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.8
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.9
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

@@ -13,7 +13,7 @@ struct SettingsView: View {
     @StateObject private var modelLoader = ModelLoader()
     @StateObject private var ui = AISettingsUI()
     @StateObject private var tester = ConnectionTester()
-    private let aiLabelWidth: CGFloat = 76
+    let aiLabelWidth: CGFloat = 76
     private var isPinned: Bool { pinState.isPinned }
     private var iCloudSyncStatusText: String {
         guard settings.iCloudSyncEnabled else { return "" }
@@ -348,26 +348,6 @@ struct SettingsView: View {
         }
         let mode = settings.autoRouteEnabled ? "自动路由" : "当前模型"
         return "预览:\(mode) 会优先尝试 \(first.diagnosticProviderName) / \(first.diagnosticModelName) · \(first.diagnosticReason)"
-    }
-
-    private func settingsMiniHeader(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-    }
-
-    private func menuLabel(_ text: String, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).foregroundStyle(.secondary)
-            Text(text)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Spacer(minLength: 4)
-            Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
-        .clipped()
     }
 
     // MARK: 添加供应商
@@ -725,16 +705,6 @@ struct SettingsView: View {
         .padding(.top, 4)
     }
 
-    private func editorRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(title)
-                .frame(width: aiLabelWidth, alignment: .trailing)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
-            content().frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
     // MARK: 供应商 / 模型 绑定与增删
 
     /// 生成对某个供应商某字段的 Binding(按 id 定位,避免下标失效)
@@ -794,7 +764,7 @@ struct SettingsView: View {
     private func deleteProvider(_ id: String) {
         settings.providers.removeAll { $0.id == id }
         if ui.expandedProviderID == id { ui.expandedProviderID = nil }
-        Keychain.delete(providerID: id)   // 清除该供应商在 Keychain 的 Key
+        LocalSecretStore.delete(providerID: id)   // 清除该供应商的本地加密 Key
         settings.normalizeActive()
         commit()
     }
@@ -1340,28 +1310,14 @@ struct SettingsView: View {
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
-    private func promptEditor(text: Binding<String>, height: CGFloat) -> some View {
-        TextEditor(text: text)
-            .font(.system(size: 14))
-            .lineSpacing(3)
-            .scrollContentBackground(.hidden)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .frame(height: height)
-            .background(Color.primary.opacity(0.045))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-            )
-    }
-
     // MARK: - 通用
 
     private var generalTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                workModeSection
+                WorkModeSettingsSection(settings: settings) {
+                    commit()
+                }
 
                 settingsSection("启动与显示") {
                     settingsToggleRow(
@@ -1430,445 +1386,25 @@ struct SettingsView: View {
                     }
                 }
 
-                settingsSection("配置迁移") {
-                    HStack(spacing: 8) {
-                        Button("导出配置…") { exportConfig() }
-                        Button("导入配置…") { importConfig() }
-                        Spacer()
-                    }
-                    Text("导出为 JSON，包含供应商、动作、快捷键等；API Key 不会被导出。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                ConfigMigrationSettingsSection(settings: settings, commit: commit)
             }
             .padding(14)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var workModeSection: some View {
-        settingsSection("工作模式") {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: settings.matchingWorkModePreset?.systemImage ?? "slider.horizontal.2.square")
-                    .font(.title3)
-                    .foregroundStyle(.tint)
-                    .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(settings.workModeStatusTitle)
-                        .font(.callout.weight(.medium))
-                    Text(settings.workModeStatusDetail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 12)
-            }
-
-            compactDivider
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: 8)], spacing: 8) {
-                ForEach(WorkModePreset.allCases) { mode in
-                    workModeButton(mode)
-                }
-            }
-        }
-    }
-
-    private func workModeButton(_ mode: WorkModePreset) -> some View {
-        let isCurrent = settings.matchingWorkModePreset == mode
-        return Button {
-            settings.applyWorkMode(mode)
-            commit()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isCurrent ? "checkmark.circle.fill" : mode.systemImage)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(mode.shortTitle)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    Text(mode.summary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .tint(isCurrent ? .accentColor : .secondary)
-        .help(mode.summary)
-    }
-
     private var privacySection: some View {
-        settingsSection("隐私") {
-            settingsToggleRow(
-                title: "发送前预览",
-                description: "发送前查看最终 Prompt、脱敏命中和附件摘要。",
-                isOn: Binding(
-                    get: { settings.privacyPreviewEnabled },
-                    set: { settings.privacyPreviewEnabled = $0; commit() }
-                )
-            )
-            compactDivider
-            settingsToggleRow(
-                title: "本地脱敏",
-                description: "在请求发出前替换匹配文本，规则只在本机执行。",
-                isOn: Binding(
-                    get: { settings.redactionEnabled },
-                    set: { settings.redactionEnabled = $0; commit() }
-                )
-            )
-            if settings.redactionEnabled {
-                compactDivider
-                redactionRulesEditor
-            }
-        }
+        PrivacySettingsSection(settings: settings,
+                               ui: ui,
+                               commit: commit,
+                               applyCommit: applyCommit)
     }
 
     private var contextProfilesSection: some View {
-        settingsSection("上下文包") {
-            HStack {
-                Text("将项目背景、术语表和偏好合并进 System Prompt。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $settings.activeContextProfileID) {
-                    Text("不使用上下文").tag("")
-                    ForEach(settings.contextProfiles) { profile in
-                        Text(profile.name).tag(profile.id)
-                    }
-                }
-                .frame(width: 170)
-                .controlSize(.small)
-                .onChange(of: settings.activeContextProfileID) { commit() }
-            }
-            ForEach(settings.contextProfiles) { profile in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Toggle("", isOn: bindingForContextProfile(profile.id, \.isEnabled))
-                            .labelsHidden()
-                            .controlSize(.small)
-                        TextField("名称", text: bindingForContextProfile(profile.id, \.name, policy: .deferredSave), onCommit: commit)
-                            .textFieldStyle(.roundedBorder)
-                            .controlSize(.small)
-                        if settings.activeContextProfileID == profile.id {
-                            Text("使用中")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.blue)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(Color.blue.opacity(0.12), in: Capsule())
-                        }
-                        Button {
-                            if settings.activeContextProfileID == profile.id {
-                                settings.activeContextProfileID = ""
-                            }
-                            settings.contextProfiles.removeAll { $0.id == profile.id }
-                            commit()
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .help("删除上下文包")
-                    }
-                    TextEditor(text: bindingForContextProfile(profile.id, \.content, policy: .deferredSave))
-                        .font(.system(size: 12))
-                        .frame(height: 58)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(Color.primary.opacity(0.045))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                        }
-                }
-                .padding(7)
-                .background(Color.primary.opacity(0.028))
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            }
-            HStack(spacing: 8) {
-                TextField("新上下文包名称", text: $ui.newContextName)
-                    .textFieldStyle(.roundedBorder)
-                    .controlSize(.small)
-                Button {
-                    addContextProfile()
-                } label: {
-                    Label("添加", systemImage: "plus")
-                }
-                .controlSize(.small)
-                .disabled(ui.newContextName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-    }
-
-    private func settingsSection<Content: View>(_ title: String,
-                                                @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
-                content()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func settingsToggleRow(title: String,
-                                   description: String,
-                                   isOn: Binding<Bool>) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 16)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var compactDivider: some View {
-        Divider()
-            .opacity(0.55)
-    }
-
-    private var redactionRulesEditor: some View {
-        let preview = redactionPreview
-        let newPatternError = newRedactionPatternError
-        return VStack(alignment: .leading, spacing: 6) {
-            ForEach(settings.redactionRules) { rule in
-                let report = preview.reports.first { $0.ruleID == rule.id }
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
-                            .labelsHidden()
-                        TextField("名称", text: bindingForRedactionRule(rule.id, \.name, policy: .deferredSave), onCommit: commit)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 82)
-                        TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern, policy: .deferredSave), onCommit: commit)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement, policy: .deferredSave), onCommit: commit)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 86)
-                        Button {
-                            settings.redactionRules.removeAll { $0.id == rule.id }
-                            commit()
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .help("删除规则")
-                    }
-                    Label(report?.statusText ?? "未检测", systemImage: report?.isValid == false ? "exclamationmark.triangle.fill" : "checkmark.circle")
-                        .font(.caption2)
-                        .foregroundStyle(report?.isValid == false ? Color.red : Color.secondary)
-                }
-                .padding(6)
-                .background(Color.primary.opacity(0.025))
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            }
-            HStack(spacing: 6) {
-                TextField("名称", text: $ui.newRedactionName)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 82)
-                TextField("正则表达式", text: $ui.newRedactionPattern)
-                    .textFieldStyle(.roundedBorder)
-                TextField("替换为", text: $ui.newRedactionReplacement)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 86)
-                Button {
-                    addRedactionRule()
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .disabled(!canAddRedactionRule)
-                Button("恢复默认") {
-                    settings.redactionRules = PrivacyRedactionRule.defaults()
-                    commit()
-                }
-                .font(.caption)
-            }
-            if let newPatternError {
-                Label(newPatternError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-            }
-            Divider().padding(.vertical, 2)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack {
-                    Text("规则测试").font(.caption.weight(.semibold))
-                    Spacer()
-                    Text("命中 \(preview.totalMatches) 处 · 错误 \(preview.invalidReports.count) 条")
-                        .font(.caption2)
-                        .foregroundStyle(preview.invalidReports.isEmpty ? Color.secondary : Color.red)
-                }
-                TextEditor(text: $ui.redactionSample)
-                    .font(.system(size: 12))
-                    .frame(height: PrivacyFilter.defaultSampleEditorHeight)
-                    .scrollContentBackground(.hidden)
-                    .padding(5)
-                    .background(Color.primary.opacity(0.045))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                Text(preview.output)
-                    .font(.system(size: 12, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity,
-                           minHeight: max(58, PrivacyFilter.defaultSampleEditorHeight - 14),
-                           alignment: .leading)
-                    .padding(7)
-                    .background(Color.green.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-        }
-        .font(.caption)
-        .padding(8)
-        .background(Color.primary.opacity(0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var redactionPreview: PrivacyRedactionPreview {
-        PrivacyFilter.preview(text: ui.redactionSample, rules: settings.redactionRules)
-    }
-
-    private var newRedactionPatternError: String? {
-        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !pattern.isEmpty else { return nil }
-        return PrivacyFilter.validatePattern(pattern)
-    }
-
-    private var canAddRedactionRule: Bool {
-        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !pattern.isEmpty && newRedactionPatternError == nil
-    }
-
-    private func bindingForContextProfile<V>(_ id: String,
-                                             _ keyPath: WritableKeyPath<ContextProfile, V>,
-                                             policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
-        Binding(
-            get: {
-                (settings.contextProfiles.first(where: { $0.id == id }) ?? ContextProfile(name: "", content: ""))[keyPath: keyPath]
-            },
-            set: { newValue in
-                guard let idx = settings.contextProfiles.firstIndex(where: { $0.id == id }) else { return }
-                settings.contextProfiles[idx][keyPath: keyPath] = newValue
-                applyCommit(policy)
-            }
-        )
-    }
-
-    private func bindingForRedactionRule<V>(_ id: String,
-                                             _ keyPath: WritableKeyPath<PrivacyRedactionRule, V>,
-                                             policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
-        Binding(
-            get: {
-                (settings.redactionRules.first(where: { $0.id == id }) ?? PrivacyRedactionRule(name: "", pattern: "", replacement: ""))[keyPath: keyPath]
-            },
-            set: { newValue in
-                guard let idx = settings.redactionRules.firstIndex(where: { $0.id == id }) else { return }
-                settings.redactionRules[idx][keyPath: keyPath] = newValue
-                applyCommit(policy)
-            }
-        )
-    }
-
-    private func addRedactionRule() {
-        let pattern = ui.newRedactionPattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !pattern.isEmpty, PrivacyFilter.validatePattern(pattern) == nil else { return }
-        let name = ui.newRedactionName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let replacement = ui.newRedactionReplacement.trimmingCharacters(in: .whitespacesAndNewlines)
-        settings.redactionRules.append(PrivacyRedactionRule(
-            name: name.isEmpty ? "自定义规则" : name,
-            pattern: pattern,
-            replacement: replacement.isEmpty ? "[已隐藏]" : replacement
-        ))
-        ui.newRedactionName = ""
-        ui.newRedactionPattern = ""
-        ui.newRedactionReplacement = "[已隐藏]"
-        commit()
-    }
-
-    private func addContextProfile() {
-        let name = ui.newContextName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        let profile = ContextProfile(name: name, content: "")
-        settings.contextProfiles.append(profile)
-        settings.activeContextProfileID = profile.id
-        ui.newContextName = ""
-        commit()
-    }
-
-    // MARK: 导入/导出(#13)
-
-    private func exportConfig() {
-        guard let exportData = settings.exportConfigurationData() else { return }
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "SnapAI-config.json"
-        panel.allowedContentTypes = [.json]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? exportData.write(to: url)
-        }
-    }
-
-    private func importConfig() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url,
-              let data = try? Data(contentsOf: url),
-              let imported = try? JSONDecoder().decode(AppSettings.self, from: data) else { return }
-        imported.normalizeImportedConfiguration()
-        // 把导入的值拷贝到当前 settings(逐字段)。始终忽略文件里的明文 Key;
-        // 同机重导入时,按 provider id 从 Keychain 回填已存的 Key,避免被清空。
-        let providerConfig = AppSettings.importedProviderConfiguration(imported.providers,
-                                                                       activeProviderID: imported.activeProviderID,
-                                                                       activeModel: imported.activeModel)
-        settings.providers = providerConfig.providers
-        settings.activeProviderID = providerConfig.activeProviderID
-        settings.activeModel = providerConfig.activeModel
-        settings.temperature = imported.temperature
-        settings.actions = AppSettings.sanitizedImportedActions(imported.actions,
-                                                                originalProviders: imported.providers,
-                                                                sanitizedProviders: settings.providers)
-        settings.askHotKey = imported.askHotKey
-        settings.translateHotKey = imported.translateHotKey
-        settings.quickPanelHotKey = imported.quickPanelHotKey
-        settings.askPrompt = imported.askPrompt
-        settings.translatePrompt = imported.translatePrompt
-        settings.systemPrompt = imported.systemPrompt
-        settings.useAXFirst = imported.useAXFirst
-        settings.showDockIcon = imported.showDockIcon
-        settings.typewriterSpeed = imported.typewriterSpeed
-        settings.autoRouteEnabled = imported.autoRouteEnabled
-        settings.fallbackEnabled = imported.fallbackEnabled
-        settings.routingPreference = imported.routingPreference
-        settings.workModePreset = imported.workModePreset
-        settings.privacyPreviewEnabled = imported.privacyPreviewEnabled
-        settings.redactionEnabled = imported.redactionEnabled
-        settings.redactionRules = imported.redactionRules
-        settings.historyContentStorage = imported.historyContentStorage
-        settings.savedHistoryFilters = imported.savedHistoryFilters
-        settings.contextProfiles = imported.contextProfiles
-        settings.activeContextProfileID = imported.activeContextProfileID
-        settings.historyLimit = imported.historyLimit
-        settings.normalizeActive()
-        commit()
+        ContextProfileSettingsSection(settings: settings,
+                                      ui: ui,
+                                      commit: commit,
+                                      applyCommit: applyCommit)
     }
 
     // MARK: - 权限

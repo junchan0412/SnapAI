@@ -6,6 +6,14 @@ import Carbon.HIToolbox
 @testable import SnapAILogic
 #endif
 
+private func fileMode(_ url: URL) -> String {
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+          let mode = attrs[.posixPermissions] as? NSNumber else {
+        return ""
+    }
+    return String(format: "%03o", mode.intValue & 0o777)
+}
+
 func testBaseURLNormalization() {
     expect(AIClient.normalizedBase("api.openai.com", proto: .openAI) == "https://api.openai.com/v1",
            "adds https and /v1")
@@ -622,14 +630,46 @@ func testSettingsImportProvidersIgnorePlaintextKeys() {
     imported.id = "provider-1"
 
     let restored = AppSettings.providersForImportedConfiguration([imported]) { providerID in
-        providerID == "provider-1" ? "keychain-secret" : ""
+        providerID == "provider-1" ? "local-secret" : ""
     }
-    expect(restored.first?.apiKey == "keychain-secret",
-           "imported providers ignore plaintext file keys and use keychain resolver")
+    expect(restored.first?.apiKey == "local-secret",
+           "imported providers ignore plaintext file keys and use local secret resolver")
 
     let stripped = AppSettings.providersForImportedConfiguration([imported]) { _ in "" }
     expect(stripped.first?.apiKey == "",
-           "imported providers strip plaintext keys when no local keychain value exists")
+           "imported providers strip plaintext keys when no local encrypted value exists")
+}
+
+func testLocalSecretStoreEncryptsProviderKeysAtRest() {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("SnapAISecrets-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let store = LocalSecretStore.Store(directoryURL: directory)
+    let providerID = "provider-1"
+    let secret = "sk-local-secret-value-1234567890"
+
+    expect(store.apiKey(for: providerID) == "",
+           "local secret store returns empty when no key exists")
+    expect(store.setAPIKey(secret, for: providerID),
+           "local secret store writes provider api key")
+    expect(store.apiKey(for: providerID) == secret,
+           "local secret store decrypts provider api key")
+
+    let keyURL = directory.appendingPathComponent("snapai-secrets.key")
+    let secretsURL = directory.appendingPathComponent("provider-secrets.json")
+    let keyText = (try? String(contentsOf: keyURL, encoding: .utf8)) ?? ""
+    let secretsText = (try? String(contentsOf: secretsURL, encoding: .utf8)) ?? ""
+    expect(!keyText.contains(secret), "master key file does not contain plaintext provider secret")
+    expect(!secretsText.contains(secret), "encrypted secret store does not contain plaintext provider secret")
+    expect(fileMode(directory) == "700", "local secret directory uses owner-only permissions")
+    expect(fileMode(keyURL) == "600", "local secret master key uses owner-only permissions")
+    expect(fileMode(secretsURL) == "600", "local encrypted secret file uses owner-only permissions")
+    expect(store.diagnosticSummary().contains("mode=local-encrypted"),
+           "local secret store reports encrypted mode in diagnostics")
+
+    expect(store.delete(providerID: providerID), "local secret store deletes provider api key")
+    expect(store.apiKey(for: providerID) == "", "deleted provider api key is no longer readable")
 }
 
 func testSettingsImportProvidersSanitizeRuntimeBoundaries() {
@@ -663,15 +703,15 @@ func testSettingsImportProvidersSanitizeRuntimeBoundaries() {
     }
 
     let sanitized = AppSettings.providersForImportedConfiguration([provider, duplicateProvider] + extras) { providerID in
-        providerID == "provider-1" ? "keychain-secret" : ""
+        providerID == "provider-1" ? "local-secret" : ""
     }
 
     expect(sanitized.count == AppSettings.importedProviderLimit,
            "import caps provider count")
     expect(Set(sanitized.map(\.id)).count == sanitized.count,
            "import assigns unique provider ids")
-    expect(sanitized.first?.apiKey == "keychain-secret",
-           "import keeps provider keys sourced from keychain")
+    expect(sanitized.first?.apiKey == "local-secret",
+           "import keeps provider keys sourced from local encrypted storage")
     expect(sanitized.first?.name.count == AppSettings.importedProviderNameLimit,
            "import caps provider names")
     expect(sanitized.first?.baseURL.count == AppSettings.importedProviderBaseURLLimit,
@@ -703,7 +743,7 @@ func testSettingsImportProvidersSanitizeRuntimeBoundaries() {
         activeProviderID: "provider-1",
         activeModel: " duplicate-active-model "
     ) { providerID in
-        providerID == "provider-1" ? "keychain-secret" : ""
+        providerID == "provider-1" ? "local-secret" : ""
     }
     expect(activeConfig.providers.count == 2,
            "import active provider mapping keeps both duplicate-id providers after id repair")
@@ -796,7 +836,7 @@ func testSettingsDecodeSanitizesStoredProviders() {
     expect(decoded.providers.count == AppSettings.importedProviderLimit,
            "settings decode caps stored provider count")
     expect(decoded.providers.first?.id == "stored-provider",
-           "settings decode preserves the first valid stored provider id for keychain lookup")
+           "settings decode preserves the first valid stored provider id for local secret lookup")
     expect(Set(decoded.providers.map(\.id)).count == decoded.providers.count,
            "settings decode assigns unique ids to duplicate stored providers")
     expect(decoded.providers.first?.name.count == AppSettings.importedProviderNameLimit,

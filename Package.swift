@@ -19,16 +19,12 @@ let package = Package(
                 .linkedFramework("SwiftUI"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("ServiceManagement"),
-                .linkedFramework("Security"),
                 .linkedLibrary("sqlite3")
             ]
         ),
         .executableTarget(
             name: "SnapAI",
             path: "Sources/SnapAI",
-            swiftSettings: [
-                .unsafeFlags(["-O"], .when(configuration: .release))
-            ],
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AppKit"),
@@ -49,7 +45,6 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("ServiceManagement"),
-                .linkedFramework("Security"),
                 .linkedLibrary("sqlite3")
             ]
         )

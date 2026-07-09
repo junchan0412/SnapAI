@@ -168,6 +168,7 @@ struct PermissionHealthSnapshot {
     var recentAIRequestStatus: String = "none"
     var apiKeyConfiguredProviderCount: Int = 0
     var enabledProviderMissingAPIKeyCount: Int = 0
+    var secretStoreStatus: String = "unknown"
     var textCaptureStatus: String = "none"
     var writeBackStatus: String
     var privacyPreviewEnabled: Bool = false
@@ -216,6 +217,7 @@ struct PermissionHealthSnapshot {
         Unavailable Request Recovery: \(Self.diagnosticValue(unavailableRequestRecoverySummary))
         Recent AI Request: \(Self.diagnosticValue(recentAIRequestStatus, limit: 500))
         API Keys: \(apiKeyConfiguredProviderCount)/\(providerCount) configured; enabled missing \(enabledProviderMissingAPIKeyCount)
+        Secret Store: \(Self.diagnosticValue(secretStoreStatus, limit: 240))
         Text Capture: \(Self.diagnosticValue(textCaptureStatus))
         Write Back: \(Self.diagnosticValue(writeBackStatus))
         Privacy Preview: \(privacyPreviewEnabled ? "enabled" : "disabled")
@@ -257,6 +259,7 @@ struct PermissionHealthSnapshot {
         AI Request: \(Self.diagnosticValue(requestReadinessStatusLine, limit: 180))
         Recent AI Request: \(Self.diagnosticValue(recentAIRequestStatus, limit: 240))
         API Key Health: \(Self.diagnosticValue(apiKeyHealthStatusLine, limit: 160))
+        Secret Store: \(Self.diagnosticValue(secretStoreStatus, limit: 160))
         Text Capture: \(Self.diagnosticValue(textCaptureStatus, limit: 180))
         Write Back: \(Self.diagnosticValue(writeBackStatus, limit: 180))
         Privacy: preview \(privacyPreviewEnabled ? "enabled" : "disabled"), redaction \(redactionEnabled ? "enabled" : "disabled"), invalid rules \(invalidRedactionRuleCount)/\(redactionRuleCount)
@@ -326,6 +329,9 @@ struct PermissionHealthSnapshot {
         }
         if enabledProviderMissingAPIKeyCount > 0 {
             add("API Key", "在 AI 设置中补齐启用供应商的 API Key")
+        }
+        if secretStoreStatus.contains("writeFailures=") {
+            add("本地密钥", "本地加密密钥保存失败。请检查 Application Support 目录权限,或重新填写 API Key 后再复制诊断")
         }
         if !activeProviderRequestReady {
             add("AI 请求", activeProviderRequestRecoverySuggestion)
@@ -417,6 +423,9 @@ struct PermissionHealthSnapshot {
         let installLogStatus = UpdateChecker.latestInstallLogStatus()
         let requestReadiness = requestReadiness(settings: settings)
         let apiKeyHealth = apiKeyHealth(settings: settings)
+        let secretStoreStatus = settings.secretStoreStatus == "not-checked"
+            ? LocalSecretStore.diagnosticSummary()
+            : settings.secretStoreStatus
         let invalidRedactionRules = settings.redactionRules.filter {
             PrivacyFilter.validatePattern($0.pattern) != nil
         }.count
@@ -451,6 +460,7 @@ struct PermissionHealthSnapshot {
             recentAIRequestStatus: recentAIRequestStatus,
             apiKeyConfiguredProviderCount: apiKeyHealth.configuredProviderCount,
             enabledProviderMissingAPIKeyCount: apiKeyHealth.enabledProviderMissingCount,
+            secretStoreStatus: secretStoreStatus,
             textCaptureStatus: textCaptureStatus,
             writeBackStatus: writeBackStatus,
             privacyPreviewEnabled: settings.privacyPreviewEnabled,

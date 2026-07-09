@@ -118,6 +118,9 @@ validate_release_version "Resources/Info.plist" "$SOURCE_VERSION" "$SOURCE_BUILD
 step "检查 diff 空白问题"
 git diff --check
 
+step "检查逻辑测试 target 边界"
+scripts/check-logic-symlinks.sh
+
 step "运行逻辑测试"
 scripts/run-logic-tests.sh
 

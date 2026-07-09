@@ -43,7 +43,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
     var name: String = "新供应商"
     var apiProtocol: APIProtocol = .openAI
     var baseURL: String = ""
-    /// API Key。注意:不写入 JSON(由 Keychain 持久化),仅运行时驻留。
+    /// API Key。注意:不写入 JSON(由本地加密密钥存储持久化),仅运行时驻留。
     var apiKey: String = ""
     var models: [AIModelEntry] = []
     var isEnabled: Bool = true
@@ -69,7 +69,7 @@ struct AIProvider: Codable, Identifiable, Equatable {
         return normalizedHost == "localhost" || normalizedHost == "127.0.0.1" || normalizedHost == "::1"
     }
 
-    // apiKey 不参与编解码,改由 Keychain 管理
+    // apiKey 不参与编解码,改由本地加密密钥存储管理
     enum CodingKeys: String, CodingKey {
         case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, requestTimeout
     }

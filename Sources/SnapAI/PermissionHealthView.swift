@@ -141,6 +141,7 @@ struct PermissionHealthView: View {
                         detailLine("AI 请求", requestReadinessDetailText)
                         detailLine("最近请求", snapshot.recentAIRequestStatus, lineLimit: 3)
                         detailLine("API Key", apiKeyDetailText)
+                        detailLine("本地密钥", snapshot.secretStoreStatus, lineLimit: 2)
                         detailLine("修复建议", snapshot.recoverySuggestionStatusLine)
                         detailLine("上下文", contextStatusText)
                         detailLine("提示长度", promptLengthText)
