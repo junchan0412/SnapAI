@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.19 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.20 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.19 版本重点
+## 1.6.20 版本重点
 
-- CI 和 release preflight 新增供应链扫描门禁:当前无外部 SwiftPM 依赖时明确通过;未来新增依赖但缺少 `osv-scanner` 时会失败。
-- 该门禁避免“没有漏洞扫描器也默默放行新增依赖”,需要本地临时跳过时必须显式设置 `SNAPAI_ALLOW_MISSING_VULN_SCANNER=1`。
-- 继续保留 1.6.18 的 SBOM release asset、1.6.17 的 `SnapAILogic` UI-only 边界检查,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
+- macOS smoke 新增真实 Carbon hotkey 注册/注销探测,确认系统能接受 SnapAI 风格的全局快捷键注册。
+- release preflight 会继续自动运行该热键探测,进一步覆盖审计报告中提到的快捷键系统交互测试缺口。
+- 继续保留 1.6.19 的供应链扫描、1.6.18 的 SBOM release asset、1.6.17 的 `SnapAILogic` UI-only 边界检查,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.19 Release Notes](docs/RELEASE_NOTES_1.6.19.md),阶段性复盘见 [SnapAI 1.6.19 Iteration Report](docs/ITERATION_REPORT_1.6.19.md)。
+详细发布说明见 [SnapAI 1.6.20 Release Notes](docs/RELEASE_NOTES_1.6.20.md),阶段性复盘见 [SnapAI 1.6.20 Iteration Report](docs/ITERATION_REPORT_1.6.20.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.19
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.20
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

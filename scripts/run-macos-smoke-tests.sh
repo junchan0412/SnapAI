@@ -42,6 +42,7 @@ trap 'rm -f "$SWIFT_FILE"' EXIT
 cat > "$SWIFT_FILE" <<'SWIFT'
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import Foundation
 
 struct PasteboardItemSnapshot {
@@ -83,10 +84,26 @@ guard pasteboard.setString(marker, forType: .string),
 
 let accessibilityTrusted = AXIsProcessTrusted()
 let screenRecordingGranted = CGPreflightScreenCaptureAccess()
+var hotKeyRef: EventHotKeyRef?
+let hotKeyID = EventHotKeyID(signature: OSType(0x534E4150), id: UInt32(19))
+let hotKeyStatus = RegisterEventHotKey(UInt32(kVK_F19),
+                                       UInt32(cmdKey | optionKey | shiftKey),
+                                       hotKeyID,
+                                       GetApplicationEventTarget(),
+                                       0,
+                                       &hotKeyRef)
+if let hotKeyRef {
+    UnregisterEventHotKey(hotKeyRef)
+}
 print("Pasteboard roundtrip: ok")
 print("Pasteboard restore snapshot items: \(snapshot.count)")
 print("Accessibility trusted: \(accessibilityTrusted ? "yes" : "no")")
 print("Screen recording granted: \(screenRecordingGranted ? "yes" : "no")")
+print("Hotkey register probe: \(hotKeyStatus == noErr ? "ok" : "failed(\(hotKeyStatus))")")
+if hotKeyStatus != noErr {
+    fputs("error: hotkey register probe failed with status \(hotKeyStatus)\n", stderr)
+    exit(1)
+}
 SWIFT
 
 swift "$SWIFT_FILE"
