@@ -6,6 +6,7 @@ ActionPipeline.swift
 ActionTemplateLibrary.swift
 AppSettingsContext.swift
 AppSettingsHistory.swift
+AppSettingsImportSanitization.swift
 AppSettingsWorkMode.swift
 AutomationRouter.swift
 AutomationURLCommand.swift
