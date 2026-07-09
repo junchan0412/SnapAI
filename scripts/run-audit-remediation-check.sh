@@ -202,6 +202,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SettingsToggleCommand must not be duplicated in the app target"
 [ -f Sources/SnapAI/SettingsToggleCommandAppSettings.swift ] \
   || fail "SettingsToggleCommand AppSettings bridge is missing"
+[ -f Sources/SnapAILogic/ModelSwitchCommand.swift ] \
+  || fail "SnapAILogic migrated ModelSwitchCommand source is missing"
+[ ! -L Sources/SnapAILogic/ModelSwitchCommand.swift ] \
+  || fail "SnapAILogic migrated ModelSwitchCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ModelSwitchCommand.swift ] \
+  || fail "ModelSwitchCommand must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

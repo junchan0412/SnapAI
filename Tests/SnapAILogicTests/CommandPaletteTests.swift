@@ -356,30 +356,18 @@ func testCommandIdentifierSlugAndUniqueness() {
 }
 
 func testModelSwitchCommandFactoryFiltersAndMarksCurrentModel() {
-    var primary = AIProvider(name: "OpenAI",
-                             apiProtocol: .openAI,
-                             baseURL: "https://api.openai.com/v1",
-                             apiKey: "key",
-                             models: [
-                                AIModelEntry(name: "gpt-4o-mini"),
-                                AIModelEntry(name: "disabled-model", enabled: false)
-                             ])
-    primary.id = "openai"
-    primary.isEnabled = true
-    var disabledProvider = AIProvider(name: "Disabled",
-                                      apiProtocol: .openAI,
-                                      baseURL: "https://disabled.test/v1",
-                                      apiKey: "key",
-                                      models: [AIModelEntry(name: "hidden-model")])
-    disabledProvider.id = "disabled"
-    disabledProvider.isEnabled = false
-    var fallback = AIProvider(name: "DeepSeek",
-                              apiProtocol: .openAI,
-                              baseURL: "https://api.deepseek.com/v1",
-                              apiKey: "key",
-                              models: [AIModelEntry(name: "deepseek-chat")])
-    fallback.id = "deepseek"
-    fallback.isEnabled = true
+    let primary = ModelSwitchProviderInput(id: "openai",
+                                           name: "OpenAI",
+                                           isEnabled: true,
+                                           enabledModelNames: ["gpt-4o-mini"])
+    let disabledProvider = ModelSwitchProviderInput(id: "disabled",
+                                                    name: "Disabled",
+                                                    isEnabled: false,
+                                                    enabledModelNames: ["hidden-model"])
+    let fallback = ModelSwitchProviderInput(id: "deepseek",
+                                            name: "DeepSeek",
+                                            isEnabled: true,
+                                            enabledModelNames: ["deepseek-chat"])
 
     let descriptors = ModelSwitchCommandFactory.descriptors(providers: [primary, disabledProvider, fallback],
                                                             activeProviderID: "openai",
@@ -436,16 +424,10 @@ func testMenuCoordinatorBuildsModelSwitchMenu() {
 }
 
 func testModelSwitchCommandIDsAreStableSlugs() {
-    var provider = AIProvider(name: "Local",
-                              apiProtocol: .openAI,
-                              baseURL: "http://localhost:11434/v1",
-                              apiKey: "key",
-                              models: [
-                                AIModelEntry(name: "gpt/4o mini"),
-                                AIModelEntry(name: "gpt 4o mini")
-                              ])
-    provider.id = "local/test"
-    provider.isEnabled = true
+    let provider = ModelSwitchProviderInput(id: "local/test",
+                                            name: "Local",
+                                            isEnabled: true,
+                                            enabledModelNames: ["gpt/4o mini", "gpt 4o mini"])
 
     let descriptors = ModelSwitchCommandFactory.descriptors(providers: [provider],
                                                             activeProviderID: "local/test",
@@ -460,13 +442,10 @@ func testModelSwitchCommandIDsAreStableSlugs() {
     expect(descriptors.allSatisfy { !$0.id.contains("/") && !$0.id.contains(" ") },
            "model switch command ids do not contain path or whitespace separators")
 
-    var unsafeProvider = AIProvider(name: "Local\nLab|`A`",
-                                    apiProtocol: .openAI,
-                                    baseURL: "http://localhost:11434/v1",
-                                    apiKey: "key",
-                                    models: [AIModelEntry(name: "gpt\n4o|mini")])
-    unsafeProvider.id = "unsafe"
-    unsafeProvider.isEnabled = true
+    let unsafeProvider = ModelSwitchProviderInput(id: "unsafe",
+                                                  name: "Local\nLab|`A`",
+                                                  isEnabled: true,
+                                                  enabledModelNames: ["gpt\n4o|mini"])
     let unsafe = ModelSwitchCommandFactory.descriptors(providers: [unsafeProvider],
                                                        activeProviderID: "unsafe",
                                                        activeModel: "gpt\n4o|mini")

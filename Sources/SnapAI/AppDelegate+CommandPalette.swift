@@ -49,7 +49,13 @@ extension AppDelegate {
         }
         appendResultCommandPaletteItems(to: &items)
         appendResultPinCommandPaletteItem(to: &items)
-        for descriptor in ModelSwitchCommandFactory.descriptors(providers: settings.providers,
+        let modelSwitchProviders = settings.providers.map { provider in
+            ModelSwitchProviderInput(id: provider.id,
+                                     name: provider.name,
+                                     isEnabled: provider.isEnabled,
+                                     enabledModelNames: provider.enabledModelNames)
+        }
+        for descriptor in ModelSwitchCommandFactory.descriptors(providers: modelSwitchProviders,
                                                                 activeProviderID: settings.activeProvider?.id,
                                                                 activeModel: settings.model) {
             items.append(CommandPaletteItem(
