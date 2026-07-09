@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.11 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.12 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.11 版本重点
+## 1.6.12 版本重点
 
-- release preflight 现在会执行 macOS smoke 测试,覆盖剪贴板 roundtrip/restore、辅助功能和屏幕录制权限探测。
-- smoke 脚本新增 `--skip-logic`,用于 release gate 中避免重复跑完整逻辑测试。
-- 继续保留 1.6.10 的动作/快捷键设置拆分,以及 1.6.9 的本地密钥存储、symlink 边界校验和 prompt/privacy/fallback eval。
+- 设置页继续按审计报告拆分:AI 供应商、模型选择、路由策略和连接测试已从主 `SettingsView` 移入独立 `ProviderSettingsSection`。
+- `SettingsView` 现在更聚焦窗口导航、顶部置顶状态、历史/通用/权限入口编排,降低后续设置项迭代的回归半径。
+- 继续保留 1.6.11 的 release preflight smoke gate、1.6.10 的动作/快捷键设置拆分,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.11 Release Notes](docs/RELEASE_NOTES_1.6.11.md),阶段性复盘见 [SnapAI 1.6.11 Iteration Report](docs/ITERATION_REPORT_1.6.11.md)。
+详细发布说明见 [SnapAI 1.6.12 Release Notes](docs/RELEASE_NOTES_1.6.12.md),阶段性复盘见 [SnapAI 1.6.12 Iteration Report](docs/ITERATION_REPORT_1.6.12.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.11
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.12
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
