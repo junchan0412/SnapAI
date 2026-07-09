@@ -11,3 +11,13 @@ func historyExportCommandInputs(_ history: [HistoryEntry]) -> [HistoryExportComm
                                   isFavorite: entry.isFavorite)
     }
 }
+
+func historyContextCommandInputs(_ history: [HistoryEntry]) -> [HistoryContextCommandInput] {
+    history.map { entry in
+        HistoryContextCommandInput(displayActionName: entry.displayActionName,
+                                   displayModelFilterName: entry.displayModelFilterName,
+                                   displayTags: entry.displayTags,
+                                   isFavorite: entry.isFavorite,
+                                   isUsableForContext: HistoryContextProfileBuilder.isUsableForContext(entry))
+    }
+}

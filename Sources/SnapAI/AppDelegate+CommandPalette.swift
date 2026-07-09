@@ -307,7 +307,8 @@ extension AppDelegate {
     }
 
     func appendHistoryContextCommandPaletteItems(to items: inout [CommandPaletteItem]) {
-        for descriptor in HistoryContextCommandFactory.descriptors(for: settings.history) {
+        let historyInputs = settings.history.map(\.historyContextCommandInput)
+        for descriptor in HistoryContextCommandFactory.descriptors(for: historyInputs) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,
@@ -315,7 +316,7 @@ extension AppDelegate {
                 systemImage: descriptor.systemImage,
                 keywords: descriptor.keywords,
                 perform: { [weak self] in
-                    self?.createHistoryContextProfile(criteria: descriptor.criteria)
+                    self?.createHistoryContextProfile(criteria: descriptor.criteria.historyFilterCriteria)
                 }
             ))
         }

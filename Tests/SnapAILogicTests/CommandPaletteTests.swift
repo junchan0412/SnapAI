@@ -2340,7 +2340,7 @@ func testHistoryContextCommandFactoryBuildsUsableContextCommands() {
                              provider: "OpenAI",
                              model: "gpt")
 
-    let descriptors = HistoryContextCommandFactory.descriptors(for: [useful, outputOnly, metadataOnly, blank],
+    let descriptors = HistoryContextCommandFactory.descriptors(for: historyContextCommandInputs([useful, outputOnly, metadataOnly, blank]),
                                                                facetLimit: 2)
 
     expect(descriptors.map(\.id) == [
@@ -2351,18 +2351,18 @@ func testHistoryContextCommandFactoryBuildsUsableContextCommands() {
         "history-context-favorites"
     ], "history context commands include all/action/model/tag/favorite usable facets")
     expect(descriptors[0].subtitle == "2 条可用记录", "all context command counts usable history only")
-    expect(descriptors[1].criteria == HistoryFilterCriteria(actionFilter: "总结"),
+    expect(descriptors[1].criteria == HistoryContextCommandCriteria(actionFilter: "总结"),
            "action context command carries action filter")
-    expect(descriptors[2].criteria == HistoryFilterCriteria(modelFilter: "gpt-4o-mini"),
+    expect(descriptors[2].criteria == HistoryContextCommandCriteria(modelFilter: "gpt-4o-mini"),
            "model context command carries model filter")
-    expect(descriptors[3].criteria == HistoryFilterCriteria(tagFilter: "项目A"),
+    expect(descriptors[3].criteria == HistoryContextCommandCriteria(tagFilter: "项目A"),
            "tag context command carries tag filter")
     expect(descriptors[4].subtitle == "1 条可用收藏记录",
            "favorite context command ignores metadata-only favorites")
     expect(!descriptors.contains { $0.title.contains("隐私审计") || $0.keywords.contains(PrivacyHistoryTag.metadataOnly) },
            "history context commands do not expose metadata-only records as context sources")
 
-    expect(HistoryContextCommandFactory.descriptors(for: [metadataOnly, blank]).isEmpty,
+    expect(HistoryContextCommandFactory.descriptors(for: historyContextCommandInputs([metadataOnly, blank])).isEmpty,
            "history context commands are unavailable when no usable history content exists")
 
     let unsafe = HistoryEntry(actionName: "总结|`A`\n测试",
@@ -2371,7 +2371,7 @@ func testHistoryContextCommandFactoryBuildsUsableContextCommands() {
                               provider: "OpenAI",
                               model: "gpt|4o\nmini",
                               tags: ["项目|`A`\n标签"])
-    let unsafeDescriptors = HistoryContextCommandFactory.descriptors(for: [unsafe], facetLimit: 4)
+    let unsafeDescriptors = HistoryContextCommandFactory.descriptors(for: historyContextCommandInputs([unsafe]), facetLimit: 4)
     let unsafeAction = unsafeDescriptors.first { $0.id.hasPrefix("history-context-action-") }
     let unsafeModel = unsafeDescriptors.first { $0.id.hasPrefix("history-context-model-") }
     let unsafeTag = unsafeDescriptors.first { $0.id.hasPrefix("history-context-tag-") }
