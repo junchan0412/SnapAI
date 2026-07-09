@@ -27,9 +27,16 @@ extension AppDelegate {
                 }
             ))
         }
-        for descriptor in ActionCommandFactory.descriptors(for: settings.actions,
-                                                           usageCounts: settings.actionUsageCounts,
-                                                           hotKeyDisplay: { $0.hotKey?.displayString }) {
+        let actionCommandInputs = settings.actions.map { action in
+            ActionCommandInput(id: action.id,
+                               name: action.name,
+                               group: action.group,
+                               icon: action.icon,
+                               isEnabled: action.isEnabled,
+                               shortcutText: action.hotKey?.displayString)
+        }
+        for descriptor in ActionCommandFactory.descriptors(for: actionCommandInputs,
+                                                           usageCounts: settings.actionUsageCounts) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,

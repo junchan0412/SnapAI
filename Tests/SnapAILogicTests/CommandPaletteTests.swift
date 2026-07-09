@@ -481,6 +481,17 @@ func testModelSwitchCommandIDsAreStableSlugs() {
            "model command keywords keep unsafe provider and model names search-safe")
 }
 
+private func actionCommandInputs(_ actions: [AIAction]) -> [ActionCommandInput] {
+    actions.map { action in
+        ActionCommandInput(id: action.id,
+                           name: action.name,
+                           group: action.group,
+                           icon: action.icon,
+                           isEnabled: action.isEnabled,
+                           shortcutText: action.hotKey?.displayString)
+    }
+}
+
 func testActionCommandFactoryFiltersAndFormatsActions() {
     var enabled = AIAction(name: "代码审查",
                            icon: "",
@@ -499,9 +510,7 @@ func testActionCommandFactoryFiltersAndFormatsActions() {
     plain.id = "plain"
     plain.isEnabled = true
 
-    let descriptors = ActionCommandFactory.descriptors(for: [enabled, disabled, plain]) { action in
-        action.hotKey?.displayString
-    }
+    let descriptors = ActionCommandFactory.descriptors(for: actionCommandInputs([enabled, disabled, plain]))
 
     expect(descriptors.map(\.id) == ["action-review", "action-plain"],
            "action commands include enabled actions only")
@@ -520,7 +529,7 @@ func testActionCommandFactoryFiltersAndFormatsActions() {
                           group: "写作\n组|`B`")
     unsafe.id = "unsafe/action"
     unsafe.isEnabled = true
-    let unsafeDescriptors = ActionCommandFactory.descriptors(for: [unsafe]) { _ in nil }
+    let unsafeDescriptors = ActionCommandFactory.descriptors(for: actionCommandInputs([unsafe]))
     expect(unsafeDescriptors.first?.title == "润色 # 注入/'A'",
            "action command title keeps unsafe action names single-line")
     expect(unsafeDescriptors.first?.subtitle == "动作 - 写作 组/'B'",
@@ -549,9 +558,9 @@ func testActionCommandFactoryPrioritizesFrequentActions() {
     explain.isEnabled = true
 
     let descriptors = ActionCommandFactory.descriptors(
-        for: [translate, polish, summarize, explain],
+        for: actionCommandInputs([translate, polish, summarize, explain]),
         usageCounts: ["翻译": 5, "润色": 12, "总结": 5, "解释": -4]
-    ) { _ in nil }
+    )
 
     expect(descriptors.map(\.actionID) == ["polish", "translate", "summarize", "explain"],
            "action commands sort frequent actions first and preserve configured order for equal counts")
@@ -577,7 +586,7 @@ func testActionCommandIDsAreStableSlugs() {
     space.id = "team A"
     space.isEnabled = true
 
-    let descriptors = ActionCommandFactory.descriptors(for: [slash, space]) { _ in nil }
+    let descriptors = ActionCommandFactory.descriptors(for: actionCommandInputs([slash, space]))
 
     expect(descriptors.map(\.id) == ["action-team-A", "action-team-A-2"],
            "action command ids slug action ids and disambiguate collisions")

@@ -176,6 +176,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated CaptureCoordinator must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/CaptureCoordinator.swift ] \
   || fail "CaptureCoordinator must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ActionCommand.swift ] \
+  || fail "SnapAILogic migrated ActionCommand source is missing"
+[ ! -L Sources/SnapAILogic/ActionCommand.swift ] \
+  || fail "SnapAILogic migrated ActionCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ActionCommand.swift ] \
+  || fail "ActionCommand must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"
