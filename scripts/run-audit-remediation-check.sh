@@ -107,6 +107,24 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated ScreenCaptureFailureDiagnostic must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/ScreenCaptureFailureDiagnostic.swift ] \
   || fail "ScreenCaptureFailureDiagnostic must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/StreamingAccumulator.swift ] \
+  || fail "SnapAILogic migrated StreamingAccumulator source is missing"
+[ ! -L Sources/SnapAILogic/StreamingAccumulator.swift ] \
+  || fail "SnapAILogic migrated StreamingAccumulator must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/StreamingAccumulator.swift ] \
+  || fail "StreamingAccumulator must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/SystemPrivacySettings.swift ] \
+  || fail "SnapAILogic migrated SystemPrivacySettings source is missing"
+[ ! -L Sources/SnapAILogic/SystemPrivacySettings.swift ] \
+  || fail "SnapAILogic migrated SystemPrivacySettings must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/SystemPrivacySettings.swift ] \
+  || fail "SystemPrivacySettings must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/TextCaptureRecoveryGuide.swift ] \
+  || fail "SnapAILogic migrated TextCaptureRecoveryGuide source is missing"
+[ ! -L Sources/SnapAILogic/TextCaptureRecoveryGuide.swift ] \
+  || fail "SnapAILogic migrated TextCaptureRecoveryGuide must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/TextCaptureRecoveryGuide.swift ] \
+  || fail "TextCaptureRecoveryGuide must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

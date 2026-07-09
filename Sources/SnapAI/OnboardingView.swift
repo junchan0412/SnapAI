@@ -1,4 +1,5 @@
 import SwiftUI
+import SnapAILogic
 
 /// 首次启动引导页:介绍 → 权限 → 配置 → 完成
 struct OnboardingView: View {

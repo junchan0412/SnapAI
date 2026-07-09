@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SnapAILogic
 
 struct PermissionSettingsSection: View {
     @ObservedObject var permissionState: PermissionState

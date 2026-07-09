@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SnapAILogic
 
 final class PermissionHealthModel: ObservableObject {
     @Published var snapshot: PermissionHealthSnapshot

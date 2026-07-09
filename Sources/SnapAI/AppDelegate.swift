@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Carbon
+import SnapAILogic
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
