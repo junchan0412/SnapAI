@@ -1416,16 +1416,50 @@ func testAutomationTypewriterSpeedSelectionResolvesAliases() {
 }
 
 func testWorkModeCommandFactoryReflectsCurrentState() {
-    let descriptors = WorkModeCommandFactory.descriptors(current: .privacy)
-    expect(descriptors.count == WorkModePreset.allCases.count, "work mode command factory exposes every preset")
+    let descriptors = WorkModeCommandFactory.descriptors(modes: workModeCommandInputs(currentID: "privacy"))
+    expect(descriptors.count == workModeCommandInputs(currentID: "privacy").count,
+           "work mode command factory exposes every preset")
     expect(descriptors.map(\.id).count == Set(descriptors.map(\.id)).count,
            "work mode command ids are unique")
-    expect(descriptors.first(where: { $0.action == .apply(.privacy) })?.subtitle.hasPrefix("当前 - ") == true,
+    expect(descriptors.first(where: { $0.action == .apply("privacy") })?.subtitle.hasPrefix("当前 - ") == true,
            "work mode command marks the current preset")
-    expect(descriptors.first(where: { $0.action == .apply(.speed) })?.keywords.contains("低延迟") == true,
+    expect(descriptors.first(where: { $0.action == .apply("speed") })?.keywords.contains("低延迟") == true,
            "work mode command keywords include preset intent")
-    expect(descriptors.first(where: { $0.action == .apply(.quality) })?.title == "切换到质量模式",
+    expect(descriptors.first(where: { $0.action == .apply("quality") })?.title == "切换到质量模式",
            "work mode command titles are user-facing")
+}
+
+private func workModeCommandInputs(currentID: String) -> [WorkModeCommandInput] {
+    [
+        WorkModeCommandInput(id: "standard",
+                             title: "标准模式",
+                             shortTitle: "标准",
+                             summary: "平衡日常效率与完整历史记录。",
+                             systemImage: "slider.horizontal.3",
+                             keywords: "work mode standard default balanced settings 模式 标准 默认 均衡",
+                             isCurrent: currentID == "standard"),
+        WorkModeCommandInput(id: "privacy",
+                             title: "隐私模式",
+                             shortTitle: "隐私",
+                             summary: "发送前确认、本地脱敏,历史仅保存元信息。",
+                             systemImage: "hand.raised",
+                             keywords: "work mode privacy preview redaction metadata history safe 隐私 预览 脱敏 元信息",
+                             isCurrent: currentID == "privacy"),
+        WorkModeCommandInput(id: "speed",
+                             title: "极速模式",
+                             shortTitle: "极速",
+                             summary: "自动路由到低延迟模型,减少确认步骤。",
+                             systemImage: "bolt",
+                             keywords: "work mode speed fastest route low latency quick 极速 快速 路由 低延迟",
+                             isCurrent: currentID == "speed"),
+        WorkModeCommandInput(id: "quality",
+                             title: "质量模式",
+                             shortTitle: "质量",
+                             summary: "自动路由并优先质量,适合长文和复杂任务。",
+                             systemImage: "sparkles",
+                             keywords: "work mode quality best route reasoning long context 质量 最佳 长文 推理",
+                             isCurrent: currentID == "quality")
+    ]
 }
 
 func testSettingsToggleCommandReflectsCurrentState() {

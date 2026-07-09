@@ -387,7 +387,17 @@ extension AppDelegate {
     }
 
     func appendWorkModeCommandPaletteItems(to items: inout [CommandPaletteItem]) {
-        for descriptor in WorkModeCommandFactory.descriptors(current: settings.matchingWorkModePreset) {
+        let currentMode = settings.matchingWorkModePreset
+        let modeInputs = WorkModePreset.allCases.map { mode in
+            WorkModeCommandInput(id: mode.id,
+                                 title: mode.title,
+                                 shortTitle: mode.shortTitle,
+                                 summary: mode.summary,
+                                 systemImage: mode.systemImage,
+                                 keywords: mode.keywords,
+                                 isCurrent: currentMode == mode)
+        }
+        for descriptor in WorkModeCommandFactory.descriptors(modes: modeInputs) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,
@@ -403,7 +413,8 @@ extension AppDelegate {
 
     func performWorkModeCommand(_ action: WorkModeCommandAction) {
         switch action {
-        case .apply(let mode):
+        case .apply(let modeID):
+            guard let mode = WorkModePreset(rawValue: modeID) else { return }
             applyWorkMode(mode)
         }
     }
