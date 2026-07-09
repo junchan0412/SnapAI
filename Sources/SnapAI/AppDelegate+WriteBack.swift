@@ -1,4 +1,5 @@
 import AppKit
+import SnapAILogic
 
 @MainActor
 extension AppDelegate {
@@ -172,12 +173,12 @@ extension AppDelegate {
                                              preferAX: settings.useAXFirst,
                                              frontmostAppName: previousApp?.localizedName,
                                              characterCount: characterCount,
-                                             method: outcome.method,
+                                             method: outcome.method.diagnosticMethod,
                                              clipboardWaitAttempts: outcome.clipboardWaitAttempts)
             : TextCaptureDiagnostic.noSelection(accessibilityGranted: TextCapture.hasAccessibilityPermission(),
                                                 preferAX: settings.useAXFirst,
                                                 frontmostAppName: previousApp?.localizedName,
-                                                failureReason: outcome.failureReason,
+                                                failureReason: outcome.failureReason.diagnosticFailureReason,
                                                 pasteboardReasonCode: outcome.pasteboardReasonCode,
                                                 clipboardWaitAttempts: outcome.clipboardWaitAttempts)
         lastTextCaptureStatusSummary = diagnostic.diagnosticSummary

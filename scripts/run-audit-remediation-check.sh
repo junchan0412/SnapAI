@@ -128,6 +128,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated TextCaptureRecoveryGuide must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/TextCaptureRecoveryGuide.swift ] \
   || fail "TextCaptureRecoveryGuide must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/TextCaptureDiagnostic.swift ] \
+  || fail "SnapAILogic migrated TextCaptureDiagnostic source is missing"
+[ ! -L Sources/SnapAILogic/TextCaptureDiagnostic.swift ] \
+  || fail "SnapAILogic migrated TextCaptureDiagnostic must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/TextCaptureDiagnostic.swift ] \
+  || fail "TextCaptureDiagnostic must not be duplicated in the app target"
+[ -f Sources/SnapAI/TextCaptureDiagnosticAppBridge.swift ] \
+  || fail "TextCaptureDiagnostic app bridge is missing"
 [ -f Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
   || fail "SnapAILogic migrated SettingsWindowPinCommand source is missing"
 [ ! -L Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
