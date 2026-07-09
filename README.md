@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.24 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.25 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.24 版本重点
+## 1.6.25 版本重点
 
-- `SnapAI` app target 开始正式依赖 `SnapAILogic` library target,为真实模块边界迁移铺路。
-- `ResultRouteStatusText` 和 `TextDiff` 已从 app target 移入 `SnapAILogic` 实体源码,不再通过 symlink 镜像。
-- 审计修复 gate 现在会确认这两块迁移不被回退;剩余逻辑文件会继续按低耦合模块逐步迁移。
+- `FollowUpInputBehavior` 和 `FollowUpHistoryStore` 已从 app target 移入 `SnapAILogic` 实体源码,不再通过 symlink 镜像。
+- `SnapAILogic` 真实源码迁移推进到 4 个实体文件,剩余 symlink 降至 72 个。
+- 审计修复 gate 已覆盖这 4 个迁移文件,防止后续迭代重新引入 app target 重复编译或 symlink 回退。
 
-详细发布说明见 [SnapAI 1.6.24 Release Notes](docs/RELEASE_NOTES_1.6.24.md),阶段性复盘见 [SnapAI 1.6.24 Iteration Report](docs/ITERATION_REPORT_1.6.24.md)。
+详细发布说明见 [SnapAI 1.6.25 Release Notes](docs/RELEASE_NOTES_1.6.25.md),阶段性复盘见 [SnapAI 1.6.25 Iteration Report](docs/ITERATION_REPORT_1.6.25.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.24
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.25
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

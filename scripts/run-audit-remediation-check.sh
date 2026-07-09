@@ -77,6 +77,18 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated TextDiff must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/TextDiff.swift ] \
   || fail "TextDiff must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/FollowUpInputBehavior.swift ] \
+  || fail "SnapAILogic migrated FollowUpInputBehavior source is missing"
+[ ! -L Sources/SnapAILogic/FollowUpInputBehavior.swift ] \
+  || fail "SnapAILogic migrated FollowUpInputBehavior must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/FollowUpInputBehavior.swift ] \
+  || fail "FollowUpInputBehavior must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/FollowUpHistoryStore.swift ] \
+  || fail "SnapAILogic migrated FollowUpHistoryStore source is missing"
+[ ! -L Sources/SnapAILogic/FollowUpHistoryStore.swift ] \
+  || fail "SnapAILogic migrated FollowUpHistoryStore must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/FollowUpHistoryStore.swift ] \
+  || fail "FollowUpHistoryStore must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

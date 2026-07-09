@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import SnapAILogic
 
 /// 浮动结果窗口的状态机
 @MainActor
