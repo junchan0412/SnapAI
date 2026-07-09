@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.45
-- `SnapAILogic` 真实 Swift 源码:28 个
-- `SnapAILogic` 剩余 symlink:48 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 48 个,真实源码不得少于 28 个
+- 版本:1.6.46
+- `SnapAILogic` 真实 Swift 源码:29 个
+- `SnapAILogic` 剩余 symlink:47 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 47 个,真实源码不得少于 29 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type、仍然阻塞迁移的 symlink 消费者,用于决定下一轮必须按簇迁移的边界。
 
@@ -17,6 +17,7 @@
 - 设置辅助:系统隐私设置 URL、设置窗口置顶状态
 - 命令面板:搜索匹配与快捷键关键词扩展
 - 命令 ID:slug 生成与 ID 去重工具
+- 更新诊断命令:安装日志命令字幕与路径脱敏
 - 动作命令:动作命令面板 descriptor 与轻量输入 DTO
 - 显示行为命令:Dock、开机启动和打字机速度 descriptor 与轻量输入 DTO
 - 工作模式命令:模式切换 descriptor 与轻量输入 DTO

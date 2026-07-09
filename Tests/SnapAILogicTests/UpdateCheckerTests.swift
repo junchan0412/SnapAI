@@ -516,11 +516,11 @@ func testLatestInstallLogURLValidation() {
 func testInstallLogCommandSubtitleRedactsUserPaths() {
     expect(InstallLogCommand.subtitle(for: nil) == InstallLogCommand.missingSubtitle,
            "install log command explains missing logs")
-    expect(InstallLogCommand.subtitle(for: .noRecord) == InstallLogCommand.missingSubtitle,
+    expect(InstallLogCommand.subtitle(for: InstallLogCommandStatus.noRecord) == InstallLogCommand.missingSubtitle,
            "install log status subtitle explains missing logs")
-    expect(InstallLogCommand.subtitle(for: .missing("/tmp/SnapAIUpdate-123/install.log")).contains("已过期"),
+    expect(InstallLogCommand.subtitle(for: InstallLogCommandStatus.missing("/tmp/SnapAIUpdate-123/install.log")).contains("已过期"),
            "install log status subtitle explains expired temporary logs")
-    let untrustedSubtitle = InstallLogCommand.subtitle(for: .untrustedLocation("/Users/alice/Library/Logs/snapai-install.log"))
+    let untrustedSubtitle = InstallLogCommand.subtitle(for: InstallLogCommandStatus.untrustedLocation("/Users/alice/Library/Logs/snapai-install.log"))
     expect(untrustedSubtitle.contains("不受信任"),
            "install log status subtitle explains untrusted paths")
     expect(untrustedSubtitle.contains("/Users/[user]/Library/Logs/snapai-install.log"),

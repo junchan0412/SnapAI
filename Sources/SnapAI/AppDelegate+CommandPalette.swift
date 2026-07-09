@@ -193,7 +193,7 @@ extension AppDelegate {
             CommandPaletteItem(
                 id: "reveal-install-log",
                 title: "显示安装日志",
-                subtitle: InstallLogCommand.subtitle(for: UpdateChecker.latestInstallLogStatus()),
+                subtitle: InstallLogCommand.subtitle(for: UpdateChecker.latestInstallLogStatus().installLogCommandStatus),
                 systemImage: "doc.text.magnifyingglass",
                 keywords: "update install log reveal finder xattr quarantine 更新 安装 日志 显示",
                 perform: { [weak self] in self?.revealLatestInstallLog() }
@@ -201,7 +201,7 @@ extension AppDelegate {
             CommandPaletteItem(
                 id: "copy-install-log-path",
                 title: "复制安装日志路径",
-                subtitle: InstallLogCommand.subtitle(for: UpdateChecker.latestInstallLogStatus()),
+                subtitle: InstallLogCommand.subtitle(for: UpdateChecker.latestInstallLogStatus().installLogCommandStatus),
                 systemImage: "link",
                 keywords: "update install log path copy xattr quarantine 更新 安装 日志 路径 复制",
                 perform: { [weak self] in self?.copyLatestInstallLogPath() }

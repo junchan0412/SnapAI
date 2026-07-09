@@ -240,6 +240,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated HistoryContextCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/HistoryContextCommand.swift ] \
   || fail "HistoryContextCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/InstallLogCommand.swift ] \
+  || fail "SnapAILogic migrated InstallLogCommand source is missing"
+[ ! -L Sources/SnapAILogic/InstallLogCommand.swift ] \
+  || fail "SnapAILogic migrated InstallLogCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/InstallLogCommand.swift ] \
+  || fail "InstallLogCommand must not be duplicated in the app target"
+[ -f Sources/SnapAI/InstallLogCommandAppBridge.swift ] \
+  || fail "InstallLogCommand app bridge is missing"
 [ -f Sources/SnapAI/HistoryExportCommandAppBridge.swift ] \
   || fail "History command app bridge is missing"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
