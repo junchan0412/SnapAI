@@ -1,6 +1,4 @@
 import SwiftUI
-import AppKit
-import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
@@ -165,134 +163,18 @@ struct SettingsView: View {
     // MARK: - 通用
 
     private var generalTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                WorkModeSettingsSection(settings: settings) {
-                    commit()
-                }
-
-                settingsSection("启动与显示") {
-                    settingsToggleRow(
-                        title: "开机启动",
-                        description: "登录系统时自动在菜单栏常驻。",
-                        isOn: Binding(
-                            get: { perm.launchAtLogin },
-                            set: { perm.setLaunchAtLogin($0) }
-                        )
-                    )
-                    compactDivider
-                    settingsToggleRow(
-                        title: "Dock 图标",
-                        description: "关闭后仅保留菜单栏图标；开启时可从 Dock 打开设置。",
-                        isOn: Binding(
-                            get: { settings.showDockIcon },
-                            set: { settings.showDockIcon = $0; commit() }
-                        )
-                    )
-                }
-
-                settingsSection("取词") {
-                    settingsToggleRow(
-                        title: "优先辅助功能取词",
-                        description: "更无感地读取当前选中内容；关闭后统一通过模拟 Command-C 取词。",
-                        isOn: Binding(
-                            get: { settings.useAXFirst },
-                            set: { settings.useAXFirst = $0; commit() }
-                        )
-                    )
-                }
-
-                contextProfilesSection
-                privacySection
-
-                settingsSection("同步与动效") {
-                    settingsToggleRow(
-                        title: "iCloud 配置同步",
-                        description: "同步供应商配置、动作和快捷键，不包含 API Key。\(iCloudSyncStatusText)",
-                        isOn: Binding(
-                            get: { settings.iCloudSyncEnabled },
-                            set: { enabled in
-                                settings.iCloudSyncEnabled = enabled
-                                commit()
-                                if enabled { iCloudSync.shared.upload(settings) }
-                            }
-                        )
-                    )
-                    compactDivider
-                    HStack(alignment: .center, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("打字机动画")
-                                .font(.callout.weight(.medium))
-                            Text("控制 AI 结果逐字显示速度。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 16)
-                        Picker("", selection: $settings.typewriterSpeed) {
-                            ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 210)
-                        .controlSize(.small)
-                        .onChange(of: settings.typewriterSpeed) { commit() }
-                    }
-                }
-
-                ConfigMigrationSettingsSection(settings: settings, commit: commit)
-            }
-            .padding(14)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var privacySection: some View {
-        PrivacySettingsSection(settings: settings,
+        GeneralSettingsSection(settings: settings,
+                               permissionState: perm,
                                ui: ui,
+                               iCloudSyncStatusText: iCloudSyncStatusText,
                                commit: commit,
                                applyCommit: applyCommit)
-    }
-
-    private var contextProfilesSection: some View {
-        ContextProfileSettingsSection(settings: settings,
-                                      ui: ui,
-                                      commit: commit,
-                                      applyCommit: applyCommit)
     }
 
     // MARK: - 权限
 
     private var permissionTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                settingsSection("辅助功能") {
-                    HStack(spacing: 10) {
-                        Image(systemName: perm.axGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(perm.axGranted ? .green : .red)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(perm.axGranted ? "已授予辅助功能权限" : "未授予辅助功能权限")
-                                .font(.callout.weight(.medium))
-                            Text("SnapAI 需要该权限来读取选中文字并模拟复制按键。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    compactDivider
-                    HStack(spacing: 8) {
-                        Button("打开系统设置") {
-                            NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
-                        }
-                        Button("重新检测") {
-                            perm.refresh(prompt: true)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-            .padding(14)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        PermissionSettingsSection(permissionState: perm)
     }
 
     private func commit() {

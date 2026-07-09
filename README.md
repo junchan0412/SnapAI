@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.13 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.14 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.13 版本重点
+## 1.6.14 版本重点
 
-- 设置页继续按审计报告拆分:历史记录、使用统计、历史保存策略和历史输出复制已移入独立 `HistorySettingsSection`。
-- `SettingsView` 现在进一步聚焦导航和 section 编排,减少历史 UI 对通用设置、权限设置和 AI 设置的干扰。
-- 继续保留 1.6.12 的 AI Provider 设置拆分、1.6.11 的 release preflight smoke gate,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
+- 设置页继续按审计报告拆分:通用设置和权限设置已分别移入 `GeneralSettingsSection` 与 `PermissionSettingsSection`。
+- `SettingsView` 现在只保留窗口导航、标题栏、置顶状态和 section 组合,旧的 `SettingsViewLayout` 死 helper 已移除。
+- 继续保留 1.6.13 的历史设置拆分、1.6.12 的 AI Provider 设置拆分、1.6.11 的 release preflight smoke gate,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.13 Release Notes](docs/RELEASE_NOTES_1.6.13.md),阶段性复盘见 [SnapAI 1.6.13 Iteration Report](docs/ITERATION_REPORT_1.6.13.md)。
+详细发布说明见 [SnapAI 1.6.14 Release Notes](docs/RELEASE_NOTES_1.6.14.md),阶段性复盘见 [SnapAI 1.6.14 Iteration Report](docs/ITERATION_REPORT_1.6.14.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.13
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.14
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
