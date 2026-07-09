@@ -1605,25 +1605,26 @@ private func typewriterSpeedCommandInputs(currentID: String) -> [TypewriterSpeed
 }
 
 func testRoutingContextCommandFactoryReflectsCurrentState() {
-    let routing = RoutingContextCommandFactory.routingDescriptors(current: .quality)
-    expect(routing.count == AIRoutingPreference.allCases.count, "routing command includes all preferences")
-    expect(routing.first(where: { $0.action == .setRoutingPreference(.quality) })?.subtitle.hasPrefix("当前 - ") == true,
+    let routing = RoutingContextCommandFactory.routingDescriptors(preferences: routingPreferenceInputs(currentID: "最佳质量"))
+    expect(routing.count == routingPreferenceInputs(currentID: "最佳质量").count,
+           "routing command includes all preferences")
+    expect(routing.first(where: { $0.action == .setRoutingPreference("最佳质量") })?.subtitle.hasPrefix("当前 - ") == true,
            "current routing preference is marked")
-    expect(routing.first(where: { $0.action == .setRoutingPreference(.fastest) })?.systemImage == "point.3.connected.trianglepath.dotted",
+    expect(routing.first(where: { $0.action == .setRoutingPreference("最快") })?.systemImage == "point.3.connected.trianglepath.dotted",
            "non-current routing preference uses route icon")
 
-    let enabled = ContextProfile(id: "project-a",
-                                 name: "项目 A",
-                                 content: "术语表",
-                                 isEnabled: true)
-    let disabled = ContextProfile(id: "project-b",
-                                  name: "项目 B",
-                                  content: "禁用",
-                                  isEnabled: false)
-    let empty = ContextProfile(id: "project-c",
-                               name: "项目 C",
-                               content: " \n ",
-                               isEnabled: true)
+    let enabled = ContextProfileCommandInput(id: "project-a",
+                                             name: "项目 A",
+                                             content: "术语表",
+                                             isEnabled: true)
+    let disabled = ContextProfileCommandInput(id: "project-b",
+                                              name: "项目 B",
+                                              content: "禁用",
+                                              isEnabled: false)
+    let empty = ContextProfileCommandInput(id: "project-c",
+                                           name: "项目 C",
+                                           content: " \n ",
+                                           isEnabled: true)
     let contexts = RoutingContextCommandFactory.contextDescriptors(
         profiles: [enabled, disabled, empty],
         activeProfileID: enabled.id
@@ -1648,14 +1649,14 @@ func testRoutingContextCommandFactoryReflectsCurrentState() {
            "clear and active context copy commands are hidden when no context is active")
     expect(noActive[0].subtitle == "全局 System Prompt", "effective prompt command explains base-only prompt")
 
-    let slashID = ContextProfile(id: "team/A",
-                                 name: "团队 A",
-                                 content: "背景",
-                                 isEnabled: true)
-    let spaceID = ContextProfile(id: "team A",
-                                 name: "团队 A 备份",
-                                 content: "背景",
-                                 isEnabled: true)
+    let slashID = ContextProfileCommandInput(id: "team/A",
+                                             name: "团队 A",
+                                             content: "背景",
+                                             isEnabled: true)
+    let spaceID = ContextProfileCommandInput(id: "team A",
+                                             name: "团队 A 备份",
+                                             content: "背景",
+                                             isEnabled: true)
     let slugged = RoutingContextCommandFactory.contextDescriptors(profiles: [slashID, spaceID],
                                                                   activeProfileID: slashID.id)
     expect(slugged.map(\.id) == ["context-clear", "context-copy-active", "context-copy-effective-prompt", "context-copy-status", "context-team-A", "context-team-A-2"],
@@ -1665,10 +1666,10 @@ func testRoutingContextCommandFactoryReflectsCurrentState() {
     expect(slugged[5].action == .setContextProfile("team A"),
            "context command action keeps original spaced profile id")
 
-    let unsafeProfile = ContextProfile(id: "unsafe",
-                                       name: "项目\n# 注入|`A`",
-                                       content: String(repeating: "上下文\n", count: 80),
-                                       isEnabled: true)
+    let unsafeProfile = ContextProfileCommandInput(id: "unsafe",
+                                                   name: "项目\n# 注入|`A`",
+                                                   content: String(repeating: "上下文\n", count: 80),
+                                                   isEnabled: true)
     let unsafeContexts = RoutingContextCommandFactory.contextDescriptors(profiles: [unsafeProfile],
                                                                          activeProfileID: unsafeProfile.id)
     expect(unsafeContexts[1].subtitle == "项目 # 注入/'A'",
@@ -1688,6 +1689,23 @@ func testRoutingContextCommandFactoryReflectsCurrentState() {
            "context switch command keywords are search-safe")
     expect(unsafeContexts[4].keywords.count < 420,
            "context command keywords cap long context content")
+}
+
+private func routingPreferenceInputs(currentID: String) -> [RoutingPreferenceCommandInput] {
+    [
+        RoutingPreferenceCommandInput(id: "最快",
+                                      title: "最快",
+                                      detail: "优先低延迟和低成本模型",
+                                      isCurrent: currentID == "最快"),
+        RoutingPreferenceCommandInput(id: "均衡",
+                                      title: "均衡",
+                                      detail: "兼顾速度、成本和任务适配",
+                                      isCurrent: currentID == "均衡"),
+        RoutingPreferenceCommandInput(id: "最佳质量",
+                                      title: "最佳质量",
+                                      detail: "优先长上下文、推理和复杂任务能力",
+                                      isCurrent: currentID == "最佳质量")
+    ]
 }
 
 func testResultDiagnosticsCommandIsSearchable() {

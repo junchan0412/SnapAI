@@ -208,6 +208,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated ModelSwitchCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/ModelSwitchCommand.swift ] \
   || fail "ModelSwitchCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/RoutingContextCommand.swift ] \
+  || fail "SnapAILogic migrated RoutingContextCommand source is missing"
+[ ! -L Sources/SnapAILogic/RoutingContextCommand.swift ] \
+  || fail "SnapAILogic migrated RoutingContextCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/RoutingContextCommand.swift ] \
+  || fail "RoutingContextCommand must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

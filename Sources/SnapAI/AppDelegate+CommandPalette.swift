@@ -321,7 +321,13 @@ extension AppDelegate {
     }
 
     func appendRoutingPreferenceCommandPaletteItems(to items: inout [CommandPaletteItem]) {
-        for descriptor in RoutingContextCommandFactory.routingDescriptors(current: settings.routingPreference) {
+        let preferences = AIRoutingPreference.allCases.map { preference in
+            RoutingPreferenceCommandInput(id: preference.id,
+                                          title: preference.rawValue,
+                                          detail: preference.description,
+                                          isCurrent: preference == settings.routingPreference)
+        }
+        for descriptor in RoutingContextCommandFactory.routingDescriptors(preferences: preferences) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,
@@ -336,7 +342,13 @@ extension AppDelegate {
     }
 
     func appendContextProfileCommandPaletteItems(to items: inout [CommandPaletteItem]) {
-        for descriptor in RoutingContextCommandFactory.contextDescriptors(profiles: settings.contextProfiles,
+        let profileInputs = settings.contextProfiles.map { profile in
+            ContextProfileCommandInput(id: profile.id,
+                                       name: profile.name,
+                                       content: profile.content,
+                                       isEnabled: profile.isEnabled)
+        }
+        for descriptor in RoutingContextCommandFactory.contextDescriptors(profiles: profileInputs,
                                                                          activeProfileID: settings.activeContextProfileID) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
@@ -353,7 +365,8 @@ extension AppDelegate {
 
     func performRoutingContextCommand(_ action: RoutingContextCommandAction) {
         switch action {
-        case .setRoutingPreference(let preference):
+        case .setRoutingPreference(let preferenceID):
+            guard let preference = AIRoutingPreference.allCases.first(where: { $0.id == preferenceID }) else { return }
             setRoutingPreferenceFromAutomation(preference)
         case .clearContext:
             clearContextFromAutomation()
