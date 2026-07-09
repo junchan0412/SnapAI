@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.34 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.35 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.34 版本重点
+## 1.6.35 版本重点
 
-- `SnapAILogic` 边界检查新增自导入防护,禁止进入 logic target 的源码 `import SnapAILogic`。
-- 保留 1.6.33 的数量基线:最多 58 个 symlink、至少 18 个真实源码。
-- 这能防止 app 文件加了 library import 后又被 symlink 镜像回 library target。
+- 新增 `scripts/report-logic-migration-candidates.sh`,自动列出剩余 `SnapAILogic` symlink 的迁移阻塞关系。
+- 审计门禁会检查迁移候选分析脚本可执行并能正常运行。
+- 保留当前数量基线:最多 58 个 symlink、至少 18 个真实源码;后续大簇迁移会继续下调 symlink 上限。
 
-详细发布说明见 [SnapAI 1.6.34 Release Notes](docs/RELEASE_NOTES_1.6.34.md),阶段性复盘见 [SnapAI 1.6.34 Iteration Report](docs/ITERATION_REPORT_1.6.34.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.35 Release Notes](docs/RELEASE_NOTES_1.6.35.md),阶段性复盘见 [SnapAI 1.6.35 Iteration Report](docs/ITERATION_REPORT_1.6.35.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.34
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.35
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

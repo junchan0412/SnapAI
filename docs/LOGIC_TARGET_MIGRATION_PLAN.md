@@ -2,11 +2,12 @@
 
 ## 当前基线
 
-- 版本:1.6.33
+- 版本:1.6.35
 - `SnapAILogic` 真实 Swift 源码:18 个
 - `SnapAILogic` 剩余 symlink:58 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 58 个,真实源码不得少于 18 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
+- 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type、仍然阻塞迁移的 symlink 消费者,用于决定下一轮必须按簇迁移的边界。
 
 ## 已迁移簇
 
@@ -15,6 +16,18 @@
 - 输入与展示:流式输出累积、文本 diff、追问输入行为、追问历史
 - 设置辅助:系统隐私设置 URL、设置窗口置顶状态
 - 命令面板:搜索匹配与快捷键关键词扩展
+
+## 迁移候选分析
+
+运行:
+
+```bash
+scripts/report-logic-migration-candidates.sh
+```
+
+输出中的 `blocked` 表示该文件的公开类型仍被其它 symlink 文件消费,单独迁移会造成 app target 与 `SnapAILogic` target 同名类型不一致,或者迫使 symlink 文件 `import SnapAILogic`。这类文件必须按照下面的簇一次性迁移。
+
+输出中的 `ready` 表示当前没有检测到其它 symlink 消费者,但迁移前仍需要人工确认 API 签名没有暴露仍在 app target 中重复存在的类型。
 
 ## 后续迁移顺序
 

@@ -64,6 +64,9 @@ require_line_count_at_most "SettingsView split" Sources/SnapAI/SettingsView.swif
 require_line_count_at_most "Settings split" Sources/SnapAI/Settings.swift 900
 
 scripts/check-logic-symlinks.sh >/dev/null
+[ -x scripts/report-logic-migration-candidates.sh ] \
+  || fail "SnapAILogic migration candidate analyzer must stay executable"
+scripts/report-logic-migration-candidates.sh >/dev/null
 
 [ -f Sources/SnapAILogic/ResultRouteStatusText.swift ] \
   || fail "SnapAILogic migrated ResultRouteStatusText source is missing"
