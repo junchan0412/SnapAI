@@ -125,6 +125,12 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated TextCaptureRecoveryGuide must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/TextCaptureRecoveryGuide.swift ] \
   || fail "TextCaptureRecoveryGuide must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
+  || fail "SnapAILogic migrated SettingsWindowPinCommand source is missing"
+[ ! -L Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
+  || fail "SnapAILogic migrated SettingsWindowPinCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/SettingsWindowPinCommand.swift ] \
+  || fail "SettingsWindowPinCommand must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

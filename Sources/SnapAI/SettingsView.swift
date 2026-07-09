@@ -1,4 +1,5 @@
 import SwiftUI
+import SnapAILogic
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
