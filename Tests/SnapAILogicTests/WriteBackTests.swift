@@ -940,7 +940,7 @@ func testResultPersistenceAndWriteBackCoordinator() {
         modelName: "",
         fallbackModelName: "fallback-model",
         elapsed: 1,
-        diagnostics: nil,
+        diagnosticsText: "",
         protectsContent: false,
         date: Date(timeIntervalSince1970: 0)
     )

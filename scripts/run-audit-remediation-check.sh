@@ -172,6 +172,20 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated ResultWriteBackCoordinator must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/ResultWriteBackCoordinator.swift ] \
   || fail "ResultWriteBackCoordinator must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultPersistence.swift ] \
+  || fail "SnapAILogic migrated ResultPersistence source is missing"
+[ ! -L Sources/SnapAILogic/ResultPersistence.swift ] \
+  || fail "SnapAILogic migrated ResultPersistence must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultPersistence.swift ] \
+  || fail "ResultPersistence must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ConversationExport.swift ] \
+  || fail "SnapAILogic migrated ConversationExport source is missing"
+[ ! -L Sources/SnapAILogic/ConversationExport.swift ] \
+  || fail "SnapAILogic migrated ConversationExport must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ConversationExport.swift ] \
+  || fail "ConversationExport must not be duplicated in the app target"
+[ -f Sources/SnapAI/ResultPersistenceAppBridge.swift ] \
+  || fail "ResultPersistence app bridge is missing"
 [ -f Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
   || fail "SnapAILogic migrated CommandPaletteMatcher source is missing"
 [ ! -L Sources/SnapAILogic/CommandPaletteMatcher.swift ] \

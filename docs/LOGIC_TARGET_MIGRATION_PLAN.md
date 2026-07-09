@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.47
-- `SnapAILogic` 真实 Swift 源码:30 个
-- `SnapAILogic` 剩余 symlink:46 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 46 个,真实源码不得少于 30 个
+- 版本:1.6.48
+- `SnapAILogic` 真实 Swift 源码:32 个
+- `SnapAILogic` 剩余 symlink:44 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 44 个,真实源码不得少于 32 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type、仍然阻塞迁移的 symlink 消费者,用于决定下一轮必须按簇迁移的边界。
 
@@ -15,6 +15,7 @@
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析
 - 取词诊断:取词状态摘要与恢复建议,app target 通过轻量枚举桥接取词实现状态
 - 输入与展示:流式输出累积、文本 diff、追问输入行为、追问历史
+- 结果持久化:完成指标和对话 Markdown 导出,app target 通过桥接保留历史写入
 - 设置辅助:系统隐私设置 URL、设置窗口置顶状态
 - 命令面板:搜索匹配与快捷键关键词扩展
 - 命令 ID:slug 生成与 ID 去重工具

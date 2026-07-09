@@ -1,19 +1,7 @@
 import Foundation
+import SnapAILogic
 
-struct ResultCompletionMetrics: Equatable {
-    var elapsed: TimeInterval
-    var characterCount: Int
-}
-
-enum ResultPersistence {
-    static func completionMetrics(startTime: Date?,
-                                  outputText: String,
-                                  now: Date = Date()) -> ResultCompletionMetrics {
-        let elapsed = startTime.map { max(0, now.timeIntervalSince($0)) } ?? 0
-        return ResultCompletionMetrics(elapsed: elapsed,
-                                       characterCount: outputText.count)
-    }
-
+extension ResultPersistence {
     static func conversationExport(actionName: String,
                                    sourceText: String,
                                    outputText: String,
@@ -24,13 +12,14 @@ enum ResultPersistence {
                                    diagnostics: AIRequestDiagnostics?,
                                    protectsContent: Bool,
                                    date: Date = Date()) -> ConversationExport {
-        ConversationExport(actionName: actionName,
+        conversationExport(actionName: actionName,
                            sourceText: sourceText,
                            outputText: outputText,
                            providerName: providerName,
-                           modelName: modelName.isEmpty ? fallbackModelName : modelName,
+                           modelName: modelName,
+                           fallbackModelName: fallbackModelName,
                            elapsed: elapsed,
-                           diagnostics: diagnostics?.summaryText(includeAttemptMessages: false) ?? "",
+                           diagnosticsText: diagnostics?.summaryText(includeAttemptMessages: false) ?? "",
                            protectsContent: protectsContent,
                            date: date)
     }
