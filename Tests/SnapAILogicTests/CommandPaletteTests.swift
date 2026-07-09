@@ -1563,9 +1563,9 @@ func testResultPinCommandReflectsCurrentState() {
 func testDisplayBehaviorCommandFactoryReflectsCurrentState() {
     let descriptors = DisplayBehaviorCommandFactory.descriptors(showDockIcon: true,
                                                                 loginItemEnabled: false,
-                                                                typewriterSpeed: .normal)
+                                                                typewriterSpeeds: typewriterSpeedCommandInputs(currentID: "标准"))
 
-    expect(descriptors.count == 2 + TypewriterSpeed.allCases.count,
+    expect(descriptors.count == 2 + typewriterSpeedCommandInputs(currentID: "标准").count,
            "display behavior commands include dock, login item, and typewriter speeds")
     expect(descriptors[0].id == "dock-icon-toggle", "dock command is first")
     expect(descriptors[0].title == "隐藏 Dock 图标", "dock command reflects visible state")
@@ -1573,8 +1573,8 @@ func testDisplayBehaviorCommandFactoryReflectsCurrentState() {
     expect(descriptors[1].title == "开启开机启动", "login item command reflects disabled state")
     expect(descriptors[1].action == .setLoginItem(true), "login item command toggles on")
 
-    guard let currentSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed(.normal) }),
-          let fastSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed(.fast) }) else {
+    guard let currentSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed("标准") }),
+          let fastSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed("快") }) else {
         expect(false, "typewriter speed commands exist")
         return
     }
@@ -1582,6 +1582,15 @@ func testDisplayBehaviorCommandFactoryReflectsCurrentState() {
     expect(currentSpeed.systemImage == "checkmark.circle.fill", "current typewriter speed uses check icon")
     expect(fastSpeed.subtitle == "更快地显示流式结果", "non-current speed explains behavior")
     expect(fastSpeed.systemImage == "text.cursor", "non-current speed uses text cursor icon")
+}
+
+private func typewriterSpeedCommandInputs(currentID: String) -> [TypewriterSpeedCommandInput] {
+    [
+        TypewriterSpeedCommandInput(id: "关闭", title: "关闭", isCurrent: currentID == "关闭"),
+        TypewriterSpeedCommandInput(id: "慢", title: "慢", isCurrent: currentID == "慢"),
+        TypewriterSpeedCommandInput(id: "标准", title: "标准", isCurrent: currentID == "标准"),
+        TypewriterSpeedCommandInput(id: "快", title: "快", isCurrent: currentID == "快")
+    ]
 }
 
 func testRoutingContextCommandFactoryReflectsCurrentState() {

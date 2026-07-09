@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.36
-- `SnapAILogic` 真实 Swift 源码:19 个
-- `SnapAILogic` 剩余 symlink:57 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 57 个,真实源码不得少于 19 个
+- 版本:1.6.37
+- `SnapAILogic` 真实 Swift 源码:20 个
+- `SnapAILogic` 剩余 symlink:56 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 56 个,真实源码不得少于 20 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type、仍然阻塞迁移的 symlink 消费者,用于决定下一轮必须按簇迁移的边界。
 
@@ -17,6 +17,7 @@
 - 设置辅助:系统隐私设置 URL、设置窗口置顶状态
 - 命令面板:搜索匹配与快捷键关键词扩展
 - 动作命令:动作命令面板 descriptor 与轻量输入 DTO
+- 显示行为命令:Dock、开机启动和打字机速度 descriptor 与轻量输入 DTO
 
 ## 迁移候选分析
 
@@ -53,8 +54,8 @@ scripts/report-logic-migration-candidates.sh
    - 注意:这是最大依赖簇,会影响几乎所有 app 工作流;应在前面小簇稳定后处理。
 
 6. 命令描述器小簇
-   - 已完成:`ActionCommand`
-   - 后续候选:`DisplayBehaviorCommand`, `ActionTemplateLibrary`, `HistoryContextCommand`, `HistoryExportCommand`, `ModelSwitchCommand`, `RoutingContextCommand`
+   - 已完成:`ActionCommand`, `DisplayBehaviorCommand`
+   - 后续候选:`ActionTemplateLibrary`, `HistoryContextCommand`, `HistoryExportCommand`, `ModelSwitchCommand`, `RoutingContextCommand`
    - 注意:即使分析脚本显示 `ready`,仍需先把 factory 输入改为 DTO,避免公开 API 暴露仍在 app target 重复存在的 `AIAction`, `AIProvider`, `HistoryEntry`, `ContextProfile` 等类型。
 
 ## 迁移规则

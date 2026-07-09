@@ -251,9 +251,14 @@ extension AppDelegate {
     }
 
     func appendDisplayBehaviorCommandPaletteItems(to items: inout [CommandPaletteItem]) {
+        let typewriterSpeeds = TypewriterSpeed.allCases.map { speed in
+            TypewriterSpeedCommandInput(id: speed.id,
+                                        title: speed.rawValue,
+                                        isCurrent: settings.typewriterSpeed == speed)
+        }
         for descriptor in DisplayBehaviorCommandFactory.descriptors(showDockIcon: settings.showDockIcon,
                                                                     loginItemEnabled: LoginItem.isEnabled,
-                                                                    typewriterSpeed: settings.typewriterSpeed) {
+                                                                    typewriterSpeeds: typewriterSpeeds) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,
@@ -273,7 +278,8 @@ extension AppDelegate {
             setDockIconFromAutomation(enabled)
         case .setLoginItem(let enabled):
             setLoginItemFromAutomation(enabled)
-        case .setTypewriterSpeed(let speed):
+        case .setTypewriterSpeed(let speedID):
+            let speed = TypewriterSpeed.allCases.first { $0.id == speedID }
             setTypewriterSpeedFromAutomation(speed)
         }
     }

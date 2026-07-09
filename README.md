@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.36 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.37 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.36 版本重点
+## 1.6.37 版本重点
 
-- `ActionCommand` 已从 app target 迁移为 `SnapAILogic` 真实源码。
-- 新增 `ActionCommandInput` 轻量 DTO,避免动作命令 factory 公开依赖仍在 app target 中的 `AIAction` 类型。
-- `SnapAILogic` 数量基线下调为最多 57 个 symlink、至少 19 个真实源码。
+- `DisplayBehaviorCommand` 已从 app target 迁移为 `SnapAILogic` 真实源码。
+- 新增 `TypewriterSpeedCommandInput` 轻量 DTO,避免显示行为 factory 公开依赖 app target 的 `TypewriterSpeed`。
+- `SnapAILogic` 数量基线下调为最多 56 个 symlink、至少 20 个真实源码。
 
-详细发布说明见 [SnapAI 1.6.36 Release Notes](docs/RELEASE_NOTES_1.6.36.md),阶段性复盘见 [SnapAI 1.6.36 Iteration Report](docs/ITERATION_REPORT_1.6.36.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.37 Release Notes](docs/RELEASE_NOTES_1.6.37.md),阶段性复盘见 [SnapAI 1.6.37 Iteration Report](docs/ITERATION_REPORT_1.6.37.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.36
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.37
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
