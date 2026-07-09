@@ -89,6 +89,24 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated FollowUpHistoryStore must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/FollowUpHistoryStore.swift ] \
   || fail "FollowUpHistoryStore must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ScreenCapturePermission.swift ] \
+  || fail "SnapAILogic migrated ScreenCapturePermission source is missing"
+[ ! -L Sources/SnapAILogic/ScreenCapturePermission.swift ] \
+  || fail "SnapAILogic migrated ScreenCapturePermission must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ScreenCapturePermission.swift ] \
+  || fail "ScreenCapturePermission must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ScreenCaptureTemporaryFile.swift ] \
+  || fail "SnapAILogic migrated ScreenCaptureTemporaryFile source is missing"
+[ ! -L Sources/SnapAILogic/ScreenCaptureTemporaryFile.swift ] \
+  || fail "SnapAILogic migrated ScreenCaptureTemporaryFile must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ScreenCaptureTemporaryFile.swift ] \
+  || fail "ScreenCaptureTemporaryFile must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ScreenCaptureFailureDiagnostic.swift ] \
+  || fail "SnapAILogic migrated ScreenCaptureFailureDiagnostic source is missing"
+[ ! -L Sources/SnapAILogic/ScreenCaptureFailureDiagnostic.swift ] \
+  || fail "SnapAILogic migrated ScreenCaptureFailureDiagnostic must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ScreenCaptureFailureDiagnostic.swift ] \
+  || fail "ScreenCaptureFailureDiagnostic must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

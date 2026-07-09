@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SnapAILogic
 
 /// 快捷输入面板的状态(含图片内容)
 @MainActor
