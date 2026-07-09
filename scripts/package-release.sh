@@ -222,6 +222,7 @@ fi
 TAG="v${VERSION#v}"
 ZIP_NAME="SnapAI-${TAG}.zip"
 MANIFEST_NAME="snapai-manifest-${TAG}.json"
+SBOM_NAME="snapai-sbom-${TAG}.json"
 DIST_DIR="dist"
 APP_BUNDLE="SnapAI.app"
 
@@ -241,7 +242,7 @@ if [ "$APP_VERSION" != "$SOURCE_VERSION" ]; then
 fi
 
 mkdir -p "$DIST_DIR"
-rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig"
+rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$DIST_DIR/$SBOM_NAME"
 
 /usr/bin/xattr -cr "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
@@ -258,6 +259,8 @@ fi
 
 /usr/bin/ditto --norsrc --noextattr -c -k --keepParent "$APP_BUNDLE" "$DIST_DIR/$ZIP_NAME"
 SHA256=$(shasum -a 256 "$DIST_DIR/$ZIP_NAME" | awk '{print $1}')
+scripts/generate-sbom.sh "$TAG" "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$SBOM_NAME" >/dev/null
+SBOM_SHA256=$(shasum -a 256 "$DIST_DIR/$SBOM_NAME" | awk '{print $1}')
 BUNDLE_ID=$(plist_value CFBundleIdentifier "$APP_BUNDLE/Contents/Info.plist")
 SAFE_REQUIREMENT=$(json_escape "$RELEASE_DESIGNATED_REQUIREMENT")
 
@@ -273,6 +276,10 @@ cat > "$DIST_DIR/$MANIFEST_NAME" <<JSON
     {
       "name": "$ZIP_NAME",
       "sha256": "$SHA256"
+    },
+    {
+      "name": "$SBOM_NAME",
+      "sha256": "$SBOM_SHA256"
     }
   ]
 }
@@ -294,4 +301,5 @@ echo "$DIST_DIR/$MANIFEST_NAME"
 if [ -f "$DIST_DIR/$MANIFEST_NAME.sig" ]; then
   echo "$DIST_DIR/$MANIFEST_NAME.sig"
 fi
+echo "$DIST_DIR/$SBOM_NAME"
 echo "sha256=$SHA256"

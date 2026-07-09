@@ -156,6 +156,7 @@ TAG="v${VERSION#v}"
 ZIP_PATH="dist/SnapAI-${TAG}.zip"
 MANIFEST_PATH="dist/snapai-manifest-${TAG}.json"
 MANIFEST_SIGNATURE_PATH="${MANIFEST_PATH}.sig"
+SBOM_PATH="dist/snapai-sbom-${TAG}.json"
 
 if [ "$REQUIRE_SYNCED" -eq 1 ] && git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   TAG_COMMIT=$(git rev-list -n 1 "$TAG")
@@ -176,7 +177,9 @@ if [ "$RUN_PACKAGE" -eq 1 ]; then
   test -f "$ZIP_PATH"
   test -f "$MANIFEST_PATH"
   test -f "$MANIFEST_SIGNATURE_PATH"
+  test -f "$SBOM_PATH"
   ACTUAL_SHA=$(shasum -a 256 "$ZIP_PATH" | awk '{print $1}')
+  SBOM_SHA=$(shasum -a 256 "$SBOM_PATH" | awk '{print $1}')
   if ! grep -F "\"name\": \"$(basename "$ZIP_PATH")\"" "$MANIFEST_PATH" >/dev/null; then
     echo "error: manifest asset name 与 zip 文件名不一致。" >&2
     echo "zip asset: $(basename "$ZIP_PATH")" >&2
@@ -199,6 +202,19 @@ if [ "$RUN_PACKAGE" -eq 1 ]; then
   if [ ! -s "$MANIFEST_SIGNATURE_PATH" ]; then
     echo "error: manifest 签名文件为空或不存在。" >&2
     echo "signature: $MANIFEST_SIGNATURE_PATH" >&2
+    exit 1
+  fi
+  if ! grep -F "\"name\": \"$(basename "$SBOM_PATH")\"" "$MANIFEST_PATH" >/dev/null; then
+    echo "error: manifest 缺少 SBOM asset 条目。" >&2
+    echo "sbom asset: $(basename "$SBOM_PATH")" >&2
+    echo "manifest:   $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  if ! grep -F "\"sha256\": \"$SBOM_SHA\"" "$MANIFEST_PATH" >/dev/null; then
+    echo "error: manifest SBOM sha256 与文件不一致。" >&2
+    echo "sbom:     $SBOM_PATH" >&2
+    echo "manifest: $MANIFEST_PATH" >&2
+    echo "sha256:   $SBOM_SHA" >&2
     exit 1
   fi
 

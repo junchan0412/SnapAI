@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.17 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.18 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.17 版本重点
+## 1.6.18 版本重点
 
-- `SnapAILogic` 边界校验继续加强:除了 symlink manifest,现在还会拒绝明显 UI-only 文件和 SwiftUI/WebKit/PDFKit 等 UI 渲染类导入进入逻辑 target。
-- CI、macOS smoke 和 release preflight 都会自动运行该边界检查,降低后续误把设置页、窗口、面板或文档选择器代码塞进逻辑测试 target 的风险。
-- 继续保留 1.6.16 的 app bundle 启动 smoke、1.6.15 的 `AppSettingsImportSanitization` 拆分,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
+- release 打包现在会生成 `snapai-sbom-vX.X.X.json`,记录应用版本、提交、SwiftPM 依赖树和关键发布文件 SHA256。
+- 签名 manifest 会包含 SBOM asset 的 sha256,preflight 会校验 SBOM 文件存在且摘要一致。
+- 继续保留 1.6.17 的 `SnapAILogic` UI-only 边界检查、1.6.16 的 app bundle 启动 smoke,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.17 Release Notes](docs/RELEASE_NOTES_1.6.17.md),阶段性复盘见 [SnapAI 1.6.17 Iteration Report](docs/ITERATION_REPORT_1.6.17.md)。
+详细发布说明见 [SnapAI 1.6.18 Release Notes](docs/RELEASE_NOTES_1.6.18.md),阶段性复盘见 [SnapAI 1.6.18 Iteration Report](docs/ITERATION_REPORT_1.6.18.md)。
 
 ## 系统要求
 
@@ -282,11 +282,11 @@ scripts/run-macos-smoke-tests.sh
 scripts/preflight-release.sh --require-clean
 ```
 
-生成 release zip 和 manifest:
+生成 release zip、manifest 和 SBOM:
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.17
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.18
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
