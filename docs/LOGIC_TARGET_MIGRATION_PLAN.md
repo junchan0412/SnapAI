@@ -6,6 +6,7 @@
 - `SnapAILogic` 真实 Swift 源码:18 个
 - `SnapAILogic` 剩余 symlink:58 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 58 个,真实源码不得少于 18 个
+- 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 
 ## 已迁移簇
 
@@ -42,4 +43,5 @@
 - 每次迁移后必须删除 app target 中重复源码。
 - app target 只能通过 `import SnapAILogic` 使用已迁移 API。
 - 不允许把已迁移真实源码退回 symlink。
+- 不允许任何 `Sources/SnapAILogic` 源码导入 `SnapAILogic` 自身。
 - 每轮迁移必须通过逻辑测试、SwiftPM build、macOS smoke 和 release preflight。

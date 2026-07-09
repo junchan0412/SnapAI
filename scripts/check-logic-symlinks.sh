@@ -35,6 +35,7 @@ FORBIDDEN_FILE_PATTERNS=(
 )
 
 FORBIDDEN_IMPORTS=(
+  "SnapAILogic"
   "SwiftUI"
   "UniformTypeIdentifiers"
   "WebKit"
