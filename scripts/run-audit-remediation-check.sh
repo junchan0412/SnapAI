@@ -131,6 +131,30 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated SettingsWindowPinCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/SettingsWindowPinCommand.swift ] \
   || fail "SettingsWindowPinCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultCommand.swift ] \
+  || fail "SnapAILogic migrated ResultCommand source is missing"
+[ ! -L Sources/SnapAILogic/ResultCommand.swift ] \
+  || fail "SnapAILogic migrated ResultCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultCommand.swift ] \
+  || fail "ResultCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultPinCommand.swift ] \
+  || fail "SnapAILogic migrated ResultPinCommand source is missing"
+[ ! -L Sources/SnapAILogic/ResultPinCommand.swift ] \
+  || fail "SnapAILogic migrated ResultPinCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultPinCommand.swift ] \
+  || fail "ResultPinCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultDiagnosticsCommand.swift ] \
+  || fail "SnapAILogic migrated ResultDiagnosticsCommand source is missing"
+[ ! -L Sources/SnapAILogic/ResultDiagnosticsCommand.swift ] \
+  || fail "SnapAILogic migrated ResultDiagnosticsCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultDiagnosticsCommand.swift ] \
+  || fail "ResultDiagnosticsCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultRecoveryCommand.swift ] \
+  || fail "SnapAILogic migrated ResultRecoveryCommand source is missing"
+[ ! -L Sources/SnapAILogic/ResultRecoveryCommand.swift ] \
+  || fail "SnapAILogic migrated ResultRecoveryCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultRecoveryCommand.swift ] \
+  || fail "ResultRecoveryCommand must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

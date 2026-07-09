@@ -1,4 +1,5 @@
 import AppKit
+import SnapAILogic
 
 @MainActor
 extension AppDelegate {
