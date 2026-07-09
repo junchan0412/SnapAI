@@ -167,6 +167,12 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated CommandPaletteMatcher must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/CommandPaletteMatcher.swift ] \
   || fail "CommandPaletteMatcher must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/CaptureCoordinator.swift ] \
+  || fail "SnapAILogic migrated CaptureCoordinator source is missing"
+[ ! -L Sources/SnapAILogic/CaptureCoordinator.swift ] \
+  || fail "SnapAILogic migrated CaptureCoordinator must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/CaptureCoordinator.swift ] \
+  || fail "CaptureCoordinator must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

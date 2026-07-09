@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.31 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.32 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.31 版本重点
+## 1.6.32 版本重点
 
-- 命令面板匹配与排序逻辑已从 app target 移入 `SnapAILogic` 实体源码。
-- `SnapAILogic` 真实源码迁移推进到 17 个实体文件,剩余 symlink 降至 59 个。
-- 审计修复 gate 已覆盖这 17 个迁移文件,防止后续迭代重新引入 app target 重复编译或 symlink 回退。
+- 取词目标解析器已从 app target 移入 `SnapAILogic` 实体源码。
+- `SnapAILogic` 真实源码迁移推进到 18 个实体文件,剩余 symlink 降至 58 个。
+- 审计修复 gate 已覆盖这 18 个迁移文件,防止后续迭代重新引入 app target 重复编译或 symlink 回退。
 
-详细发布说明见 [SnapAI 1.6.31 Release Notes](docs/RELEASE_NOTES_1.6.31.md),阶段性复盘见 [SnapAI 1.6.31 Iteration Report](docs/ITERATION_REPORT_1.6.31.md)。
+详细发布说明见 [SnapAI 1.6.32 Release Notes](docs/RELEASE_NOTES_1.6.32.md),阶段性复盘见 [SnapAI 1.6.32 Iteration Report](docs/ITERATION_REPORT_1.6.32.md)。
 
 ## 系统要求
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.31
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.32
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
