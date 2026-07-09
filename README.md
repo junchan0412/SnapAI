@@ -2,19 +2,18 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.9 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.10 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.9 版本重点
+## 1.6.10 版本重点
 
-- API Key 改为本地 AES.GCM 加密密钥存储,避免非 Apple Developer ID 分发时每次更新后反复触发 Keychain 授权。
-- 权限健康中心会显示本地密钥存储状态,保存失败会进入诊断文本,更容易定位配置持久化问题。
-- 设置页继续拆分职责,隐私、上下文包和配置迁移已独立为小组件,降低后续 UI 回归风险。
-- CI 和 release preflight 新增 SnapAILogic symlink 清单校验,防止 UI 文件误入逻辑测试 target。
-- 新增 prompt/privacy/fallback eval 语料测试,覆盖本地优先、云端 fallback、高风险隐私预览和历史保护。
+- 继续落实审计报告中的设置页职责拆分,动作/快捷键设置已独立为 `ActionSettingsSection`。
+- 主设置视图进一步收敛,从 1.6.9 的约 1480 行降到约 1080 行,后续 Provider/History 拆分风险更低。
+- 动作导入导出、恢复默认快捷键、快捷提问面板快捷键、动作级模型覆盖和快捷键冲突跳转保持原行为。
+- 保留 1.6.9 的本地密钥存储、symlink 边界校验、macOS smoke 和 prompt/privacy/fallback eval 改进。
 
-详细发布说明见 [SnapAI 1.6.9 Release Notes](docs/RELEASE_NOTES_1.6.9.md),阶段性复盘见 [SnapAI 1.6.9 Iteration Report](docs/ITERATION_REPORT_1.6.9.md)。
+详细发布说明见 [SnapAI 1.6.10 Release Notes](docs/RELEASE_NOTES_1.6.10.md),阶段性复盘见 [SnapAI 1.6.10 Iteration Report](docs/ITERATION_REPORT_1.6.10.md)。
 
 ## 系统要求
 
@@ -288,7 +287,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.9
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.10
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
