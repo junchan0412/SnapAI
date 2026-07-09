@@ -17,7 +17,8 @@ Runs the release readiness gate:
   3. swift build
   4. app bundle build
   5. codesign verification
-  6. release package + manifest verification
+  6. app bundle launch smoke
+  7. release package + manifest verification
 
 Options:
   --skip-package   Skip release zip/manifest packaging.
@@ -146,6 +147,9 @@ if [ "$APP_VERSION" != "$SOURCE_VERSION" ]; then
   echo "app:    $APP_VERSION" >&2
   exit 1
 fi
+
+step "运行 app bundle 启动 smoke"
+scripts/run-app-launch-smoke.sh SnapAI.app
 
 VERSION="$SOURCE_VERSION"
 TAG="v${VERSION#v}"

@@ -2,17 +2,17 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.15 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.16 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.15 版本重点
+## 1.6.16 版本重点
 
-- `AppSettings` 继续按审计报告拆分:配置导出、导入清洗、存储清洗、clamp 和 provider/action/history/privacy/context sanitize 已移入 `AppSettingsImportSanitization`。
-- `Settings.swift` 从 1000 行降到约 480 行,更聚焦 Codable 主模型、迁移入口和运行时状态。
-- 继续保留 1.6.14 的设置 UI section 拆分、1.6.11 的 release preflight smoke gate,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
+- release preflight 新增 app bundle 启动 smoke:构建后会通过 LaunchServices 打开 `SnapAI.app`,确认产生新进程并可退出。
+- 本机 smoke 现在覆盖逻辑 target 边界、逻辑测试、剪贴板恢复、权限探测、release bundle 签名和启动级校验。
+- 继续保留 1.6.15 的 `AppSettingsImportSanitization` 拆分、1.6.14 的设置 UI section 拆分,以及 1.6.9 的本地密钥存储和 prompt/privacy/fallback eval。
 
-详细发布说明见 [SnapAI 1.6.15 Release Notes](docs/RELEASE_NOTES_1.6.15.md),阶段性复盘见 [SnapAI 1.6.15 Iteration Report](docs/ITERATION_REPORT_1.6.15.md)。
+详细发布说明见 [SnapAI 1.6.16 Release Notes](docs/RELEASE_NOTES_1.6.16.md),阶段性复盘见 [SnapAI 1.6.16 Iteration Report](docs/ITERATION_REPORT_1.6.16.md)。
 
 ## 系统要求
 
@@ -268,7 +268,7 @@ scripts/run-logic-tests.sh
 scripts/run-macos-smoke-tests.sh
 ```
 
-这组检查会运行逻辑测试、校验 `SnapAILogic` target 边界,并临时写入后恢复系统剪贴板,同时探测辅助功能和屏幕录制权限状态。它用于本机发版前验证,不建议放进无 GUI session 的默认 CI。
+这组检查会运行逻辑测试、校验 `SnapAILogic` target 边界,并临时写入后恢复系统剪贴板,同时探测辅助功能和屏幕录制权限状态。release preflight 还会在构建后运行 app bundle 启动 smoke,确认 `SnapAI.app` 可通过 LaunchServices 打开并产生新进程。它用于本机发版前验证,不建议放进无 GUI session 的默认 CI。
 
 本地构建 `.app`:
 
@@ -286,7 +286,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.15
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.16
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
