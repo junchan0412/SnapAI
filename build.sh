@@ -8,12 +8,16 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="SnapAI"
+BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/snapai-build.XXXXXX")
 BIN="/tmp/${APP_NAME}.bin"
 UPDATER_BIN="/tmp/${APP_NAME}Updater.bin"
+LOGIC_OBJECT="${BUILD_DIR}/SnapAILogic.o"
 APP_BUNDLE="${APP_NAME}.app"
 LOCAL_IDENTITY_NAME="SnapAI Local Signing"
 SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
 RELEASE_BUILD="${SNAPAI_RELEASE:-0}"
+
+trap 'rm -rf "${BUILD_DIR}"' EXIT
 
 usage() {
   cat <<'USAGE'
@@ -43,14 +47,31 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-echo "==> 编译 (swiftc -O) ..."
+echo "==> 编译 SnapAILogic module (swiftc -O) ..."
+swiftc -O -whole-module-optimization -parse-as-library \
+  -module-name SnapAILogic \
+  -emit-module \
+  -emit-module-path "${BUILD_DIR}/SnapAILogic.swiftmodule" \
+  -emit-object Sources/SnapAILogic/*.swift \
+  -o "${LOGIC_OBJECT}" \
+  -framework AppKit \
+  -framework SwiftUI \
+  -framework Carbon \
+  -framework ApplicationServices \
+  -framework ServiceManagement \
+  -lsqlite3
+
+echo "==> 编译 SnapAI app (swiftc -O) ..."
 swiftc -O \
+  -I "${BUILD_DIR}" \
   Sources/SnapAI/*.swift \
+  "${LOGIC_OBJECT}" \
   -o "${BIN}" \
   -framework AppKit \
   -framework SwiftUI \
   -framework Carbon \
   -framework ApplicationServices \
+  -framework ServiceManagement \
   -lsqlite3
 
 echo "==> 编译 updater helper ..."

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SnapAILogic
 
 struct TypingCursor: View {
     var body: some View {

@@ -42,7 +42,7 @@ FORBIDDEN_IMPORTS=(
   "Quartz"
 )
 
-find Sources/SnapAILogic -maxdepth 1 -type l -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
+find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
 
 if ! diff -u "$MANIFEST" "$CURRENT"; then
   echo "error: Sources/SnapAILogic symlink manifest is out of date." >&2
@@ -60,17 +60,20 @@ while IFS= read -r file; do
     fi
   done
   if [ ! -L "$path" ]; then
-    echo "error: $path is not a symlink." >&2
-    exit 1
-  fi
-  target=$(readlink "$path")
-  if [[ "$target" != ../SnapAI/*.swift ]]; then
-    echo "error: $path points outside Sources/SnapAI: $target" >&2
-    exit 1
-  fi
-  if [ ! -f "$path" ]; then
-    echo "error: $path points to a missing source file: $target" >&2
-    exit 1
+    if [ ! -f "$path" ]; then
+      echo "error: $path is neither a regular source file nor a symlink." >&2
+      exit 1
+    fi
+  else
+    target=$(readlink "$path")
+    if [[ "$target" != ../SnapAI/*.swift ]]; then
+      echo "error: $path points outside Sources/SnapAI: $target" >&2
+      exit 1
+    fi
+    if [ ! -f "$path" ]; then
+      echo "error: $path points to a missing source file: $target" >&2
+      exit 1
+    fi
   fi
   for module in "${FORBIDDEN_IMPORTS[@]}"; do
     if grep -Eq "^[[:space:]]*import[[:space:]]+$module([[:space:]]|$)" "$path"; then
@@ -81,4 +84,4 @@ while IFS= read -r file; do
   done
 done < "$MANIFEST"
 
-echo "SnapAILogic symlink manifest verified."
+echo "SnapAILogic source manifest verified."

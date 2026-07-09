@@ -24,6 +24,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "SnapAI",
+            dependencies: ["SnapAILogic"],
             path: "Sources/SnapAI",
             linkerSettings: [
                 .linkedFramework("Carbon"),

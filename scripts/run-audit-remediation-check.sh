@@ -65,4 +65,18 @@ require_line_count_at_most "Settings split" Sources/SnapAI/Settings.swift 900
 
 scripts/check-logic-symlinks.sh >/dev/null
 
+[ -f Sources/SnapAILogic/ResultRouteStatusText.swift ] \
+  || fail "SnapAILogic migrated ResultRouteStatusText source is missing"
+[ ! -L Sources/SnapAILogic/ResultRouteStatusText.swift ] \
+  || fail "SnapAILogic migrated ResultRouteStatusText must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultRouteStatusText.swift ] \
+  || fail "ResultRouteStatusText must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/TextDiff.swift ] \
+  || fail "SnapAILogic migrated TextDiff source is missing"
+[ ! -L Sources/SnapAILogic/TextDiff.swift ] \
+  || fail "SnapAILogic migrated TextDiff must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/TextDiff.swift ] \
+  || fail "TextDiff must not be duplicated in the app target"
+require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
+
 echo "Audit remediation check: ok"
