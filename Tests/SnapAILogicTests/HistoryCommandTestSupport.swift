@@ -21,3 +21,34 @@ func historyContextCommandInputs(_ history: [HistoryEntry]) -> [HistoryContextCo
                                    isUsableForContext: HistoryContextProfileBuilder.isUsableForContext(entry))
     }
 }
+
+func actionTemplateAction(_ action: AIAction) -> ActionTemplateAction {
+    ActionTemplateAction(id: action.id,
+                         name: action.name,
+                         icon: action.icon,
+                         group: action.group,
+                         prompt: action.prompt,
+                         isTranslation: action.isTranslation,
+                         targetLanguage: action.targetLanguage.rawValue,
+                         replaceByDefault: action.replaceByDefault,
+                         isEnabled: action.isEnabled,
+                         thinkingMode: action.thinkingMode,
+                         thinkingBudget: action.thinkingBudget,
+                         saveHistory: action.saveHistory)
+}
+
+func aiAction(_ action: ActionTemplateAction) -> AIAction {
+    var result = AIAction(name: action.name,
+                          icon: action.icon,
+                          group: action.group,
+                          prompt: action.prompt,
+                          isTranslation: action.isTranslation,
+                          targetLanguage: TargetLanguage(rawValue: action.targetLanguage) ?? .auto,
+                          replaceByDefault: action.replaceByDefault,
+                          isEnabled: action.isEnabled,
+                          thinkingMode: action.thinkingMode,
+                          thinkingBudget: AIAction.sanitizedThinkingBudget(action.thinkingBudget),
+                          saveHistory: action.saveHistory)
+    result.id = action.id
+    return result
+}

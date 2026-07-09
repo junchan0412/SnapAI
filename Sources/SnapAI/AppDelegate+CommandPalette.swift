@@ -248,8 +248,8 @@ extension AppDelegate {
 
     func installActionTemplate(_ template: ActionTemplate) {
         let action = ActionTemplateLibrary.installedAction(from: template,
-                                                           existingActions: settings.actions)
-        settings.actions.append(action)
+                                                           existingActions: settings.actions.actionTemplateActions).aiAction
+        settings.actions.append(contentsOf: AppSettings.sanitizedImportedActions([action]))
         settings.save()
         registerHotKeys()
         buildMenu()

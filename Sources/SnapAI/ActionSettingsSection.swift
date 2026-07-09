@@ -1,4 +1,5 @@
 import AppKit
+import SnapAILogic
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -62,7 +63,7 @@ struct ActionSettingsSection: View {
             Divider()
             ForEach(ActionTemplateLibrary.builtIns) { template in
                 Button(template.title) {
-                    addAction(template.action)
+                    addAction(template.action.aiAction)
                 }
             }
         } label: {
@@ -380,7 +381,7 @@ struct ActionSettingsSection: View {
               let data = try? Data(contentsOf: url),
               let imported = try? ActionTemplateLibrary.importedActions(from: data) else { return }
         let installed = ActionTemplateLibrary.installedActions(from: imported,
-                                                               existingActions: settings.actions)
+                                                               existingActions: settings.actions.actionTemplateActions).aiActions
         guard !installed.isEmpty else { return }
         settings.actions.append(contentsOf: installed)
         ui.expandedActionID = installed.first?.id
@@ -388,7 +389,7 @@ struct ActionSettingsSection: View {
     }
 
     private func exportActionLibrary() {
-        guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions) else { return }
+        guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions.actionTemplateActions) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "SnapAI-Actions.json"

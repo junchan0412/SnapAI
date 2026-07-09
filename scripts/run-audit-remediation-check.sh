@@ -214,6 +214,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated RoutingContextCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/RoutingContextCommand.swift ] \
   || fail "RoutingContextCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ActionTemplateLibrary.swift ] \
+  || fail "SnapAILogic migrated ActionTemplateLibrary source is missing"
+[ ! -L Sources/SnapAILogic/ActionTemplateLibrary.swift ] \
+  || fail "SnapAILogic migrated ActionTemplateLibrary must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ActionTemplateLibrary.swift ] \
+  || fail "ActionTemplateLibrary must not be duplicated in the app target"
+[ -f Sources/SnapAI/ActionTemplateLibraryAppBridge.swift ] \
+  || fail "ActionTemplateLibrary app bridge is missing"
 [ -f Sources/SnapAILogic/HistoryExportCommand.swift ] \
   || fail "SnapAILogic migrated HistoryExportCommand source is missing"
 [ ! -L Sources/SnapAILogic/HistoryExportCommand.swift ] \

@@ -121,8 +121,8 @@ func testActionTemplateLibraryBuiltInsAreShareable() {
            "built-in catalog includes code review")
     expect(templates.allSatisfy { !$0.action.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty },
            "built-in templates include prompts")
-    expect(templates.allSatisfy { $0.action.hotKey == nil },
-           "built-in templates do not reserve global shortcuts")
+    expect(templates.allSatisfy { !$0.action.name.isEmpty && !$0.action.icon.isEmpty },
+           "built-in templates include installable action metadata")
 }
 
 func testActionTemplateLibraryExportsPortableBundle() {
@@ -133,7 +133,7 @@ func testActionTemplateLibraryExportsPortableBundle() {
     action.providerID = "private-provider-id"
     action.modelOverride = "private-model-name"
 
-    guard let data = try? ActionTemplateLibrary.exportBundleData(actions: [action],
+    guard let data = try? ActionTemplateLibrary.exportBundleData(actions: [actionTemplateAction(action)],
                                                                  exportedAt: Date(timeIntervalSince1970: 0)),
           let json = String(data: data, encoding: .utf8) else {
         expect(false, "exports action template bundle")
@@ -152,9 +152,8 @@ func testActionTemplateLibraryExportsPortableBundle() {
     }
     expect(bundle.schemaVersion == ActionTemplateBundle.currentSchemaVersion,
            "exported action bundle records schema version")
-    expect(exported.hotKey == nil, "exported template clears hotkey")
-    expect(exported.providerID == nil, "exported template clears provider override")
-    expect(exported.modelOverride == nil, "exported template clears model override")
+    expect(exported.name == "团队润色", "exported template keeps shareable action name")
+    expect(exported.prompt == "请润色:\n\n{{text}}", "exported template keeps shareable prompt")
 }
 
 func testActionTemplateLibraryImportsAndInstallsSafely() {
@@ -173,14 +172,13 @@ func testActionTemplateLibraryImportsAndInstallsSafely() {
         expect(false, "imports legacy action arrays")
         return
     }
-    expect(firstDecoded.hotKey == nil, "imported templates clear external hotkeys")
-    expect(firstDecoded.providerID == nil, "imported templates clear provider overrides")
-    expect(firstDecoded.modelOverride == nil, "imported templates clear model overrides")
+    expect(firstDecoded.name == "润色", "imported legacy templates keep action name")
+    expect(firstDecoded.prompt == "请润色:\n\n{{text}}", "imported legacy templates keep prompt")
 
     var existing = AIAction(name: "润色", icon: "wand.and.stars", prompt: "{{text}}")
     existing.id = "existing-id"
     let installed = ActionTemplateLibrary.installedActions(from: decoded,
-                                                           existingActions: [existing])
+                                                           existingActions: [actionTemplateAction(existing)])
     expect(installed.first?.name == "润色 2", "installing templates avoids duplicate action names")
     expect(installed.first?.id != "existing-id", "installing templates avoids duplicate action ids")
 }
