@@ -155,6 +155,12 @@ scripts/check-logic-symlinks.sh >/dev/null
   || fail "SnapAILogic migrated ResultRecoveryCommand must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/ResultRecoveryCommand.swift ] \
   || fail "ResultRecoveryCommand must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultWriteBackCoordinator.swift ] \
+  || fail "SnapAILogic migrated ResultWriteBackCoordinator source is missing"
+[ ! -L Sources/SnapAILogic/ResultWriteBackCoordinator.swift ] \
+  || fail "SnapAILogic migrated ResultWriteBackCoordinator must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/ResultWriteBackCoordinator.swift ] \
+  || fail "ResultWriteBackCoordinator must not be duplicated in the app target"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"
