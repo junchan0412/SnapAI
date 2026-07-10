@@ -15,7 +15,8 @@ extension AppDelegate {
     @objc func handleAutomationURL(_ event: NSAppleEventDescriptor,
                                            withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let rawURL = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
-              let command = AutomationRouter.command(from: rawURL) else {
+              let url = URL(string: rawURL),
+              let command = AutomationURLCommand.parse(url) else {
             return
         }
         runAutomationCommand(command)
@@ -308,7 +309,7 @@ extension AppDelegate {
     }
 
     func settingsSection(for raw: String?) -> SettingsSection {
-        AutomationRouter.settingsSection(for: raw,
-                                         fallback: windowCoordinator.selectedSettingsSection)
+        AutomationSettingsSectionSelection.resolve(raw,
+                                                   fallback: windowCoordinator.selectedSettingsSection)
     }
 }

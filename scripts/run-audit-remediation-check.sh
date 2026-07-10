@@ -186,6 +186,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "ConversationExport must not be duplicated in the app target"
 [ -f Sources/SnapAI/ResultPersistenceAppBridge.swift ] \
   || fail "ResultPersistence app bridge is missing"
+[ -f Sources/SnapAILogic/AutomationRouter.swift ] \
+  || fail "SnapAILogic migrated AutomationRouter source is missing"
+[ ! -L Sources/SnapAILogic/AutomationRouter.swift ] \
+  || fail "SnapAILogic migrated AutomationRouter must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/AutomationRouter.swift ] \
+  || fail "AutomationRouter must not be duplicated in the app target"
 [ -f Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
   || fail "SnapAILogic migrated CommandPaletteMatcher source is missing"
 [ ! -L Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
