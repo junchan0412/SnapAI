@@ -200,6 +200,12 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "AutomationURLCommand must not be duplicated in the app target"
 [ -f Sources/SnapAI/AutomationURLCommandAppBridge.swift ] \
   || fail "AutomationURLCommand app bridge is missing"
+[ -f Sources/SnapAILogic/SettingsSection.swift ] \
+  || fail "SnapAILogic migrated SettingsSection source is missing"
+[ ! -L Sources/SnapAILogic/SettingsSection.swift ] \
+  || fail "SnapAILogic migrated SettingsSection must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/SettingsSection.swift ] \
+  || fail "SettingsSection must not be duplicated in the app target"
 [ -f Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
   || fail "SnapAILogic migrated CommandPaletteMatcher source is missing"
 [ ! -L Sources/SnapAILogic/CommandPaletteMatcher.swift ] \

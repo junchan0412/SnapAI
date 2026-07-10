@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import SnapAILogic
 
 /// 追踪设置界面里的运行时状态(辅助功能权限、开机自启)。
 /// 这里用 ObservableObject 而非 @State,以兼容仅装了 Command Line Tools
