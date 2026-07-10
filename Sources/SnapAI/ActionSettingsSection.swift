@@ -145,13 +145,18 @@ struct ActionSettingsSection: View {
                 }
                 Spacer()
                 Button { moveAction(action.id, up: true) } label: { Image(systemName: "chevron.up.circle") }
-                    .buttonStyle(.plain).disabled(settings.actions.first?.id == action.id)
+                    .buttonStyle(.plain)
+                    .disabled(settings.actions.first?.id == action.id)
+                    .accessibilityLabel("上移动作 \(action.name)")
                 Button { moveAction(action.id, up: false) } label: { Image(systemName: "chevron.down.circle") }
-                    .buttonStyle(.plain).disabled(settings.actions.last?.id == action.id)
+                    .buttonStyle(.plain)
+                    .disabled(settings.actions.last?.id == action.id)
+                    .accessibilityLabel("下移动作 \(action.name)")
                 Button {
                     ui.expandedActionID = isExpanded ? nil : action.id
                 } label: { Image(systemName: isExpanded ? "chevron.up" : "chevron.down") }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(isExpanded ? "收起动作 \(action.name)" : "展开动作 \(action.name)")
             }
             .padding(.vertical, 4)
             .contentShape(Rectangle())

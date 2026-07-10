@@ -372,6 +372,50 @@ func testHistoryStoreReportsWriteFailures() {
            "history store records load failures for diagnostics")
 }
 
+func testAppSettingsHistoryMutationsDoNotCommitWhenPersistenceFails() {
+    let parentFile = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("SnapAI-HistoryMutation-Blocked-\(UUID().uuidString)")
+    let blockedURL = parentFile.appendingPathComponent("history.sqlite")
+    defer { try? FileManager.default.removeItem(at: parentFile) }
+
+    do {
+        try Data("not a directory".utf8).write(to: parentFile)
+    } catch {
+        expect(false, "creates blocked parent file for history mutation test: \(error.localizedDescription)")
+        return
+    }
+
+    let blockedStore = HistoryStore(url: blockedURL)
+    let settings = AppSettings()
+    let original = HistoryEntry(id: "persistent-entry",
+                                actionName: "总结",
+                                source: "原文",
+                                output: "结果",
+                                provider: "OpenAI",
+                                model: "gpt")
+    settings.history = [original]
+
+    expect(!settings.deleteHistory(id: original.id, store: blockedStore),
+           "failed history deletion reports failure")
+    expect(settings.history == [original],
+           "failed history deletion keeps the in-memory source of truth unchanged")
+
+    expect(!settings.toggleHistoryFavorite(id: original.id, store: blockedStore),
+           "failed favorite update reports failure")
+    expect(settings.history.first?.isFavorite == false,
+           "failed favorite update does not show a value that was never persisted")
+
+    expect(!settings.updateHistoryTags(id: original.id, tags: ["敏感"], store: blockedStore),
+           "failed tag update reports failure")
+    expect(settings.history.first?.displayTags.isEmpty == true,
+           "failed tag update leaves the visible tags unchanged")
+
+    expect(!settings.clearHistory(store: blockedStore),
+           "failed history clear reports failure")
+    expect(settings.history == [original],
+           "failed history clear does not hide records that still exist on disk")
+}
+
 func testHistorySearchUsesStoreResultsBeforeFacetFiltering() {
     let summary = HistoryEntry(id: "summary",
                                date: Date(timeIntervalSince1970: 3),

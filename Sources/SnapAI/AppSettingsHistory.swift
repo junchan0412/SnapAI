@@ -2,10 +2,12 @@ import Foundation
 
 extension AppSettings {
     /// 追加一条历史并裁剪到上限
+    @discardableResult
     func addHistory(action: String, source: String, output: String,
                     provider: String, model: String, tags: [String] = [],
-                    contentStorage: HistoryContentStorage? = nil) {
-        guard historyLimit > 0 else { return }
+                    contentStorage: HistoryContentStorage? = nil,
+                    store: HistoryStore = .shared) -> Bool {
+        guard historyLimit > 0 else { return false }
         let payload = historyPayload(source: source,
                                      output: output,
                                      tags: tags,
@@ -22,38 +24,52 @@ extension AppSettings {
                                                                    maxLength: Self.importedModelNameLimit,
                                                                    fallback: ""),
                                  tags: payload.tags)
+        guard store.upsert(entry, limit: historyLimit) else { return false }
         history.insert(entry, at: 0)
-        if history.count > historyLimit {
-            history = Array(history.prefix(historyLimit))
-        }
-        HistoryStore.shared.upsert(entry, limit: historyLimit)
+        history = Array(history.prefix(historyLimit))
         save()
+        return true
     }
 
-    func clearHistory() {
+    @discardableResult
+    func clearHistory(store: HistoryStore = .shared) -> Bool {
+        guard store.deleteAll() else { return false }
         history.removeAll()
-        HistoryStore.shared.deleteAll()
         save()
+        return true
     }
 
-    func deleteHistory(id: String) {
+    @discardableResult
+    func deleteHistory(id: String, store: HistoryStore = .shared) -> Bool {
+        guard history.contains(where: { $0.id == id }) else { return false }
+        guard store.delete(id: id) else { return false }
         history.removeAll { $0.id == id }
-        HistoryStore.shared.delete(id: id)
         save()
+        return true
     }
 
-    func toggleHistoryFavorite(id: String) {
-        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
-        history[idx].isFavorite.toggle()
-        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
+    @discardableResult
+    func toggleHistoryFavorite(id: String, store: HistoryStore = .shared) -> Bool {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = history[idx]
+        updated.isFavorite.toggle()
+        guard store.upsert(updated, limit: historyLimit) else { return false }
+        history[idx] = updated
         save()
+        return true
     }
 
-    func updateHistoryTags(id: String, tags: [String]) {
-        guard let idx = history.firstIndex(where: { $0.id == id }) else { return }
-        history[idx].tags = Self.historyTags(tags)
-        HistoryStore.shared.upsert(history[idx], limit: historyLimit)
+    @discardableResult
+    func updateHistoryTags(id: String,
+                           tags: [String],
+                           store: HistoryStore = .shared) -> Bool {
+        guard let idx = history.firstIndex(where: { $0.id == id }) else { return false }
+        var updated = history[idx]
+        updated.tags = Self.historyTags(tags)
+        guard store.upsert(updated, limit: historyLimit) else { return false }
+        history[idx] = updated
         save()
+        return true
     }
 
     @discardableResult

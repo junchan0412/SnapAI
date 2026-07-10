@@ -16,8 +16,8 @@ top_level_types() {
   sed -nE 's/^[[:space:]]*(public[[:space:]]+)?(struct|enum|class|actor)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\3/p' "$1"
 }
 
-printf '%-34s %-8s %-42s %s\n' "source" "status" "symlink consumers" "app/test consumers"
-printf '%-34s %-8s %-42s %s\n' "------" "------" "-----------------" "------------------"
+printf '%-34s %-8s %-10s %-42s %s\n' "source" "status" "boundary" "symlink consumers" "app/test consumers"
+printf '%-34s %-8s %-10s %-42s %s\n' "------" "------" "--------" "-----------------" "------------------"
 
 while IFS= read -r file; do
   logic_path="Sources/SnapAILogic/$file"
@@ -52,11 +52,16 @@ while IFS= read -r file; do
 
   symlink_consumers=$(printf '%s' "$symlink_consumers" | unique_csv)
   app_consumers=$(printf '%s' "$app_consumers" | unique_csv)
+  boundary="isolated"
   if [ -n "$symlink_consumers" ]; then
     status="blocked"
+    boundary="cluster"
+  elif [ -n "$app_consumers" ]; then
+    status="bridge"
+    boundary="app-api"
   else
     status="ready"
   fi
 
-  printf '%-34s %-8s %-42s %s\n' "$file" "$status" "${symlink_consumers:-"-"}" "${app_consumers:-"-"}"
+  printf '%-34s %-8s %-10s %-42s %s\n' "$file" "$status" "$boundary" "${symlink_consumers:-"-"}" "${app_consumers:-"-"}"
 done < "$MANIFEST"
