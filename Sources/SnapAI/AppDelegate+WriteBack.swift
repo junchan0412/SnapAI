@@ -162,7 +162,7 @@ extension AppDelegate {
     }
 
     func currentWriteBackStatusSummary() -> String? {
-        WriteBackCommandFactory.statusSummary(for: lastWriteBackRecord,
+        WriteBackCommandFactory.statusSummary(for: lastWriteBackRecord?.writeBackCommandInput,
                                               fallback: lastWriteBackStatusSummary)
     }
 
@@ -189,7 +189,7 @@ extension AppDelegate {
     }
 
     func undoWriteBackMenuTitle() -> String {
-        WriteBackCommandFactory.undoMenuTitle(for: lastWriteBackRecord)
+        WriteBackCommandFactory.undoMenuTitle(for: lastWriteBackRecord?.writeBackCommandInput)
     }
 
     @objc func undoLastWriteBackFromMenu(_ sender: Any?) {

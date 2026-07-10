@@ -14,7 +14,9 @@ extension AppDelegate {
             shortcutText: settings.quickPanelHotKey.displayString,
             perform: { [weak self] in self?.toggleQuickInput() }
         ))
-        if let descriptor = WriteBackCommandFactory.undoDescriptor(for: lastWriteBackRecord) {
+        if let descriptor = WriteBackCommandFactory.undoDescriptor(
+            for: lastWriteBackRecord?.writeBackCommandInput
+        ) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,
                 title: descriptor.title,

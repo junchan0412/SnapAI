@@ -1,4 +1,5 @@
 import AppKit
+import SnapAILogic
 
 enum MenuCoordinator {
     static func configureShortcut(_ item: NSMenuItem, combo: HotKeyCombo?) {
@@ -11,32 +12,39 @@ enum MenuCoordinator {
                                 target: AnyObject,
                                 action: Selector) -> NSMenu {
         let sub = NSMenu()
-        let enabledProviders = settings.providers.filter { $0.isEnabled }
-        if enabledProviders.isEmpty {
+        let providerInputs = settings.providers.map { provider in
+            ModelSwitchProviderInput(id: provider.id,
+                                     name: provider.name,
+                                     isEnabled: provider.isEnabled,
+                                     enabledModelNames: provider.enabledModelNames)
+        }
+        let descriptors = ModelSwitchCommandFactory.descriptors(
+            providers: providerInputs,
+            activeProviderID: settings.activeProvider?.id,
+            activeModel: settings.model
+        )
+        if descriptors.isEmpty {
             let item = NSMenuItem(title: "无可用配置,请到设置添加", action: nil, keyEquivalent: "")
             item.isEnabled = false
             sub.addItem(item)
             return sub
         }
-        for provider in enabledProviders {
-            let names = provider.enabledModelNames
-            if names.isEmpty { continue }
-            let providerName = MarkdownExportSafety.metadata(provider.name,
-                                                             fallback: "未命名供应商",
-                                                             maxLength: 80)
-            let header = NSMenuItem(title: providerName, action: nil, keyEquivalent: "")
+        for provider in providerInputs where provider.isEnabled {
+            let providerDescriptors = descriptors.filter { $0.providerID == provider.id }
+            guard let firstDescriptor = providerDescriptors.first else { continue }
+            let header = NSMenuItem(title: firstDescriptor.providerName, action: nil, keyEquivalent: "")
             header.isEnabled = false
             sub.addItem(header)
-            for model in names {
-                let modelName = MarkdownExportSafety.metadata(model,
-                                                              fallback: "未命名模型",
-                                                              maxLength: 120)
-                let item = NSMenuItem(title: "  \(modelName)",
+            for descriptor in providerDescriptors {
+                let item = NSMenuItem(title: "  \(descriptor.title)",
                                       action: action,
                                       keyEquivalent: "")
                 item.target = target
-                item.representedObject = ["provider": provider.id, "model": model]
-                if provider.id == settings.activeProvider?.id && model == settings.model {
+                item.representedObject = [
+                    "provider": descriptor.providerID,
+                    "model": descriptor.modelName
+                ]
+                if descriptor.systemImage == "checkmark.circle.fill" {
                     item.state = .on
                 }
                 sub.addItem(item)

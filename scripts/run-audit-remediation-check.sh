@@ -307,6 +307,16 @@ registered_logic_tests=$(
   || fail "InstallLogCommand app bridge is missing"
 [ -f Sources/SnapAI/HistoryExportCommandAppBridge.swift ] \
   || fail "History command app bridge is missing"
+[ -f Sources/SnapAILogic/WriteBackCommand.swift ] \
+  || fail "SnapAILogic migrated WriteBackCommand source is missing"
+[ ! -L Sources/SnapAILogic/WriteBackCommand.swift ] \
+  || fail "SnapAILogic migrated WriteBackCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/WriteBackCommand.swift ] \
+  || fail "WriteBackCommand must not be duplicated in the app target"
+[ -f Sources/SnapAI/WriteBackCommandAppBridge.swift ] \
+  || fail "WriteBackCommand app bridge is missing"
+[ ! -e Sources/SnapAILogic/MenuCoordinator.swift ] \
+  || fail "AppKit MenuCoordinator must stay out of SnapAILogic"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"

@@ -25,6 +25,7 @@ FORBIDDEN_FILE_PATTERNS=(
   "FloatingPanel.swift"
   "HotKeyRecorder.swift"
   "MarkdownView.swift"
+  "MenuCoordinator.swift"
   "OnboardingView.swift"
   "QuickInput.swift"
   "SettingsViewSupport.swift"
@@ -43,8 +44,8 @@ FORBIDDEN_IMPORTS=(
   "Quartz"
 )
 
-MAX_LOGIC_SYMLINKS=41
-MIN_LOGIC_REAL_SOURCES=36
+MAX_LOGIC_SYMLINKS=39
+MIN_LOGIC_REAL_SOURCES=37
 
 find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
 

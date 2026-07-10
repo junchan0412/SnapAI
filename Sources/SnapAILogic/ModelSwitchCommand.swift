@@ -24,6 +24,7 @@ public struct ModelSwitchCommandDescriptor: Equatable {
     public var systemImage: String
     public var keywords: String
     public var providerID: String
+    public var providerName: String
     public var modelName: String
 }
 
@@ -65,6 +66,7 @@ public enum ModelSwitchCommandFactory {
                 modelTitle
             ]),
             providerID: provider.id,
+            providerName: providerName,
             modelName: model
         )
     }

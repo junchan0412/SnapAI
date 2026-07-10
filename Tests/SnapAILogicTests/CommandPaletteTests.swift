@@ -381,46 +381,18 @@ func testModelSwitchCommandFactoryFiltersAndMarksCurrentModel() {
     expect(descriptors[0].systemImage == "checkmark.circle.fill", "current model uses check icon")
     expect(descriptors[1].subtitle == "切换模型 - DeepSeek", "non-current model offers switch")
     expect(descriptors[1].keywords.contains("deepseek-chat"), "model command is searchable by model")
+    expect(descriptors[1].providerName == "DeepSeek", "model command carries the sanitized provider title")
     expect(descriptors[1].providerID == "deepseek" && descriptors[1].modelName == "deepseek-chat",
            "model command carries switch target")
-}
-
-func testMenuCoordinatorBuildsModelSwitchMenu() {
-    let settings = AppSettings()
-    var primary = AIProvider(name: "OpenAI",
-                             apiProtocol: .openAI,
-                             baseURL: "https://api.openai.com/v1",
-                             apiKey: "key",
-                             models: [
-                                AIModelEntry(name: "gpt-4o-mini"),
-                                AIModelEntry(name: "disabled-model", enabled: false)
-                             ])
-    primary.id = "openai"
-    primary.isEnabled = true
-    var disabledProvider = AIProvider(name: "Disabled",
-                                      apiProtocol: .openAI,
-                                      baseURL: "https://disabled.test/v1",
-                                      apiKey: "key",
-                                      models: [AIModelEntry(name: "hidden-model")])
-    disabledProvider.id = "disabled"
-    disabledProvider.isEnabled = false
-    settings.providers = [primary, disabledProvider]
-    settings.activeProviderID = primary.id
-    settings.activeModel = "gpt-4o-mini"
-
-    let menu = MenuCoordinator.modelSwitchMenu(settings: settings,
-                                               target: NSObject(),
-                                               action: Selector(("switchModel:")))
-    let titles = menu.items.map(\.title)
-    expect(titles.contains("OpenAI"), "model switch menu includes enabled provider header")
-    expect(titles.contains("  gpt-4o-mini"), "model switch menu includes enabled model")
-    expect(!titles.contains("Disabled"), "model switch menu omits disabled providers")
-    expect(!titles.contains("  disabled-model"), "model switch menu omits disabled models")
-    let modelItem = menu.items.first { $0.title == "  gpt-4o-mini" }
-    expect(modelItem?.state == .on, "model switch menu marks the active model")
-    let represented = modelItem?.representedObject as? [String: String]
-    expect(represented?["provider"] == "openai" && represented?["model"] == "gpt-4o-mini",
-           "model switch menu carries provider and model identifiers")
+    let emptyDescriptors = ModelSwitchCommandFactory.descriptors(
+        providers: [ModelSwitchProviderInput(id: "empty",
+                                             name: "Empty",
+                                             isEnabled: true,
+                                             enabledModelNames: [])],
+        activeProviderID: nil,
+        activeModel: ""
+    )
+    expect(emptyDescriptors.isEmpty, "model switch commands omit providers without enabled models")
 }
 
 func testModelSwitchCommandIDsAreStableSlugs() {

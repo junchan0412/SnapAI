@@ -365,7 +365,13 @@ func testWriteBackCommandFactoryReflectsUndoAvailability() {
                                       operation: .replace,
                                       originalText: "旧文本",
                                       replacementText: "新文本")
-    let replaceDescriptor = WriteBackCommandFactory.undoDescriptor(for: replace)
+    let replaceInput = WriteBackCommandInput(
+        undoTitle: replace.undoTitle,
+        operation: .replace,
+        diagnosticSummary: replace.diagnosticSummary,
+        isUndoAvailable: replace.isUndoAvailable
+    )
+    let replaceDescriptor = WriteBackCommandFactory.undoDescriptor(for: replaceInput)
     expect(replaceDescriptor?.id == "undo-write-back", "writeback undo command uses stable id")
     expect(replaceDescriptor?.title == "撤销上次替换到 原应用", "replace undo command uses record title")
     expect(replaceDescriptor?.subtitle == "恢复替换前的原文", "replace undo command explains restore behavior")
@@ -373,9 +379,9 @@ func testWriteBackCommandFactoryReflectsUndoAvailability() {
     expect(replaceDescriptor?.shortcutText == WriteBackCommandFactory.undoShortcutText,
            "writeback undo command exposes its menu shortcut")
     expect(replaceDescriptor?.action == .undoLastWriteBack, "writeback undo command carries undo action")
-    expect(WriteBackCommandFactory.undoMenuTitle(for: replace) == replace.undoTitle,
+    expect(WriteBackCommandFactory.undoMenuTitle(for: replaceInput) == replace.undoTitle,
            "available writeback record drives menu title")
-    expect(WriteBackCommandFactory.statusSummary(for: replace,
+    expect(WriteBackCommandFactory.statusSummary(for: replaceInput,
                                                  fallback: "state=fallback-copied")?.contains("operation=replace") == true,
            "writeback status summary prefers live records over stale fallback strings")
 
@@ -383,7 +389,13 @@ func testWriteBackCommandFactoryReflectsUndoAvailability() {
                                      operation: .append,
                                      originalText: "",
                                      replacementText: "\n追加")
-    let appendDescriptor = WriteBackCommandFactory.undoDescriptor(for: append)
+    let appendInput = WriteBackCommandInput(
+        undoTitle: append.undoTitle,
+        operation: .append,
+        diagnosticSummary: append.diagnosticSummary,
+        isUndoAvailable: append.isUndoAvailable
+    )
+    let appendDescriptor = WriteBackCommandFactory.undoDescriptor(for: appendInput)
     expect(appendDescriptor?.subtitle == "移除上次追加内容", "append undo command explains removal behavior")
     expect(appendDescriptor?.keywords.contains("追加") == true, "append undo command is searchable by append")
 
@@ -391,9 +403,15 @@ func testWriteBackCommandFactoryReflectsUndoAvailability() {
                                       originalText: "旧文本",
                                       replacementText: "新文本",
                                       createdAt: Date(timeIntervalSinceNow: -TextWriteBackRecord.expirationInterval - 1))
-    expect(WriteBackCommandFactory.undoDescriptor(for: expired) == nil,
+    let expiredInput = WriteBackCommandInput(
+        undoTitle: expired.undoTitle,
+        operation: .replace,
+        diagnosticSummary: expired.diagnosticSummary,
+        isUndoAvailable: expired.isUndoAvailable
+    )
+    expect(WriteBackCommandFactory.undoDescriptor(for: expiredInput) == nil,
            "expired writeback record produces no undo command")
-    let expiredStatus = WriteBackCommandFactory.statusSummary(for: expired,
+    let expiredStatus = WriteBackCommandFactory.statusSummary(for: expiredInput,
                                                               fallback: "state=available")
     expect(expiredStatus?.contains("state=unavailable") == true &&
            expiredStatus?.contains("undo=expired") == true,
