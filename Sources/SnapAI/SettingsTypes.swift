@@ -9,12 +9,12 @@ enum APIProtocol: String, Codable, CaseIterable, Identifiable {
 }
 
 /// 打字机动画速度
-enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
+public enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
     case off = "关闭"
     case slow = "慢"
     case normal = "标准"
     case fast = "快"
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// 每次 tick 揭示的字符数
     var charsPerTick: Int {
@@ -38,12 +38,12 @@ enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
 }
 
 /// AI 自动路由偏好。
-enum AIRoutingPreference: String, Codable, CaseIterable, Identifiable {
+public enum AIRoutingPreference: String, Codable, CaseIterable, Identifiable {
     case fastest = "最快"
     case balanced = "均衡"
     case quality = "最佳质量"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     var description: String {
         switch self {
@@ -83,13 +83,13 @@ struct WorkModeBehavior: Equatable {
     var routingPreference: AIRoutingPreference
 }
 
-enum WorkModePreset: String, Codable, CaseIterable, Identifiable {
+public enum WorkModePreset: String, Codable, CaseIterable, Identifiable {
     case standard
     case privacy
     case speed
     case quality
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     var title: String {
         switch self {

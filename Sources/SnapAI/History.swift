@@ -240,18 +240,30 @@ private extension String {
     }
 }
 
-struct HistoryFilterCriteria: Codable, Equatable {
-    static let allActions = "全部动作"
-    static let allModels = "全部模型"
-    static let allTags = "全部标签"
+public struct HistoryFilterCriteria: Codable, Equatable {
+    public static let allActions = "全部动作"
+    public static let allModels = "全部模型"
+    public static let allTags = "全部标签"
 
-    var query: String = ""
-    var actionFilter: String = Self.allActions
-    var modelFilter: String = Self.allModels
-    var tagFilter: String = Self.allTags
-    var favoriteOnly: Bool = false
+    public var query: String = ""
+    public var actionFilter: String = Self.allActions
+    public var modelFilter: String = Self.allModels
+    public var tagFilter: String = Self.allTags
+    public var favoriteOnly: Bool = false
 
-    var isDefault: Bool {
+    public init(query: String = "",
+                actionFilter: String = Self.allActions,
+                modelFilter: String = Self.allModels,
+                tagFilter: String = Self.allTags,
+                favoriteOnly: Bool = false) {
+        self.query = query
+        self.actionFilter = actionFilter
+        self.modelFilter = modelFilter
+        self.tagFilter = tagFilter
+        self.favoriteOnly = favoriteOnly
+    }
+
+    public var isDefault: Bool {
         self == HistoryFilterCriteria()
     }
 

@@ -192,6 +192,14 @@ scripts/report-logic-migration-candidates.sh >/dev/null
   || fail "SnapAILogic migrated AutomationRouter must be a real source file, not a symlink"
 [ ! -e Sources/SnapAI/AutomationRouter.swift ] \
   || fail "AutomationRouter must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/AutomationURLCommand.swift ] \
+  || fail "SnapAILogic migrated AutomationURLCommand source is missing"
+[ ! -L Sources/SnapAILogic/AutomationURLCommand.swift ] \
+  || fail "SnapAILogic migrated AutomationURLCommand must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/AutomationURLCommand.swift ] \
+  || fail "AutomationURLCommand must not be duplicated in the app target"
+[ -f Sources/SnapAI/AutomationURLCommandAppBridge.swift ] \
+  || fail "AutomationURLCommand app bridge is missing"
 [ -f Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
   || fail "SnapAILogic migrated CommandPaletteMatcher source is missing"
 [ ! -L Sources/SnapAILogic/CommandPaletteMatcher.swift ] \

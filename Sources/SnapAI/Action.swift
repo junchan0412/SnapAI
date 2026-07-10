@@ -2,7 +2,7 @@ import Foundation
 import Carbon.HIToolbox
 
 /// 翻译/输出目标语言
-enum TargetLanguage: String, Codable, CaseIterable, Identifiable {
+public enum TargetLanguage: String, Codable, CaseIterable, Identifiable {
     case auto = "自动(中英互译)"
     case chinese = "简体中文"
     case english = "英语"
@@ -11,7 +11,7 @@ enum TargetLanguage: String, Codable, CaseIterable, Identifiable {
     case french = "法语"
     case german = "德语"
     case spanish = "西班牙语"
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
     /// 注入 prompt 的指令片段
     var instruction: String {
