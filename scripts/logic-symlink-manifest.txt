@@ -69,6 +69,7 @@ TextCaptureDiagnostic.swift
 TextCaptureRecoveryGuide.swift
 TextDiff.swift
 TextEditTransaction.swift
+TypewriterBuffer.swift
 UpdateChecker.swift
 WorkModeCommand.swift
 WriteBackCommand.swift

@@ -10,6 +10,7 @@ final class QuickInputModel: ObservableObject {
     @Published var imageData: Data? = nil   // #3 截图/粘贴的图片
     @Published var imageMimeType: String = "image/png"
     @Published var imageWarning: String? = nil
+    @Published var isCapturing = false
     let settings: AppSettings
     var onSubmit: ((String, AIAction, Data?, String) -> Void)?
 
@@ -124,9 +125,21 @@ struct QuickInputView: View {
             HStack {
                 // #3 截图 / 粘贴图片
                 Button { onCapture() } label: {
-                    Label("截图", systemImage: "camera")
+                    if model.isCapturing {
+                        Label("截图中", systemImage: "camera")
+                    } else {
+                        Label("截图", systemImage: "camera")
+                    }
                 }
-                .buttonStyle(.borderless).controlSize(.small).help("截取当前屏幕")
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(model.isCapturing ? "正在截取当前屏幕" : "截取当前屏幕")
+                .disabled(model.isCapturing)
+                if model.isCapturing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("正在截取当前屏幕")
+                }
                 Button { model.pasteImageFromClipboard() } label: {
                     Label("粘贴图片", systemImage: "photo")
                 }
@@ -208,6 +221,8 @@ final class QuickInputController: NSObject, NSWindowDelegate {
 
     /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
     private func captureScreen() {
+        guard !model.isCapturing else { return }
+        model.isCapturing = true
         guard ScreenCapturePermission.isGranted() else {
             finishScreenCapture(.failure(ScreenCaptureFailureDiagnostic.missingPermission()),
                                 visibleWindows: [])
@@ -282,6 +297,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
 
     private func finishScreenCapture(_ result: Result<SnapAIImagePayload, Error>, visibleWindows: [NSWindow]) {
+        model.isCapturing = false
         visibleWindows.forEach { $0.makeKeyAndOrderFront(nil) }
         switch result {
         case .success(let payload):

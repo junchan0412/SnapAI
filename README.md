@@ -2,17 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.51 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.52 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.51 版本重点
+## 1.6.52 版本重点
 
-- `SettingsSection` 已从 app target 迁移为 `SnapAILogic` 真实源码。
-- 设置页导航 tab 的标题、图标、副标题和宽度成为明确的 logic 值对象,app target 只消费 public API。
-- `SnapAILogic` 数量基线下调为最多 41 个 symlink、至少 35 个真实源码。
+- 修复历史删除、清空、收藏与标签编辑在 SQLite 写入失败时仍显示成功的问题。
+- 流式结果的打字机效果改为增量 chunk 队列,避免长回答反复遍历和复制完整字符串。
+- 快捷输入截图新增进行中状态和重复触发保护,动作/供应商编辑按钮补齐动态辅助功能标签。
+- logic test 门禁会自动校验所有 `test*` 函数都已注册,并补回此前漏执行的隐私回归测试。
+- 新增真实 `SnapAILogic.TypewriterBuffer` 源码,基线提升为最多 41 个 symlink、至少 36 个真实源码。
 
-详细发布说明见 [SnapAI 1.6.51 Release Notes](docs/RELEASE_NOTES_1.6.51.md),阶段性复盘见 [SnapAI 1.6.51 Iteration Report](docs/ITERATION_REPORT_1.6.51.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.52 Release Notes](docs/RELEASE_NOTES_1.6.52.md),阶段性复盘见 [SnapAI 1.6.52 Iteration Report](docs/ITERATION_REPORT_1.6.52.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -276,6 +278,12 @@ scripts/run-macos-smoke-tests.sh
 ./build.sh
 ```
 
+Codex 桌面环境可直接使用项目 Run action;其统一入口也可以手动执行:
+
+```bash
+./script/build_and_run.sh --verify
+```
+
 正式打包前检查:
 
 ```bash
@@ -286,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.51
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.52
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
@@ -297,4 +305,4 @@ export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"
 
 ## 许可证
 
-请以仓库中的许可证文件为准。
+当前仓库尚未附带明确的开源许可证。若你计划复制、修改或再分发,请先联系项目维护者确认授权。

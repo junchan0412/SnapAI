@@ -267,16 +267,19 @@ struct ProviderSettingsSection: View {
                     .buttonStyle(.plain)
                     .disabled(settings.providers.first?.id == provider.id)
                     .help("上移")
+                    .accessibilityLabel("上移供应商 \(provider.name)")
                 Button { moveProvider(provider.id, up: false) } label: { Image(systemName: "chevron.down.circle") }
                     .buttonStyle(.plain)
                     .disabled(settings.providers.last?.id == provider.id)
                     .help("下移")
+                    .accessibilityLabel("下移供应商 \(provider.name)")
                 Button {
                     ui.expandedProviderID = isExpanded ? nil : provider.id
                 } label: {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起供应商 \(provider.name)" : "展开供应商 \(provider.name)")
             }
             .padding(.vertical, 4)
             .contentShape(Rectangle())
@@ -367,6 +370,7 @@ struct ProviderSettingsSection: View {
                 Button { addModel(to: provider.id) } label: { Image(systemName: "plus") }
                     .frame(width: 30, height: 26)
                     .help("添加模型")
+                    .accessibilityLabel("为供应商 \(provider.name) 添加模型")
                     .disabled(ui.newModelName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }

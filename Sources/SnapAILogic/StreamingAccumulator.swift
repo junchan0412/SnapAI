@@ -12,36 +12,44 @@ public struct StreamingAccumulator: Equatable {
         self.thinkingText = thinkingText
     }
 
-    public mutating func appendContentToken(_ token: String, extractsThinkTags: Bool) {
+    @discardableResult
+    public mutating func appendContentToken(_ token: String, extractsThinkTags: Bool) -> String {
         guard extractsThinkTags else {
             outputText += token
-            return
+            return token
         }
 
         var remaining = bufferedTagFragment + token
         bufferedTagFragment = ""
+        var visibleText = ""
 
         while !remaining.isEmpty {
             if inThinkTag {
                 consumeThinkingText(from: &remaining)
             } else {
-                consumeOutputText(from: &remaining)
+                consumeOutputText(from: &remaining, visibleText: &visibleText)
             }
         }
+        return visibleText
     }
 
     public mutating func appendExternalThinking(_ text: String) {
         thinkingText += text
     }
 
-    public mutating func finish() {
-        guard !bufferedTagFragment.isEmpty else { return }
+    @discardableResult
+    public mutating func finish() -> String {
+        guard !bufferedTagFragment.isEmpty else { return "" }
+        let visibleText: String
         if inThinkTag {
             thinkingText += bufferedTagFragment
+            visibleText = ""
         } else {
             outputText += bufferedTagFragment
+            visibleText = bufferedTagFragment
         }
         bufferedTagFragment = ""
+        return visibleText
     }
 
     public mutating func resetForFallback() {
@@ -51,10 +59,13 @@ public struct StreamingAccumulator: Equatable {
         bufferedTagFragment = ""
     }
 
-    private mutating func consumeOutputText(from remaining: inout String) {
+    private mutating func consumeOutputText(from remaining: inout String,
+                                            visibleText: inout String) {
         let startTag = "<think>"
         if let start = remaining.range(of: startTag) {
-            outputText += String(remaining[remaining.startIndex..<start.lowerBound])
+            let text = String(remaining[remaining.startIndex..<start.lowerBound])
+            outputText += text
+            visibleText += text
             remaining = String(remaining[start.upperBound...])
             inThinkTag = true
             return
@@ -62,13 +73,16 @@ public struct StreamingAccumulator: Equatable {
 
         if let length = remaining.partialSuffixLength(matchingPrefixOf: startTag) {
             let split = remaining.index(remaining.endIndex, offsetBy: -length)
-            outputText += String(remaining[..<split])
+            let text = String(remaining[..<split])
+            outputText += text
+            visibleText += text
             bufferedTagFragment = String(remaining[split...])
             remaining = ""
             return
         }
 
         outputText += remaining
+        visibleText += remaining
         remaining = ""
     }
 

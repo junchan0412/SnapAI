@@ -67,6 +67,21 @@ scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \
   || fail "SnapAILogic migration candidate analyzer must stay executable"
 scripts/report-logic-migration-candidates.sh >/dev/null
+candidate_report=$(scripts/report-logic-migration-candidates.sh)
+rg -q 'app-api' <<< "$candidate_report" \
+  || fail "SnapAILogic migration candidate analyzer must classify app API bridge risk"
+
+declared_logic_tests=$(
+  rg --no-filename '^func test[A-Za-z0-9_]+\(' Tests/SnapAILogicTests/*.swift \
+    | sed -E 's/^func ([A-Za-z0-9_]+).*/\1/' \
+    | sort -u
+)
+registered_logic_tests=$(
+  sed -nE 's/^[[:space:]]*(test[A-Za-z0-9_]+)\(\)$/\1/p' Tests/SnapAILogicTests/main.swift \
+    | sort -u
+)
+[ "$declared_logic_tests" = "$registered_logic_tests" ] \
+  || fail "every top-level logic test must be registered in runAllLogicTests"
 
 [ -f Sources/SnapAILogic/ResultRouteStatusText.swift ] \
   || fail "SnapAILogic migrated ResultRouteStatusText source is missing"

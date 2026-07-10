@@ -42,6 +42,7 @@ final class ResultViewModel: ObservableObject {
     // 打字机
     private var streamDone: Bool = false
     private var typewriterTimer: Timer?
+    private var typewriterBuffer = TypewriterBuffer()
     private var charsPerTick: Int { settings.typewriterSpeed.charsPerTick }
     private var tickInterval: TimeInterval { settings.typewriterSpeed.tickInterval }
     private var fullText: String {
@@ -305,6 +306,7 @@ final class ResultViewModel: ObservableObject {
         client.cancel()
         stopTypewriter()
         output = fullText
+        typewriterBuffer.removeAll()
         isStreaming = false
         finishMetrics(recordUsage: false, saveHistory: false)
     }
@@ -374,6 +376,7 @@ final class ResultViewModel: ObservableObject {
     private func resetOutput() {
         stopTypewriter()
         streamAccumulator.resetForFallback()
+        typewriterBuffer.removeAll()
         output = ""
         thinkingText = ""
         showRouteDetails = false
@@ -507,10 +510,16 @@ final class ResultViewModel: ObservableObject {
             if firstTokenMilliseconds == nil {
                 firstTokenMilliseconds = AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt)
             }
-            self.streamAccumulator.appendContentToken(token,
-                                                      extractsThinkTags: thinkingEnabled)
+            let visibleText = self.streamAccumulator.appendContentToken(
+                token,
+                extractsThinkTags: thinkingEnabled
+            )
             self.thinkingText = self.streamAccumulator.thinkingText
-            if !typewriterOn { self.output = self.fullText }
+            if typewriterOn {
+                self.typewriterBuffer.enqueue(visibleText)
+            } else {
+                self.output = self.fullText
+            }
         } onThinking: { [weak self] thinking in
             // Anthropic extended thinking 块
             guard let self = self else { return }
@@ -518,9 +527,12 @@ final class ResultViewModel: ObservableObject {
             self.thinkingText = self.streamAccumulator.thinkingText
         } onComplete: { [weak self] error in
             guard let self = self else { return }
-            self.streamAccumulator.finish()
+            let finalVisibleText = self.streamAccumulator.finish()
             self.thinkingText = self.streamAccumulator.thinkingText
             self.streamDone = true
+            if typewriterOn {
+                self.typewriterBuffer.enqueue(finalVisibleText)
+            }
             if let error = error {
                 let failure = FallbackRunner.routeFailure(
                     error: error,
@@ -546,6 +558,7 @@ final class ResultViewModel: ObservableObject {
                     self.stopTypewriter()
                     self.output = ""
                     self.streamAccumulator.resetForFallback()
+                    self.typewriterBuffer.removeAll()
                     self.thinkingText = self.streamAccumulator.thinkingText
                     self.errorMessage = nil
                     self.routeNote = route.fallbackSwitchNote
@@ -558,6 +571,7 @@ final class ResultViewModel: ObservableObject {
                 self.errorMessage = failure.safeErrorMessage
                 self.stopTypewriter()
                 self.output = self.fullText
+                self.typewriterBuffer.removeAll()
                 self.isStreaming = false
                 self.finishMetrics(recordUsage: false, saveHistory: false)
             } else if !typewriterOn {
@@ -654,11 +668,10 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func tick() {
-        if output.count < fullText.count {
-            let target = min(output.count + charsPerTick, fullText.count)
-            let endIdx = fullText.index(fullText.startIndex, offsetBy: target)
-            output = String(fullText[fullText.startIndex..<endIdx])
-        } else if streamDone {
+        let nextText = typewriterBuffer.dequeue(maxCharacters: charsPerTick)
+        if !nextText.isEmpty {
+            output += nextText
+        } else if streamDone && typewriterBuffer.isEmpty {
             isStreaming = false
             typewriterTimer?.invalidate()
             typewriterTimer = nil

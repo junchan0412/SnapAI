@@ -2550,6 +2550,22 @@ func testStreamingAccumulatorSeparatesThinkingAndResetsForFallback() {
            "streaming accumulator flushes incomplete tag fragments when the stream finishes")
 }
 
+func testTypewriterBufferDequeuesOnlyIncrementalChunks() {
+    var buffer = TypewriterBuffer()
+    buffer.enqueue("你好")
+    buffer.enqueue("👨‍👩‍👧‍👦 Swift")
+
+    expect(buffer.dequeue(maxCharacters: 1) == "你",
+           "typewriter buffer dequeues the first visible character")
+    expect(buffer.dequeue(maxCharacters: 2) == "好👨‍👩‍👧‍👦",
+           "typewriter buffer crosses chunk boundaries without splitting grapheme clusters")
+    expect(buffer.dequeue(maxCharacters: 3) == " Sw",
+           "typewriter buffer continues from its saved incremental cursor")
+    expect(buffer.dequeue(maxCharacters: 20) == "ift",
+           "typewriter buffer returns the remaining text without rebuilding prior output")
+    expect(buffer.isEmpty, "typewriter buffer releases consumed chunks")
+}
+
 func testResultRouteStatusTextBuildsCompactPrimaryAndDetails() {
     let status = ResultRouteStatusText.make(providerName: "OpenAI",
                                             modelName: "gpt-4o-mini",

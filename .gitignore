@@ -5,3 +5,5 @@ dist/
 .build/
 *.xcuserstate
 bug*.png
+.claude/audits/
+audit-report-*.html
