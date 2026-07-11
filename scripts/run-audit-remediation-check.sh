@@ -73,8 +73,10 @@ require_match "routing metrics background persistence" 'persistenceQueue\.asyncA
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
+require_line_count_at_most "ResultViewModel completion split" Sources/SnapAI/ResultViewModel.swift 700
 require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
 require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
+require_line_count_at_most "ResultCompletionCoordinator split" Sources/SnapAI/ResultCompletionCoordinator.swift 130
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -89,8 +91,13 @@ require_no_match "result view model SwiftUI dependency" '^import SwiftUI$' Sourc
 require_match "deduplicated live output publication" 'guard self\.text != text else \{ return false \}' Sources/SnapAILogic/ResultLiveOutputState.swift
 require_match "single diagnostic snapshot publication" '@Published private var diagnosticText: ResultDiagnosticTextSnapshot' Sources/SnapAI/ResultViewModel.swift
 require_match "completion metrics leaf observer" '@ObservedObject var state: ResultCompletionState' Sources/SnapAI/ResultCompletionMetricsView.swift
-require_match "completion metrics snapshot update" 'completionState\.replace\(with: completion\)' Sources/SnapAI/ResultViewModel.swift
+require_match "completion metrics snapshot update" 'state\.replace\(with: metrics\)' Sources/SnapAI/ResultCompletionCoordinator.swift
 require_match "completion snapshot test" 'testResultCompletionStatePublishesOneDeduplicatedSnapshot' Tests/SnapAILogicTests/WriteBackTests.swift
+require_match "completion lifecycle test" 'testResultCompletionLifecycleRunsOnceAndResetsCleanly' Tests/SnapAILogicTests/WriteBackTests.swift
+require_match "completion coordinator usage" 'completionCoordinator\.finish' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model completion flags" 'private var (startTime|savedToHistory|metricsFinished)' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model history persistence" 'ResultPersistence\.saveHistoryIfNeeded' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model usage persistence" 'settings\.recordActionUsage' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift
@@ -107,6 +114,12 @@ require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\
   || fail "SnapAILogic ResultLiveOutputState must be a real source file"
 [ ! -e Sources/SnapAI/ResultLiveOutputState.swift ] \
   || fail "ResultLiveOutputState must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
+  || fail "SnapAILogic ResultCompletionLifecycle source is missing"
+[ ! -L Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
+  || fail "SnapAILogic ResultCompletionLifecycle must be a real source file"
+[ ! -e Sources/SnapAI/ResultCompletionLifecycle.swift ] \
+  || fail "ResultCompletionLifecycle must not be duplicated in the app target"
 require_line_count_at_most "HistoryWindow view split" Sources/SnapAI/HistoryWindow.swift 500
 require_line_count_at_most "HistoryWindowModel split" Sources/SnapAI/HistoryWindowModel.swift 260
 require_match "history presentation background refresh" 'refreshQueue\.async' Sources/SnapAI/HistoryWindowModel.swift

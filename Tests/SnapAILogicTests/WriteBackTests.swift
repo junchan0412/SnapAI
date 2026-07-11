@@ -104,6 +104,21 @@ func testResultCompletionStatePublishesOneDeduplicatedSnapshot() {
     withExtendedLifetime(subscription) {}
 }
 
+func testResultCompletionLifecycleRunsOnceAndResetsCleanly() {
+    var lifecycle = ResultCompletionLifecycle()
+    expect(!lifecycle.isFinished && !lifecycle.isHistorySaved,
+           "new completion lifecycle starts clean")
+    expect(lifecycle.beginCompletion(), "first completion attempt is accepted")
+    expect(!lifecycle.beginCompletion(), "duplicate completion attempt is rejected")
+    lifecycle.updateHistorySaved(true)
+    lifecycle.updateHistorySaved(false)
+    expect(lifecycle.isHistorySaved, "history saved state is monotonic within one completion")
+    lifecycle.reset()
+    expect(!lifecycle.isFinished && !lifecycle.isHistorySaved,
+           "new request resets completion and history guards together")
+    expect(lifecycle.beginCompletion(), "completion is accepted again after reset")
+}
+
 func testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath() {
   let directory = URL(fileURLWithPath: "/tmp/snapai-test-temp", isDirectory: true)
   let firstUUID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!

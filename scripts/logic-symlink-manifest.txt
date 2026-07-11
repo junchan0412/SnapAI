@@ -41,6 +41,7 @@ PrivacySubmissionPreview.swift
 Provider.swift
 RequestSession.swift
 ResultCommand.swift
+ResultCompletionLifecycle.swift
 ResultContentPresentation.swift
 ResultDiagnosticsCommand.swift
 ResultLiveOutputState.swift
