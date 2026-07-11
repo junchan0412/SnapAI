@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.58 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.59 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.58 版本重点
+## 1.6.59 版本重点
 
-- 路由成功、失败和手动偏好不再在请求/UI 调用线程同步 JSON 编码与原子写盘。
-- 350ms 窗口内的连续 metrics 变化会合并为一次后台持久化,减少磁盘写入和主线程卡顿。
-- 后台任务只保存最新 generation,过期 snapshot 不会覆盖新数据。
-- 应用退出时同步 flush 最新 metrics,避免 debounce 窗口内的数据丢失。
-- 新增 12 次快速更新合并为 1 次写入、退出 flush 和延迟写入失效的并发回归测试。
+- AI 流式输出阶段改用轻量纯文本展示,不再随每个 typewriter tick 重新解析整段 Markdown。
+- 输出完成后一次性切换到 Markdown,并用 `Equatable` 边界避免追问等无关状态变化触发重复渲染。
+- 自动滚动最高限制为 30Hz;流式阶段取消逐 tick 动画,完成时仅执行一次最终对齐动画。
+- Markdown block 与列表遍历不再构造临时 `Array(enumerated())`,减少渲染期分配。
+- 新增等待、流式文本、完成态 Markdown 与滚动节流的 logic 回归覆盖和发布门禁。
 
-详细发布说明见 [SnapAI 1.6.58 Release Notes](docs/RELEASE_NOTES_1.6.58.md),阶段性复盘见 [SnapAI 1.6.58 Iteration Report](docs/ITERATION_REPORT_1.6.58.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.59 Release Notes](docs/RELEASE_NOTES_1.6.59.md),阶段性复盘见 [SnapAI 1.6.59 Iteration Report](docs/ITERATION_REPORT_1.6.59.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.58
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.59
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

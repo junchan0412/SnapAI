@@ -38,6 +38,7 @@ final class ResultViewModel: ObservableObject {
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
     private var requestDiagnostics: AIRequestDiagnostics?
     private var streamAccumulator = StreamingAccumulator()
+    private var lastAutoScrollTime: TimeInterval = 0
 
     // 打字机
     private var streamDone: Bool = false
@@ -76,6 +77,21 @@ final class ResultViewModel: ObservableObject {
 
     var completeText: String { fullText }
     var isTranslation: Bool { action.isTranslation }
+
+    func shouldAutoScroll(currentTime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+        let shouldScroll = ResultAutoScrollPolicy.shouldScroll(lastScrollTime: lastAutoScrollTime,
+                                                               currentTime: currentTime,
+                                                               isStreaming: isStreaming)
+        if shouldScroll {
+            lastAutoScrollTime = currentTime
+        }
+        return shouldScroll
+    }
+
+    func markFinalAutoScroll(currentTime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        lastAutoScrollTime = currentTime
+    }
+
     var privacyProtectionStatusText: String? {
         submissionPrivacy?.protectionSummaryText
     }

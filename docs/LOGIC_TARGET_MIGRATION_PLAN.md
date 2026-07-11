@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.58
-- `SnapAILogic` 真实 Swift 源码:40 个
+- 版本:1.6.59
+- `SnapAILogic` 真实 Swift 源码:41 个
 - `SnapAILogic` 剩余 symlink:36 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 40 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 41 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type 消费者,并用 `boundary` 标记 `cluster` / `app-api` / `isolated`,用于决定下一轮是按簇迁移、加 app bridge/DTO,还是可直接迁移。
 
@@ -17,6 +17,7 @@
 - 自动更新:`UpdateChecker` 只保留版本、Release/manifest/signature/digest、安装日志和签名解析纯逻辑;`UpdateCheckerApp` 负责网络、AppKit UI、解压与安装。
 - 菜单边界:`MenuCoordinator` 保持为 app-only AppKit adapter,模型切换菜单复用 `ModelSwitchCommandFactory` descriptor,不再进入 logic target。
 - `TypewriterBuffer`:流式 UI 只消费增量 chunk,避免在 app target 中维护长文本索引与重复前缀复制。
+- 结果内容展示:`ResultContentPresentation` 将等待、流式纯文本和完成态 Markdown 明确分层,并集中定义 30Hz 自动滚动策略,避免流式阶段反复解析完整 Markdown。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析

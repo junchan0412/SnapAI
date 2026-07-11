@@ -261,24 +261,43 @@ struct ResultView: View {
                         }
                     }
 
-                    if vm.output.isEmpty && vm.isStreaming {
+                    switch ResultContentRenderMode.resolve(text: vm.output,
+                                                           isStreaming: vm.isStreaming) {
+                    case .waiting:
                         HStack(spacing: 6) {
                             Text("思考中").foregroundStyle(.secondary)
                             TypingCursor()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading).id("output")
-                    } else {
+                        .accessibilityLabel("AI 正在生成结果")
+                    case .streamingText:
                         VStack(alignment: .leading, spacing: 4) {
-                            MarkdownView(text: vm.output)
-                            if vm.isStreaming { TypingCursor() }
+                            Text(vm.output)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            TypingCursor()
                         }
                         .id("output")
+                        .accessibilityLabel("AI 正在生成结果")
+                    case .markdown:
+                        MarkdownView(text: vm.output)
+                            .equatable()
+                            .id("output")
+                    case .empty:
+                        EmptyView()
                     }
                 }
                 .padding(14)
             }
             .onChange(of: vm.output) {
-                withAnimation(.linear(duration: 0.1)) { proxy.scrollTo("output", anchor: .bottom) }
+                guard vm.shouldAutoScroll() else { return }
+                proxy.scrollTo("output", anchor: .bottom)
+            }
+            .onChange(of: vm.isStreaming) {
+                guard !vm.isStreaming else { return }
+                vm.markFinalAutoScroll()
+                withAnimation(.easeOut(duration: 0.12)) {
+                    proxy.scrollTo("output", anchor: .bottom)
+                }
             }
         }
     }
