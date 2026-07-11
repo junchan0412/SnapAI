@@ -2,14 +2,14 @@ import SwiftUI
 
 /// 轻量 Markdown 渲染器(block 级解析 + 行内用 AttributedString)。
 /// 不依赖第三方库;纯函数式构建视图,避开本机 CLT 缺失的 @State 宏。
-struct MarkdownView: View {
+struct MarkdownView: View, Equatable {
     let text: String
 
     var body: some View {
         let blocks = MarkdownParser.parse(text)
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                view(for: block)
+            ForEach(blocks.indices, id: \.self) { index in
+                view(for: blocks[index])
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -30,20 +30,20 @@ struct MarkdownView: View {
 
         case .bullet(let items):
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                ForEach(items.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: 6) {
                         Text("•").foregroundStyle(.secondary)
-                        inlineText(item).frame(maxWidth: .infinity, alignment: .leading)
+                        inlineText(items[index]).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
 
         case .ordered(let items):
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                ForEach(items.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: 6) {
-                        Text("\(idx + 1).").foregroundStyle(.secondary).monospacedDigit()
-                        inlineText(item).frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(index + 1).").foregroundStyle(.secondary).monospacedDigit()
+                        inlineText(items[index]).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }

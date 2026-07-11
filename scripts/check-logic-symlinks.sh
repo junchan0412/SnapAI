@@ -45,7 +45,7 @@ FORBIDDEN_IMPORTS=(
 )
 
 MAX_LOGIC_SYMLINKS=36
-MIN_LOGIC_REAL_SOURCES=40
+MIN_LOGIC_REAL_SOURCES=41
 
 find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
 

@@ -40,6 +40,7 @@ PrivacySubmissionPreview.swift
 Provider.swift
 RequestSession.swift
 ResultCommand.swift
+ResultContentPresentation.swift
 ResultDiagnosticsCommand.swift
 ResultPersistence.swift
 ResultPinCommand.swift

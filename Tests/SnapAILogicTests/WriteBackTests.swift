@@ -35,6 +35,29 @@ func testTextReplacementPreparationDelay() {
     "does not synthesize Shift-Left reselection when no reliable selection handle exists")
 }
 
+func testResultContentRenderModeAvoidsStreamingMarkdownReparse() {
+    expect(ResultContentRenderMode.resolve(text: "", isStreaming: false) == .empty,
+           "empty completed results do not build a content renderer")
+    expect(ResultContentRenderMode.resolve(text: "", isStreaming: true) == .waiting,
+           "empty streaming results show a lightweight waiting state")
+    expect(ResultContentRenderMode.resolve(text: "# partial", isStreaming: true) == .streamingText,
+           "partial streaming output stays plain text instead of reparsing markdown on every tick")
+    expect(ResultContentRenderMode.resolve(text: "# complete", isStreaming: false) == .markdown,
+           "completed output switches to markdown rendering")
+    expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
+                                               currentTime: 1.01,
+                                               isStreaming: true) == false,
+           "streaming auto-scroll suppresses updates above the 30 Hz budget")
+    expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
+                                               currentTime: 1.04,
+                                               isStreaming: true),
+           "streaming auto-scroll advances after its frame budget")
+    expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
+                                               currentTime: 1.001,
+                                               isStreaming: false),
+           "completed output always receives a final bottom alignment")
+}
+
 func testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath() {
   let directory = URL(fileURLWithPath: "/tmp/snapai-test-temp", isDirectory: true)
   let firstUUID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!

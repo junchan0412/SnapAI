@@ -72,6 +72,17 @@ require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed
 require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAI/RoutingMetrics.swift
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
+require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultView.swift
+require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
+require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
+require_no_match "streaming markdown reparse" 'if vm\.isStreaming.*MarkdownView|MarkdownView\(text: vm\.output\).*vm\.isStreaming' Sources/SnapAI/ResultView.swift
+require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\.scrollTo\("output"' Sources/SnapAI/ResultView.swift
+[ -f Sources/SnapAILogic/ResultContentPresentation.swift ] \
+  || fail "SnapAILogic ResultContentPresentation source is missing"
+[ ! -L Sources/SnapAILogic/ResultContentPresentation.swift ] \
+  || fail "SnapAILogic ResultContentPresentation must be a real source file"
+[ ! -e Sources/SnapAI/ResultContentPresentation.swift ] \
+  || fail "ResultContentPresentation must not be duplicated in the app target"
 
 scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \
