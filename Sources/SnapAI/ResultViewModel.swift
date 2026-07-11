@@ -1,4 +1,3 @@
-import SwiftUI
 import Combine
 import AppKit
 import SnapAILogic
@@ -8,7 +7,6 @@ import SnapAILogic
 final class ResultViewModel: ObservableObject {
 
     @Published var sourceText: String = ""
-    @Published var output: String = ""
     @Published var isStreaming: Bool = false
     @Published var errorMessage: String?
     @Published var followUp: String = ""
@@ -22,8 +20,19 @@ final class ResultViewModel: ObservableObject {
     @Published var routeNote: String?
     @Published var requestDiagnosticText: String = ""
     @Published var requestDiagnosticBriefText: String = ""
+    let outputState = ResultOutputState()
+    let thinkingState = ResultThinkingState()
+
+    var output: String {
+        get { outputState.text }
+        set { outputState.replace(with: newValue) }
+    }
+
     /// #2 Thinking/推理文本(Anthropic 或 DeepSeek R1 的 <think> 内容)
-    @Published var thinkingText: String = ""
+    var thinkingText: String {
+        get { thinkingState.text }
+        set { thinkingState.replace(with: newValue) }
+    }
     @Published var showThinking: Bool = false
     @Published var showRouteDetails: Bool = false
 

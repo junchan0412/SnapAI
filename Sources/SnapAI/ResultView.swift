@@ -204,22 +204,9 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     sourceEditor
 
-                    // #2 thinking 展开/折叠
-                    if !vm.thinkingText.isEmpty {
-                        DisclosureGroup(
-                            isExpanded: Binding(get: { vm.showThinking }, set: { vm.showThinking = $0 }),
-                            content: {
-                                Text(vm.thinkingText).font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary).textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8).background(Color.primary.opacity(0.04))
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            },
-                            label: {
-                                Label("思考过程", systemImage: "brain").font(.caption).foregroundStyle(.secondary)
-                            }
-                        )
-                    }
+                    ResultThinkingSection(state: vm.thinkingState,
+                                          isExpanded: Binding(get: { vm.showThinking },
+                                                              set: { vm.showThinking = $0 }))
 
                     if let err = vm.errorMessage {
                         VStack(alignment: .leading, spacing: 6) {
@@ -261,37 +248,15 @@ struct ResultView: View {
                         }
                     }
 
-                    switch ResultContentRenderMode.resolve(text: vm.output,
-                                                           isStreaming: vm.isStreaming) {
-                    case .waiting:
-                        HStack(spacing: 6) {
-                            Text("思考中").foregroundStyle(.secondary)
-                            TypingCursor()
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading).id("output")
-                        .accessibilityLabel("AI 正在生成结果")
-                    case .streamingText:
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(vm.output)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            TypingCursor()
-                        }
-                        .id("output")
-                        .accessibilityLabel("AI 正在生成结果")
-                    case .markdown:
-                        MarkdownView(text: vm.output)
-                            .equatable()
-                            .id("output")
-                    case .empty:
-                        EmptyView()
-                    }
+                    ResultOutputDisplay(state: vm.outputState,
+                                        isStreaming: vm.isStreaming)
                 }
                 .padding(14)
             }
-            .onChange(of: vm.output) {
+            .background(ResultOutputAutoScrollObserver(state: vm.outputState) {
                 guard vm.shouldAutoScroll() else { return }
                 proxy.scrollTo("output", anchor: .bottom)
-            }
+            })
             .onChange(of: vm.isStreaming) {
                 guard !vm.isStreaming else { return }
                 vm.markFinalAutoScroll()
@@ -377,75 +342,13 @@ struct ResultView: View {
                 .disabled(!canSendFollowUp)
             }
 
-            resultActionsToolbar
+            ResultActionsToolbar(vm: vm, outputState: vm.outputState)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
-    private var resultActionsToolbar: some View {
-        HStack(spacing: 7) {
-            Spacer(minLength: 0)
-
-                Button { vm.copyOutput() } label: { resultCommandImage(.copyOutput) }
-                    .controlSize(.small)
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .help(resultCommandHelpText(.copyOutput))
-                    .accessibilityLabel(resultCommandAccessibilityLabel(.copyOutput))
-                    .disabled(!resultCommandEnabled(.copyOutput))
-
-                Button { vm.copyConversationMarkdown() } label: { resultCommandImage(.copyMarkdown) }
-                    .controlSize(.small)
-                    .keyboardShortcut("c", modifiers: [.command, .option])
-                    .help(resultCommandHelpText(.copyMarkdown))
-                    .accessibilityLabel(resultCommandAccessibilityLabel(.copyMarkdown))
-                    .disabled(!resultCommandEnabled(.copyMarkdown))
-
-                Button { vm.replaceOriginal() } label: { resultCommandImage(.replaceOriginal) }
-                    .controlSize(.small)
-                    .keyboardShortcut(.return, modifiers: [.command])
-                    .help(resultCommandHelpText(.replaceOriginal))
-                    .accessibilityLabel(resultCommandAccessibilityLabel(.replaceOriginal))
-                    .disabled(!resultCommandEnabled(.replaceOriginal))
-
-                Button { vm.appendToDocument() } label: { resultCommandImage(.appendToDocument) }
-                    .controlSize(.small)
-                    .keyboardShortcut(.return, modifiers: [.command, .shift])
-                    .help(resultCommandHelpText(.appendToDocument))
-                    .accessibilityLabel(resultCommandAccessibilityLabel(.appendToDocument))
-                    .disabled(!resultCommandEnabled(.appendToDocument))
-
-                // #7 导出
-                Button { vm.exportConversation() } label: { resultCommandImage(.exportConversation) }
-                    .controlSize(.small)
-                    .keyboardShortcut("e", modifiers: [.command])
-                    .help(resultCommandHelpText(.exportConversation))
-                    .accessibilityLabel(resultCommandAccessibilityLabel(.exportConversation))
-                    .disabled(!resultCommandEnabled(.exportConversation))
-
-                if vm.isStreaming {
-                    Button { vm.cancel() } label: { resultCommandImage(.stop) }
-                        .controlSize(.small)
-                        .keyboardShortcut(.cancelAction)
-                        .help(resultCommandHelpText(.stop))
-                        .accessibilityLabel(resultCommandAccessibilityLabel(.stop))
-                        .disabled(!resultCommandEnabled(.stop))
-                } else {
-                    Button { vm.regenerate() } label: { resultCommandImage(.regenerate) }
-                        .controlSize(.small)
-                        .keyboardShortcut("r", modifiers: [.command])
-                        .help(resultCommandHelpText(.regenerate))
-                        .accessibilityLabel(resultCommandAccessibilityLabel(.regenerate))
-                        .disabled(!resultCommandEnabled(.regenerate))
-                }
-        }
-    }
-
     private var canSendFollowUp: Bool {
         !vm.isStreaming && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func resultCommandImage(_ action: ResultCommandAction) -> Image {
-        Image(systemName: ResultCommandFactory.descriptor(for: action, in: resultCommandState).systemImage)
     }
 
     private var errorRetryButton: some View {
@@ -479,13 +382,6 @@ struct ResultView: View {
         ResultCommandFactory.isEnabled(action, in: resultCommandState)
     }
 
-    private func resultCommandHelpText(_ action: ResultCommandAction) -> String {
-        ResultCommandFactory.helpText(for: action, in: resultCommandState)
-    }
-
-    private func resultCommandAccessibilityLabel(_ action: ResultCommandAction) -> String {
-        ResultCommandFactory.accessibilityLabel(for: action, in: resultCommandState)
-    }
 }
 
 // MARK: - 追问框(#5 支持↑/↓浏览历史)

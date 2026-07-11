@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import Combine
 import Foundation
 
 #if !SNAPAI_MANUAL_TEST_MAIN
@@ -56,6 +57,29 @@ func testResultContentRenderModeAvoidsStreamingMarkdownReparse() {
                                                currentTime: 1.001,
                                                isStreaming: false),
            "completed output always receives a final bottom alignment")
+}
+
+func testResultLiveOutputStatesPublishIndependently() {
+    let output = ResultOutputState()
+    let thinking = ResultThinkingState()
+    var outputChanges = 0
+    var thinkingChanges = 0
+    let outputSubscription = output.objectWillChange.sink { outputChanges += 1 }
+    let thinkingSubscription = thinking.objectWillChange.sink { thinkingChanges += 1 }
+
+    expect(output.replace(with: "partial"), "new output text is accepted")
+    expect(outputChanges == 1, "output state publishes its own streaming update")
+    expect(thinkingChanges == 0, "output updates do not invalidate thinking observers")
+    expect(!output.replace(with: "partial"), "identical output text is ignored")
+    expect(outputChanges == 1, "identical output does not publish another update")
+
+    expect(thinking.replace(with: "reasoning"), "new thinking text is accepted")
+    expect(outputChanges == 1, "thinking updates do not invalidate output observers")
+    expect(thinkingChanges == 1, "thinking state publishes its own update")
+    expect(!thinking.replace(with: "reasoning"), "identical thinking text is ignored")
+    expect(thinkingChanges == 1, "identical thinking does not publish another update")
+
+    withExtendedLifetime((outputSubscription, thinkingSubscription)) {}
 }
 
 func testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath() {

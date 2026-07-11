@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.60 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.61 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.60 版本重点
+## 1.6.61 版本重点
 
-- 历史搜索、FTS fallback、semantic search 和 facets 计算移出 SwiftUI `body`,统一在后台生成 presentation snapshot。
-- 搜索输入增加 180ms debounce 和 generation 校验,快速输入不会堆叠重复查询,旧结果也不会覆盖新筛选。
-- 历史窗口不再观察整个 `AppSettings`;只订阅历史、上限与已保存筛选,减少无关设置导致的全列表刷新。
-- 标签输入草稿不再通过 `@Published` 广播整张字典,避免每次击键 invalidation 全部历史卡片。
-- 日期 formatter 改为共享缓存;上下文包正文改为点击时按需生成,减少列表渲染分配和常驻内存。
+- 流式 `output` 和 `thinkingText` 不再由宽 `ResultViewModel` 直接发布,避免每个 token invalidation 整个结果窗口。
+- output、thinking 使用两个独立 observable state,内容渲染、思考区和操作工具栏只订阅各自需要的高频数据。
+- 相同 output/thinking 文本会被短路,不再产生重复 publisher 通知。
+- 自动滚动观察器拆为零尺寸 leaf view,每个 typewriter tick 只更新输出、滚动与必要的操作可用性区域。
+- `ResultView` 从 628 行降至 524 行,高频展示组件独立为 142 行,并移除 ViewModel 对 SwiftUI 的无用依赖。
 
-详细发布说明见 [SnapAI 1.6.60 Release Notes](docs/RELEASE_NOTES_1.6.60.md),阶段性复盘见 [SnapAI 1.6.60 Iteration Report](docs/ITERATION_REPORT_1.6.60.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.61 Release Notes](docs/RELEASE_NOTES_1.6.61.md),阶段性复盘见 [SnapAI 1.6.61 Iteration Report](docs/ITERATION_REPORT_1.6.61.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.60
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.61
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
