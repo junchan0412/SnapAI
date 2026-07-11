@@ -43,6 +43,7 @@ final class ResultViewModel: ObservableObject {
     private var client: AIClient
     private let completionCoordinator: ResultCompletionCoordinator
     private let routeAttemptCoordinator: ResultRouteAttemptCoordinator
+    private let requestPreparationCoordinator: ResultRequestPreparationCoordinator
     private var history: [ChatMessage] = []
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
@@ -80,6 +81,7 @@ final class ResultViewModel: ObservableObject {
         self.client = AIClient(settings: settings)
         self.completionCoordinator = ResultCompletionCoordinator(settings: settings)
         self.routeAttemptCoordinator = ResultRouteAttemptCoordinator(settings: settings)
+        self.requestPreparationCoordinator = ResultRequestPreparationCoordinator(settings: settings)
     }
 
     // #3 图片(来自截图/粘贴)
@@ -420,66 +422,26 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func runStream(hasImage: Bool) {
-        refreshSubmissionPayloadCharacterCounts()
-        let contextDiagnostic = AIRequestContextDiagnostic.make(settings: settings)
-        let requestHasImage = hasImage || history.contains { $0.imageData != nil }
-        let payloadDiagnostic = AIRequestPayloadDiagnostic.make(messages: history,
-                                                                explicitHasImage: requestHasImage)
-        let actionPipeline = ActionPipelineDiagnostic.make(action: action,
-                                                           settings: settings,
-                                                           hasImage: requestHasImage,
-                                                           captureMethod: pendingCaptureMethod,
-                                                           sourceKind: pendingSourceContext?.kind)
-        let routes = AIRequestRouter.candidates(settings: settings,
-                                                action: action,
-                                                sourceText: sourceText,
-                                                hasImage: requestHasImage,
-                                                routingTextCharacterCount: payloadDiagnostic.textCharacterCount,
-                                                routingMetrics: RoutingMetricsStore.shared.snapshot())
-        guard !routes.isEmpty else {
-            errorMessage = "没有可用的 AI 供应商或模型,请在设置中启用至少一个模型。"
-            let unavailableSummary = AIRequestDiagnostics.noCandidateRouteReasonSummary(providers: settings.providers)
-            let unavailableRecovery = AIRequestDiagnostics.noCandidateRouteRecoverySuggestion(providers: settings.providers)
-            updateRequestDiagnostics(AIRequestDiagnostics(actionName: action.name,
-                                                          actionRequiresReasoning: action.thinkingMode,
-                                                          sourceCharacterCount: sourceText.count,
-                                                          hasImage: requestHasImage,
-                                                          fallbackEnabled: settings.fallbackEnabled,
-                                                          autoRouteEnabled: settings.autoRouteEnabled,
-                                                          routingPreference: settings.routingPreference,
-                                                          candidateCount: 0,
-                                                          actionPipeline: actionPipeline,
-                                                          context: contextDiagnostic,
-                                                          payload: payloadDiagnostic,
-                                                          submissionPrivacy: submissionPrivacy,
-                                                          candidateRoutes: [],
-                                                          candidateUnavailabilitySummary: unavailableSummary,
-                                                          candidateUnavailabilityRecoverySuggestion: unavailableRecovery))
-            return
-        }
-        let diagnostics = AIRequestDiagnostics(actionName: action.name,
-                                               actionRequiresReasoning: action.thinkingMode,
-                                               sourceCharacterCount: sourceText.count,
-                                               hasImage: requestHasImage,
-                                               fallbackEnabled: settings.fallbackEnabled,
-                                               autoRouteEnabled: settings.autoRouteEnabled,
-                                               routingPreference: settings.routingPreference,
-                                               candidateCount: routes.count,
-                                               actionPipeline: actionPipeline,
-                                               context: contextDiagnostic,
-                                               payload: payloadDiagnostic,
-                                               submissionPrivacy: submissionPrivacy,
-                                               candidateRoutes: routes)
-        runRoute(at: 0, routes: routes, diagnostics: diagnostics)
-    }
-
-    private func refreshSubmissionPayloadCharacterCounts() {
-        guard let submissionPrivacy else { return }
-        let counts = RequestSession.payloadCharacterCounts(messages: history)
-        self.submissionPrivacy = submissionPrivacy.withPayloadCharacterCounts(
-            finalUserPromptCharacterCount: counts.finalUserPrompt,
-            systemPromptCharacterCount: counts.systemPrompt
+        let input = ResultRequestPreparationInput(
+            action: action,
+            sourceText: sourceText,
+            history: history,
+            explicitHasImage: hasImage,
+            captureMethod: pendingCaptureMethod,
+            sourceContext: pendingSourceContext,
+            submissionPrivacy: submissionPrivacy
         )
+        switch requestPreparationCoordinator.prepare(input) {
+        case .ready(let request):
+            submissionPrivacy = request.submissionPrivacy
+            runRoute(at: 0,
+                     routes: request.routes,
+                     diagnostics: request.diagnostics)
+        case .unavailable(let message, let diagnostics, let privacy):
+            submissionPrivacy = privacy
+            errorMessage = message
+            updateRequestDiagnostics(diagnostics)
+        }
     }
 
     private func runRoute(at index: Int,
