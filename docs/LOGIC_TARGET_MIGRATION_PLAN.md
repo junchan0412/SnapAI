@@ -2,7 +2,7 @@
 
 ## 当前基线
 
-- 版本:1.6.61
+- 版本:1.6.62
 - `SnapAILogic` 真实 Swift 源码:43 个
 - `SnapAILogic` 剩余 symlink:36 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 43 个
@@ -20,6 +20,7 @@
 - 结果内容展示:`ResultContentPresentation` 将等待、流式纯文本和完成态 Markdown 明确分层,并集中定义 30Hz 自动滚动策略,避免流式阶段反复解析完整 Markdown。
 - 历史窗口刷新:`HistoryWindowRefreshPolicy` 集中定义搜索 debounce 与 generation 校验;app target 的 `HistoryWindowModel` 负责后台构建 presentation snapshot,SwiftUI view 不再直接执行数据库与 semantic search。
 - 结果实时状态:`ResultLiveOutputState` 将 output 与 thinking 分为独立 observable source,重复文本更新短路;app target 仅保留具体 SwiftUI 内容、滚动观察器和操作工具栏。
+- 结果完成状态:`ResultCompletionState` 将 elapsed 与 characterCount 合并为可去重 snapshot;`ResultDiagnosticTextSnapshot` 将 full/brief diagnostics 合并为单一根级 value update。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析

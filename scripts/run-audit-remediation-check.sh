@@ -74,6 +74,7 @@ require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
 require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
+require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -82,8 +83,14 @@ require_match "isolated thinking observer" '@ObservedObject var state: ResultThi
 require_match "isolated action toolbar observer" '@ObservedObject var outputState: ResultOutputState' Sources/SnapAI/ResultLiveOutputView.swift
 require_no_match "broad published output" '@Published var output:' Sources/SnapAI/ResultViewModel.swift
 require_no_match "broad published thinking" '@Published var thinkingText:' Sources/SnapAI/ResultViewModel.swift
+require_no_match "split completion metrics publication" '@Published var (elapsed|charCount):' Sources/SnapAI/ResultViewModel.swift
+require_no_match "split diagnostic text publication" '@Published var requestDiagnostic(Brief)?Text:' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result view model SwiftUI dependency" '^import SwiftUI$' Sources/SnapAI/ResultViewModel.swift
 require_match "deduplicated live output publication" 'guard self\.text != text else \{ return false \}' Sources/SnapAILogic/ResultLiveOutputState.swift
+require_match "single diagnostic snapshot publication" '@Published private var diagnosticText: ResultDiagnosticTextSnapshot' Sources/SnapAI/ResultViewModel.swift
+require_match "completion metrics leaf observer" '@ObservedObject var state: ResultCompletionState' Sources/SnapAI/ResultCompletionMetricsView.swift
+require_match "completion metrics snapshot update" 'completionState\.replace\(with: completion\)' Sources/SnapAI/ResultViewModel.swift
+require_match "completion snapshot test" 'testResultCompletionStatePublishesOneDeduplicatedSnapshot' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift

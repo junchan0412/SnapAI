@@ -82,6 +82,28 @@ func testResultLiveOutputStatesPublishIndependently() {
     withExtendedLifetime((outputSubscription, thinkingSubscription)) {}
 }
 
+func testResultCompletionStatePublishesOneDeduplicatedSnapshot() {
+    let state = ResultCompletionState()
+    var changes = 0
+    let subscription = state.objectWillChange.sink { changes += 1 }
+    let metrics = ResultCompletionMetrics(elapsed: 1.25, characterCount: 320)
+
+    expect(state.replace(with: metrics), "new completion metrics are accepted")
+    expect(changes == 1, "elapsed and character count publish as one snapshot")
+    expect(state.metrics == metrics, "completion state keeps both metrics together")
+    expect(!state.replace(with: metrics), "identical completion metrics are ignored")
+    expect(changes == 1, "identical completion metrics do not republish")
+    expect(state.reset(), "non-empty completion state resets")
+    expect(changes == 2, "reset publishes one empty snapshot")
+    expect(!state.reset(), "already-empty completion state ignores duplicate reset")
+    expect(changes == 2, "duplicate reset does not republish")
+
+    let diagnostics = ResultDiagnosticTextSnapshot(fullText: "full", briefText: "brief")
+    expect(diagnostics != .empty && diagnostics.fullText == "full" && diagnostics.briefText == "brief",
+           "diagnostic text snapshot keeps full and brief variants in one value")
+    withExtendedLifetime(subscription) {}
+}
+
 func testScreenCaptureTemporaryFileUsesUniqueUnpredictablePath() {
   let directory = URL(fileURLWithPath: "/tmp/snapai-test-temp", isDirectory: true)
   let firstUUID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
