@@ -526,6 +526,34 @@ func testPrivacySubmissionPreviewRendersSourceResendPayload() {
            "source resend preview does not expose redacted sensitive text")
 }
 
+func testPrivacyPreparedSubmissionPassthroughPreservesRiskProtection() {
+    let lowRisk = PrivacyPreparedSubmission.passthrough(
+        text: "继续解释",
+        saveHistoryEnabled: false,
+        historyContentStorage: .full
+    )
+    expect(lowRisk.text == "继续解释",
+           "passthrough submission preserves unchanged text")
+    expect(lowRisk.diagnostic.riskAssessment.level == .low,
+           "ordinary passthrough text remains low risk")
+    expect(!lowRisk.diagnostic.previewRequired,
+           "passthrough does not invent a preview confirmation")
+    expect(lowRisk.diagnostic.historyTags.contains(PrivacyHistoryTag.historyDisabled),
+           "passthrough preserves disabled-history diagnostics")
+
+    let highRisk = PrivacyPreparedSubmission.passthrough(
+        text: "Authorization: Bearer sk-live-secret-value-1234567890",
+        saveHistoryEnabled: true,
+        historyContentStorage: .full
+    )
+    expect(highRisk.diagnostic.riskAssessment.level == .high,
+           "secret-bearing passthrough text still receives high-risk classification")
+    expect(highRisk.diagnostic.effectiveHistoryContentStorage == .metadataOnly,
+           "high-risk passthrough downgrades history content to metadata only")
+    expect(highRisk.diagnostic.contentExportProtectionEnabled,
+           "high-risk passthrough protects conversation export content")
+}
+
 func testPromptPrivacyEvalCorpusKeepsInjectionInUserPayloadAndRedactsSecrets() {
     let fixtures: [(name: String, text: String, forbidden: [String])] = [
         (
