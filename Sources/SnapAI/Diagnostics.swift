@@ -412,6 +412,7 @@ struct PermissionHealthSnapshot {
                      textCaptureStatus: String = "none",
                      writeBackStatus: String = "none",
                      recentAIRequestStatus: String = "none",
+                     installLogStatus: PermissionInstallLogStatus = .noRecord,
                      includeSigningSummary: Bool = true) -> PermissionHealthSnapshot {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "0.0.0"
@@ -420,7 +421,6 @@ struct PermissionHealthSnapshot {
         let installPath = appURL.path
         let os = ProcessInfo.processInfo.operatingSystemVersionString
         let active = activeModelSummary(settings: settings)
-        let installLogStatus = UpdateChecker.latestInstallLogStatus()
         let requestReadiness = requestReadiness(settings: settings)
         let apiKeyHealth = apiKeyHealth(settings: settings)
         let secretStoreStatus = settings.secretStoreStatus == "not-checked"
@@ -442,7 +442,7 @@ struct PermissionHealthSnapshot {
             installDirectoryWritable: installDirectoryWritable(for: appURL),
             quarantineStatus: quarantineSummary(for: appURL),
             latestInstallLogPath: installLogStatus.diagnosticPath,
-            latestInstallLogAvailable: installLogStatus.url != nil,
+            latestInstallLogAvailable: installLogStatus.isAvailable,
             latestInstallLogStatus: installLogStatus.diagnosticCode,
             latestInstallLogRecoverySuggestion: installLogStatus.recoverySuggestion,
             signingSummary: includeSigningSummary ? signingSummary(for: appURL) : "未检查",
@@ -675,4 +675,18 @@ struct PermissionHealthSnapshot {
             return "签名检查失败: \(SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription))"
         }
     }
+}
+
+struct PermissionInstallLogStatus {
+    var diagnosticPath: String
+    var isAvailable: Bool
+    var diagnosticCode: String
+    var recoverySuggestion: String
+
+    static let noRecord = PermissionInstallLogStatus(
+        diagnosticPath: "none",
+        isAvailable: false,
+        diagnosticCode: "no-record",
+        recoverySuggestion: "暂无自动更新日志;如更新失败,请重新检查更新后再复制诊断"
+    )
 }

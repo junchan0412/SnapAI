@@ -340,6 +340,16 @@ registered_logic_tests=$(
   || fail "AppKit TextEditTransaction must stay out of SnapAILogic"
 [ ! -e Sources/SnapAILogic/MenuCoordinator.swift ] \
   || fail "AppKit MenuCoordinator must stay out of SnapAILogic"
+[ -f Sources/SnapAILogic/UpdateChecker.swift ] \
+  || fail "SnapAILogic migrated UpdateChecker source is missing"
+[ ! -L Sources/SnapAILogic/UpdateChecker.swift ] \
+  || fail "SnapAILogic migrated UpdateChecker must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/UpdateChecker.swift ] \
+  || fail "mixed app/logic UpdateChecker source must not return"
+[ -f Sources/SnapAI/UpdateCheckerApp.swift ] \
+  || fail "UpdateChecker app adapter is missing"
+require_line_count_at_most "UpdateChecker logic split" Sources/SnapAILogic/UpdateChecker.swift 650
+require_line_count_at_most "UpdateChecker app split" Sources/SnapAI/UpdateCheckerApp.swift 520
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
 
 echo "Audit remediation check: ok"
