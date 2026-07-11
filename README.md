@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.63 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.64 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.63 版本重点
+## 1.6.64 版本重点
 
-- 新增专用 `ResultCompletionCoordinator`,统一完成指标、usage、历史保存、设置持久化与自动写回顺序。
-- `startTime`、`savedToHistory`、`metricsFinished` 从 `ResultViewModel` 移出,完成生命周期不再散落在 UI 状态机中。
-- 新增 `ResultCompletionLifecycle`,确保同一请求只能完成一次,历史已保存状态在一次请求内保持单调。
-- fallback 会重新标记 route start,重试/追问会完整 reset lifecycle,保持原有耗时与历史语义。
-- `ResultViewModel` 从 716 行降至 691 行,并新增 700 行上限门禁。
+- 新增 `ResultRouteAttemptCoordinator`,统一 route preflight、scoped settings、fallback failure 与 metrics 记录。
+- 明显不适配或失效的 route 在 coordinator 中归约为 advance/unavailable/ready 三种结果,VM 只更新 UI 状态和推进请求。
+- 成功 elapsed 只采样一次,同一个值同时写入 diagnostics 和 routing metrics,避免毫秒级漂移。
+- typewriter 与非 typewriter 成功分支合并,删除重复 diagnostics/metrics 代码。
+- `ResultViewModel` 从 691 行降至 664 行,门禁进一步收紧到 670 行。
 
-详细发布说明见 [SnapAI 1.6.63 Release Notes](docs/RELEASE_NOTES_1.6.63.md),阶段性复盘见 [SnapAI 1.6.63 Iteration Report](docs/ITERATION_REPORT_1.6.63.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.64 Release Notes](docs/RELEASE_NOTES_1.6.64.md),阶段性复盘见 [SnapAI 1.6.64 Iteration Report](docs/ITERATION_REPORT_1.6.64.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.63
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.64
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

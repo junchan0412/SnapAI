@@ -42,6 +42,7 @@ final class ResultViewModel: ObservableObject {
     let settings: AppSettings
     private var client: AIClient
     private let completionCoordinator: ResultCompletionCoordinator
+    private let routeAttemptCoordinator: ResultRouteAttemptCoordinator
     private var history: [ChatMessage] = []
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
@@ -78,6 +79,7 @@ final class ResultViewModel: ObservableObject {
         self.settings = settings
         self.client = AIClient(settings: settings)
         self.completionCoordinator = ResultCompletionCoordinator(settings: settings)
+        self.routeAttemptCoordinator = ResultRouteAttemptCoordinator(settings: settings)
     }
 
     // #3 图片(来自截图/粘贴)
@@ -483,41 +485,32 @@ final class ResultViewModel: ObservableObject {
     private func runRoute(at index: Int,
                           routes: [AIRequestRoute],
                           diagnostics: AIRequestDiagnostics) {
-        let route = routes[index]
-        var routeDiagnostics = diagnostics
-        let hasNextRoute = routes.indices.contains(index + 1)
-        if routeDiagnostics.shouldSkipRouteBeforeRequest(route,
-                                                         autoRouteEnabled: settings.autoRouteEnabled,
-                                                         hasNextRoute: hasNextRoute) {
-            routeDiagnostics.mark(route: route,
-                                  status: .skipped,
-                                  message: routeDiagnostics.routeSkipMessage(for: route))
-            updateRequestDiagnostics(routeDiagnostics)
-            routeNote = routeDiagnostics.routeSkipSwitchNote(for: route,
-                                                             nextRoute: routes[index + 1])
-            runRoute(at: index + 1, routes: routes, diagnostics: routeDiagnostics)
+        let preparation = routeAttemptCoordinator.prepare(index: index,
+                                                          routes: routes,
+                                                          diagnostics: diagnostics)
+        switch preparation {
+        case .advance(let nextIndex, let diagnostics, let note):
+            updateRequestDiagnostics(diagnostics)
+            if let note { routeNote = note }
+            runRoute(at: nextIndex, routes: routes, diagnostics: diagnostics)
             return
-        }
-        routeDiagnostics.mark(route: route, status: .running)
-        updateRequestDiagnostics(routeDiagnostics)
-
-        guard let scoped = AIRequestRouter.scopedSettings(from: settings, route: route) else {
-            routeDiagnostics.mark(route: route,
-                                  status: .skipped,
-                                  message: "路由模型不可用或供应商已禁用")
-            updateRequestDiagnostics(routeDiagnostics)
-            if hasNextRoute {
-                runRoute(at: index + 1, routes: routes, diagnostics: routeDiagnostics)
-            } else {
-                errorMessage = "路由到的模型不可用,请检查供应商和模型设置。"
-            }
+        case .unavailable(let diagnostics, let message):
+            updateRequestDiagnostics(diagnostics)
+            errorMessage = message
             return
+        case .ready(let attempt):
+            updateRequestDiagnostics(attempt.diagnostics)
+            executeRoute(attempt, routes: routes)
         }
+    }
 
-        client = AIClient(settings: scoped)
+    private func executeRoute(_ attempt: ResultRunnableRouteAttempt,
+                              routes: [AIRequestRoute]) {
+        let route = attempt.route
+        client = AIClient(settings: attempt.scopedSettings)
         activeProviderName = route.providerName
         activeModelName = route.modelName
-        routeNote = routeDiagnostics.routeDisplayNote(for: route)
+        routeNote = attempt.routeNote
 
         isStreaming = true
         streamDone = false
@@ -557,25 +550,17 @@ final class ResultViewModel: ObservableObject {
                 self.typewriterBuffer.enqueue(finalVisibleText)
             }
             if let error = error {
-                let failure = FallbackRunner.routeFailure(
+                let recordedFailure = self.routeAttemptCoordinator.recordFailure(
                     error: error,
                     outputText: self.fullText,
                     thinkingText: self.thinkingText,
                     routeStartedAt: routeStartedAt,
-                    route: route,
                     routes: routes,
-                    index: index,
-                    diagnostics: routeDiagnostics,
-                    fallbackEnabled: self.settings.fallbackEnabled
+                    attempt: attempt,
+                    firstTokenMilliseconds: firstTokenMilliseconds
                 )
-                let failedDiagnostics = failure.diagnosticsMarkingFailure(routeDiagnostics,
-                                                                          route: route)
-                RoutingMetricsStore.shared.recordFailure(
-                    route: route,
-                    elapsedMilliseconds: failure.elapsedMilliseconds,
-                    firstTokenMilliseconds: firstTokenMilliseconds,
-                    reason: failure.safeErrorMessage
-                )
+                let failure = recordedFailure.failure
+                let failedDiagnostics = recordedFailure.diagnostics
                 self.updateRequestDiagnostics(failedDiagnostics)
                 if failure.decision.shouldTryNext {
                     self.stopTypewriter()
@@ -585,7 +570,9 @@ final class ResultViewModel: ObservableObject {
                     self.thinkingText = self.streamAccumulator.thinkingText
                     self.errorMessage = nil
                     self.routeNote = route.fallbackSwitchNote
-                    self.runRoute(at: index + 1, routes: routes, diagnostics: failedDiagnostics)
+                    self.runRoute(at: attempt.index + 1,
+                                  routes: routes,
+                                  diagnostics: failedDiagnostics)
                     return
                 }
                 if let note = failure.decision.userNote {
@@ -597,33 +584,19 @@ final class ResultViewModel: ObservableObject {
                 self.typewriterBuffer.removeAll()
                 self.isStreaming = false
                 self.finishMetrics(recordUsage: false, saveHistory: false)
-            } else if !typewriterOn {
-                var completedDiagnostics = routeDiagnostics
-                completedDiagnostics.mark(route: route,
-                                          status: .succeeded,
-                                          elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
-                                          outputCharacterCount: self.fullText.count)
-                RoutingMetricsStore.shared.recordSuccess(
-                    route: route,
-                    elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
-                    firstTokenMilliseconds: firstTokenMilliseconds
-                )
-                self.updateRequestDiagnostics(completedDiagnostics)
-                self.output = self.fullText
-                self.isStreaming = false
-                self.finishMetrics(recordUsage: true, saveHistory: true)
             } else {
-                var completedDiagnostics = routeDiagnostics
-                completedDiagnostics.mark(route: route,
-                                          status: .succeeded,
-                                          elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
-                                          outputCharacterCount: self.fullText.count)
-                RoutingMetricsStore.shared.recordSuccess(
-                    route: route,
-                    elapsedMilliseconds: AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt),
-                    firstTokenMilliseconds: firstTokenMilliseconds
+                let completedDiagnostics = self.routeAttemptCoordinator.recordSuccess(
+                    attempt: attempt,
+                    routeStartedAt: routeStartedAt,
+                    firstTokenMilliseconds: firstTokenMilliseconds,
+                    outputCharacterCount: self.fullText.count
                 )
                 self.updateRequestDiagnostics(completedDiagnostics)
+                if !typewriterOn {
+                    self.output = self.fullText
+                    self.isStreaming = false
+                    self.finishMetrics(recordUsage: true, saveHistory: true)
+                }
             }
         }
     }
