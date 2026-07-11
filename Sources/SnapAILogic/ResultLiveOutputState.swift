@@ -25,6 +25,14 @@ public final class ResultOutputState: ObservableObject {
         self.text = text
         return true
     }
+
+    /// 追加流式可见文本，避免调用方通过完整 getter/setter 重建既有结果。
+    @discardableResult
+    public func append(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        self.text.append(contentsOf: text)
+        return true
+    }
 }
 
 public final class ResultThinkingState: ObservableObject {

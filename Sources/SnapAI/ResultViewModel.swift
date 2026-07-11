@@ -44,24 +44,13 @@ final class ResultViewModel: ObservableObject {
     private let completionCoordinator: ResultCompletionCoordinator
     private let routeAttemptCoordinator: ResultRouteAttemptCoordinator
     private let requestPreparationCoordinator: ResultRequestPreparationCoordinator
+    private let streamingCoordinator: ResultStreamingCoordinator
     private var history: [ChatMessage] = []
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
     private var requestDiagnostics: AIRequestDiagnostics?
-    private var streamAccumulator = StreamingAccumulator()
     private var lastAutoScrollTime: TimeInterval = 0
-
-    // 打字机
-    private var streamDone: Bool = false
-    private var typewriterTimer: Timer?
-    private var typewriterBuffer = TypewriterBuffer()
-    private var charsPerTick: Int { settings.typewriterSpeed.charsPerTick }
-    private var tickInterval: TimeInterval { settings.typewriterSpeed.tickInterval }
-    private var fullText: String {
-        get { streamAccumulator.outputText }
-        set { streamAccumulator.outputText = newValue }
-    }
 
     // #5 追问历史(↑/↓ 浏览)
     private var followUpHistory = FollowUpHistoryStore()
@@ -82,6 +71,7 @@ final class ResultViewModel: ObservableObject {
         self.completionCoordinator = ResultCompletionCoordinator(settings: settings)
         self.routeAttemptCoordinator = ResultRouteAttemptCoordinator(settings: settings)
         self.requestPreparationCoordinator = ResultRequestPreparationCoordinator(settings: settings)
+        self.streamingCoordinator = ResultStreamingCoordinator()
     }
 
     // #3 图片(来自截图/粘贴)
@@ -90,7 +80,7 @@ final class ResultViewModel: ObservableObject {
     private var pendingCaptureMethod: TextCaptureMethod?
     private var pendingSourceContext: SelectionSourceContext?
 
-    var completeText: String { fullText }
+    var completeText: String { streamingCoordinator.completeText }
     var isTranslation: Bool { action.isTranslation }
 
     func shouldAutoScroll(currentTime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
@@ -288,7 +278,7 @@ final class ResultViewModel: ObservableObject {
         // #5 追问历史
         followUpHistory.record(q)
         RequestSession.appendFollowUp(to: &history,
-                                      assistantText: fullText,
+                                      assistantText: completeText,
                                       userText: prepared.text)
         submissionPrivacy = prepared.diagnostic
         followUp = ""
@@ -335,20 +325,19 @@ final class ResultViewModel: ObservableObject {
     func cancel() {
         guard isStreaming else { return }
         client.cancel()
-        stopTypewriter()
-        output = fullText
-        typewriterBuffer.removeAll()
+        streamingCoordinator.stopAndDiscardPendingPresentation()
+        output = completeText
         isStreaming = false
         finishMetrics(recordUsage: false, saveHistory: false)
     }
 
     func copyOutput() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(fullText, forType: .string)
+        NSPasteboard.general.setString(completeText, forType: .string)
     }
 
     func copyConversationMarkdown() {
-        guard !fullText.isEmpty else { return }
+        guard !completeText.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(conversationExport().markdown, forType: .string)
     }
@@ -368,13 +357,13 @@ final class ResultViewModel: ObservableObject {
     /// #3 替换原文
     func replaceOriginal() {
         ResultWriteBackCoordinator.replace(original: replacementOriginalText,
-                                           replacement: fullText,
+                                           replacement: completeText,
                                            handler: onReplace)
     }
 
     /// #8 追加到文档
     func appendToDocument() {
-        ResultWriteBackCoordinator.append(text: fullText,
+        ResultWriteBackCoordinator.append(text: completeText,
                                           handler: onAppend)
     }
 
@@ -405,13 +394,10 @@ final class ResultViewModel: ObservableObject {
     // MARK: - 内部
 
     private func resetOutput() {
-        stopTypewriter()
-        streamAccumulator.resetForFallback()
-        typewriterBuffer.removeAll()
+        streamingCoordinator.reset()
         output = ""
         thinkingText = ""
         showRouteDetails = false
-        streamDone = false
         errorMessage = nil
         routeNote = nil
         requestDiagnostics = nil
@@ -475,46 +461,50 @@ final class ResultViewModel: ObservableObject {
         routeNote = attempt.routeNote
 
         isStreaming = true
-        streamDone = false
         let routeStartedAt = completionCoordinator.markRouteStarted()
         var firstTokenMilliseconds: Int?
-        let typewriterOn = settings.typewriterSpeed != .off
         let thinkingEnabled = action.thinkingMode
 
-        if typewriterOn { startTypewriter() }
+        streamingCoordinator.begin(
+            speed: settings.typewriterSpeed,
+            onOutputChunk: { [weak self] chunk in
+                self?.outputState.append(chunk)
+            },
+            onDrained: { [weak self] in
+                guard let self else { return }
+                self.isStreaming = false
+                self.finishMetrics(recordUsage: true, saveHistory: true)
+            }
+        )
+        let typewriterOn = streamingCoordinator.usesTypewriter
 
         client.stream(messages: history, action: action) { [weak self] token in
             guard let self = self else { return }
             if firstTokenMilliseconds == nil {
                 firstTokenMilliseconds = AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt)
             }
-            let visibleText = self.streamAccumulator.appendContentToken(
+            let immediateOutputDelta = self.streamingCoordinator.appendContentToken(
                 token,
-                extractsThinkTags: thinkingEnabled
-            )
-            self.thinkingText = self.streamAccumulator.thinkingText
-            if typewriterOn {
-                self.typewriterBuffer.enqueue(visibleText)
-            } else {
-                self.output = self.fullText
+                extractsThinkTags: thinkingEnabled)
+            self.thinkingText = self.streamingCoordinator.thinkingText
+            if let immediateOutputDelta {
+                self.outputState.append(immediateOutputDelta)
             }
         } onThinking: { [weak self] thinking in
             // Anthropic extended thinking 块
             guard let self = self else { return }
-            self.streamAccumulator.appendExternalThinking(thinking)
-            self.thinkingText = self.streamAccumulator.thinkingText
+            self.thinkingText = self.streamingCoordinator.appendExternalThinking(thinking)
         } onComplete: { [weak self] error in
             guard let self = self else { return }
-            let finalVisibleText = self.streamAccumulator.finish()
-            self.thinkingText = self.streamAccumulator.thinkingText
-            self.streamDone = true
-            if typewriterOn {
-                self.typewriterBuffer.enqueue(finalVisibleText)
+            let immediateOutputDelta = self.streamingCoordinator.finish()
+            self.thinkingText = self.streamingCoordinator.thinkingText
+            if let immediateOutputDelta {
+                self.outputState.append(immediateOutputDelta)
             }
             if let error = error {
                 let recordedFailure = self.routeAttemptCoordinator.recordFailure(
                     error: error,
-                    outputText: self.fullText,
+                    outputText: self.completeText,
                     thinkingText: self.thinkingText,
                     routeStartedAt: routeStartedAt,
                     routes: routes,
@@ -525,11 +515,9 @@ final class ResultViewModel: ObservableObject {
                 let failedDiagnostics = recordedFailure.diagnostics
                 self.updateRequestDiagnostics(failedDiagnostics)
                 if failure.decision.shouldTryNext {
-                    self.stopTypewriter()
+                    self.streamingCoordinator.reset()
                     self.output = ""
-                    self.streamAccumulator.resetForFallback()
-                    self.typewriterBuffer.removeAll()
-                    self.thinkingText = self.streamAccumulator.thinkingText
+                    self.thinkingText = self.streamingCoordinator.thinkingText
                     self.errorMessage = nil
                     self.routeNote = route.fallbackSwitchNote
                     self.runRoute(at: attempt.index + 1,
@@ -541,9 +529,8 @@ final class ResultViewModel: ObservableObject {
                     self.routeNote = note
                 }
                 self.errorMessage = failure.safeErrorMessage
-                self.stopTypewriter()
-                self.output = self.fullText
-                self.typewriterBuffer.removeAll()
+                self.streamingCoordinator.stopAndDiscardPendingPresentation()
+                self.output = self.completeText
                 self.isStreaming = false
                 self.finishMetrics(recordUsage: false, saveHistory: false)
             } else {
@@ -551,11 +538,10 @@ final class ResultViewModel: ObservableObject {
                     attempt: attempt,
                     routeStartedAt: routeStartedAt,
                     firstTokenMilliseconds: firstTokenMilliseconds,
-                    outputCharacterCount: self.fullText.count
+                    outputCharacterCount: self.completeText.count
                 )
                 self.updateRequestDiagnostics(completedDiagnostics)
                 if !typewriterOn {
-                    self.output = self.fullText
                     self.isStreaming = false
                     self.finishMetrics(recordUsage: true, saveHistory: true)
                 }
@@ -578,7 +564,7 @@ final class ResultViewModel: ObservableObject {
             saveHistory: saveHistory,
             action: action,
             sourceText: sourceText,
-            outputText: fullText,
+            outputText: completeText,
             errorMessage: errorMessage,
             providerName: activeProviderName,
             modelName: activeModelName,
@@ -596,31 +582,4 @@ final class ResultViewModel: ObservableObject {
         }
     }
 
-    private func startTypewriter() {
-        stopTypewriter()
-        let timer = Timer(timeInterval: tickInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.tick()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        typewriterTimer = timer
-    }
-
-    private func tick() {
-        let nextText = typewriterBuffer.dequeue(maxCharacters: charsPerTick)
-        if !nextText.isEmpty {
-            output += nextText
-        } else if streamDone && typewriterBuffer.isEmpty {
-            isStreaming = false
-            typewriterTimer?.invalidate()
-            typewriterTimer = nil
-            finishMetrics(recordUsage: true, saveHistory: true)
-        }
-    }
-
-    private func stopTypewriter() {
-        typewriterTimer?.invalidate()
-        typewriterTimer = nil
-    }
 }

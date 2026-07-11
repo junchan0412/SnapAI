@@ -49,6 +49,7 @@ ResultPersistence.swift
 ResultPinCommand.swift
 ResultRecoveryCommand.swift
 ResultRouteStatusText.swift
+ResultStreamingLifecycle.swift
 ResultWriteBackCoordinator.swift
 RoutingContextCommand.swift
 RoutingDiagnostics.swift

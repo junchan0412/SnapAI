@@ -2619,6 +2619,54 @@ func testTypewriterBufferDequeuesOnlyIncrementalChunks() {
     expect(buffer.isEmpty, "typewriter buffer releases consumed chunks")
 }
 
+func testResultStreamingLifecycleCoordinatesImmediateAndTypewriterPresentation() {
+    var lifecycle = ResultStreamingLifecycle()
+
+    let immediate = lifecycle.appendContentToken("正文<think>推理</think>尾部",
+                                                 extractsThinkTags: true,
+                                                 usesTypewriter: false)
+    expect(immediate == "正文尾部",
+           "streaming lifecycle returns complete visible output when typewriter is disabled")
+    expect(lifecycle.completeText == "正文尾部",
+           "streaming lifecycle retains provider-complete visible output")
+    expect(lifecycle.thinkingText == "推理",
+           "streaming lifecycle keeps thinking text isolated")
+    expect(lifecycle.appendContentToken("继续",
+                                        extractsThinkTags: false,
+                                        usesTypewriter: false) == "继续",
+           "immediate presentation returns only the new visible delta")
+    expect(lifecycle.completeText == "正文尾部继续",
+           "streaming lifecycle still retains complete output across deltas")
+    expect(lifecycle.finish(usesTypewriter: false) == "",
+           "immediate presentation only returns a trailing parser fragment at finish")
+
+    lifecycle.reset()
+    expect(lifecycle.appendContentToken("你好",
+                                        extractsThinkTags: false,
+                                        usesTypewriter: true) == nil,
+           "typewriter presentation buffers visible deltas")
+    expect(lifecycle.dequeue(maxCharacters: 1) == .chunk("你"),
+           "typewriter lifecycle reveals bounded grapheme chunks")
+    expect(lifecycle.dequeue(maxCharacters: 2) == .chunk("好"),
+           "typewriter lifecycle drains the remaining chunk")
+    expect(lifecycle.dequeue(maxCharacters: 2) == .waiting,
+           "an open provider stream waits after the presentation buffer drains")
+    expect(lifecycle.finish(usesTypewriter: true) == nil,
+           "typewriter completion remains buffered")
+    expect(lifecycle.dequeue(maxCharacters: 2) == .finished,
+           "streaming lifecycle finishes only after provider and presentation are both drained")
+
+    lifecycle.reset()
+    _ = lifecycle.appendContentToken("备用前的残留",
+                                     extractsThinkTags: false,
+                                     usesTypewriter: true)
+    lifecycle.reset()
+    expect(lifecycle.completeText.isEmpty && lifecycle.thinkingText.isEmpty,
+           "fallback reset releases visible and thinking text")
+    expect(lifecycle.dequeue(maxCharacters: 20) == .waiting,
+           "fallback reset releases queued typewriter chunks")
+}
+
 func testResultRouteStatusTextBuildsCompactPrimaryAndDetails() {
     let status = ResultRouteStatusText.make(providerName: "OpenAI",
                                             modelName: "gpt-4o-mini",
