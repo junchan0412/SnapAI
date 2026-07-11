@@ -3,7 +3,7 @@ import SwiftUI
 import SnapAILogic
 
 @MainActor
-final class WindowCoordinator {
+final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let settings: AppSettings
     private let settingsNavigation = SettingsNavigationModel()
     private let settingsWindowPinState = SettingsWindowPinState()
@@ -20,6 +20,7 @@ final class WindowCoordinator {
         self.settings = settings
         self.onSettingsChange = onSettingsChange
         self.onPinStateChange = onPinStateChange
+        super.init()
     }
 
     var selectedSettingsSection: SettingsSection {
@@ -37,6 +38,9 @@ final class WindowCoordinator {
     func showSettings(section: SettingsSection) {
         settingsNavigation.select(section)
         if let window = settingsWindow {
+            if window.contentViewController == nil {
+                window.contentViewController = makeSettingsContentController()
+            }
             applySettingsWindowPinnedState(to: window)
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
@@ -44,22 +48,13 @@ final class WindowCoordinator {
             return
         }
 
-        let view = SettingsView(
-            settings: settings,
-            navigation: settingsNavigation,
-            onChange: onSettingsChange,
-            pinState: settingsWindowPinState,
-            onPinChange: { [weak self] newValue in
-                self?.setSettingsWindowPinned(newValue)
-            }
-        )
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
+        let window = NSWindow(contentViewController: makeSettingsContentController())
         window.title = "SnapAI 设置"
         window.identifier = NSUserInterfaceItemIdentifier("SnapAI.SettingsWindow")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.isRestorable = false
+        window.delegate = self
         window.setContentSize(NSSize(width: 840, height: 620))
         window.minSize = NSSize(width: 760, height: 560)
         applySettingsWindowPinnedState(to: window)
@@ -90,30 +85,59 @@ final class WindowCoordinator {
 
     func showOnboarding() {
         if let window = onboardingWindow {
+            if window.contentViewController == nil {
+                window.contentViewController = makeOnboardingContentController()
+            }
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
+        let window = NSWindow(contentViewController: makeOnboardingContentController())
+        window.title = "欢迎使用 SnapAI"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        onboardingWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let closedWindow = notification.object as? NSWindow else { return }
+        guard closedWindow === settingsWindow || closedWindow === onboardingWindow else { return }
+        DispatchQueue.main.async { [weak self, weak closedWindow] in
+            guard let self, let closedWindow else { return }
+            guard closedWindow === self.settingsWindow || closedWindow === self.onboardingWindow else { return }
+            closedWindow.contentViewController = nil
+        }
+    }
+
+    private func makeSettingsContentController() -> NSViewController {
+        let view = SettingsView(
+            settings: settings,
+            navigation: settingsNavigation,
+            onChange: onSettingsChange,
+            pinState: settingsWindowPinState,
+            onPinChange: { [weak self] newValue in
+                self?.setSettingsWindowPinned(newValue)
+            }
+        )
+        return NSHostingController(rootView: view)
+    }
+
+    private func makeOnboardingContentController() -> NSViewController {
         let view = OnboardingView(settings: settings) { [weak self] in
             guard let self else { return }
             self.settings.onboardingDone = true
             self.settings.save()
             self.onboardingWindow?.close()
-            self.onboardingWindow = nil
             self.onSettingsChange()
         } openSettings: { [weak self] in
             self?.openSettings()
         }
-        let hosting = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hosting)
-        window.title = "欢迎使用 SnapAI"
-        window.styleMask = [.titled, .closable]
-        window.isReleasedWhenClosed = false
-        window.center()
-        onboardingWindow = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        return NSHostingController(rootView: view)
     }
 
     private func applySettingsWindowPinnedState(to window: NSWindow) {

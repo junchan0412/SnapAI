@@ -2,7 +2,7 @@
 
 ## 当前基线
 
-- 版本:1.6.55
+- 版本:1.6.56
 - `SnapAILogic` 真实 Swift 源码:39 个
 - `SnapAILogic` 剩余 symlink:37 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 37 个,真实源码不得少于 39 个

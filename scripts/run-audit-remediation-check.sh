@@ -65,11 +65,19 @@ require_line_count_at_most "Settings split" Sources/SnapAI/Settings.swift 900
 require_match "cached quick-input image preview" 'if let nsImg = model\.imagePreview' Sources/SnapAI/QuickInput.swift
 require_match "bounded quick-input image optimization lifetime" 'autoreleasepool' Sources/SnapAI/QuickInput.swift
 require_no_match "quick-input body image re-decode" 'if let .*model\.imageData.*NSImage\(data:' Sources/SnapAI/QuickInput.swift
+require_match "settings window release lifecycle" 'func windowWillClose' Sources/SnapAI/WindowCoordinator.swift
+require_match "closed window content release" 'closedWindow\.contentViewController = nil' Sources/SnapAI/WindowCoordinator.swift
+require_match "settings content lazy rebuild" 'window\.contentViewController = makeSettingsContentController\(\)' Sources/SnapAI/WindowCoordinator.swift
+require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed = true' Sources/SnapAI/WindowCoordinator.swift
 
 scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \
   || fail "SnapAILogic migration candidate analyzer must stay executable"
 scripts/report-logic-migration-candidates.sh >/dev/null
+[ -x scripts/profile-runtime-memory.sh ] \
+  || fail "runtime memory profiler must stay executable"
+bash -n scripts/profile-runtime-memory.sh \
+  || fail "runtime memory profiler syntax check failed"
 candidate_report=$(scripts/report-logic-migration-candidates.sh)
 rg -q 'app-api' <<< "$candidate_report" \
   || fail "SnapAILogic migration candidate analyzer must classify app API bridge risk"
