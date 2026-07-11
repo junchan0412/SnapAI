@@ -1,5 +1,17 @@
 import Combine
 
+public struct ResultDiagnosticTextSnapshot: Equatable {
+    public var fullText: String
+    public var briefText: String
+
+    public init(fullText: String = "", briefText: String = "") {
+        self.fullText = fullText
+        self.briefText = briefText
+    }
+
+    public static let empty = ResultDiagnosticTextSnapshot()
+}
+
 public final class ResultOutputState: ObservableObject {
     @Published public private(set) var text: String
 

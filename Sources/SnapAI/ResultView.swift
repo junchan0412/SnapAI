@@ -297,30 +297,12 @@ struct ResultView: View {
 
     private var footer: some View {
         VStack(spacing: 6) {
-            // 指标行
-            if vm.charCount > 0 || vm.elapsed > 0 {
-                HStack(spacing: 10) {
-                    if vm.elapsed > 0 { Label(String(format: "%.1fs", vm.elapsed), systemImage: "clock") }
-                    if vm.charCount > 0 { Label("\(vm.charCount) 字", systemImage: "textformat") }
-                    Spacer(minLength: 0)
-                    if let privacyStatus = vm.privacyProtectionStatusText {
-                        Label(privacyStatus, systemImage: "hand.raised")
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .help(privacyStatus)
-                            .layoutPriority(1)
-                    }
-                    Button {
-                        vm.copyBriefRequestDiagnostics()
-                    } label: {
-                        Image(systemName: ResultDiagnosticsCommand.systemImage)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
-                    .help(ResultDiagnosticsCommand.briefTitle)
-                }
-                .font(.caption2).foregroundStyle(.secondary)
-            }
+            ResultCompletionMetricsRow(
+                state: vm.completionState,
+                privacyStatus: vm.privacyProtectionStatusText,
+                canCopyBriefDiagnostics: resultCommandEnabled(.copyBriefDiagnostics),
+                onCopyBriefDiagnostics: vm.copyBriefRequestDiagnostics
+            )
 
             HStack(spacing: 8) {
                 FollowUpField(text: $vm.followUp, onSubmit: vm.sendFollowUp,

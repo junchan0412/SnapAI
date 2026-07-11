@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.61 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.62 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.61 版本重点
+## 1.6.62 版本重点
 
-- 流式 `output` 和 `thinkingText` 不再由宽 `ResultViewModel` 直接发布,避免每个 token invalidation 整个结果窗口。
-- output、thinking 使用两个独立 observable state,内容渲染、思考区和操作工具栏只订阅各自需要的高频数据。
-- 相同 output/thinking 文本会被短路,不再产生重复 publisher 通知。
-- 自动滚动观察器拆为零尺寸 leaf view,每个 typewriter tick 只更新输出、滚动与必要的操作可用性区域。
-- `ResultView` 从 628 行降至 524 行,高频展示组件独立为 142 行,并移除 ViewModel 对 SwiftUI 的无用依赖。
+- 完成指标 `elapsed` 与 `characterCount` 合并为单一 observable snapshot,不再连续发布两个根级更新。
+- 指标行拆为独立 footer leaf view,生成完成时只刷新耗时、字数、隐私和诊断区域。
+- full/brief request diagnostics 合并为单一 value snapshot,每次路由诊断更新由两次根通知收敛为一次。
+- completion、diagnostics 和 reset 均增加相等值短路,重复完成或重复清空不会再次发布。
+- `ResultView` 从 524 行进一步降至 506 行,metrics 组件独立为 39 行。
 
-详细发布说明见 [SnapAI 1.6.61 Release Notes](docs/RELEASE_NOTES_1.6.61.md),阶段性复盘见 [SnapAI 1.6.61 Iteration Report](docs/ITERATION_REPORT_1.6.61.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.62 Release Notes](docs/RELEASE_NOTES_1.6.62.md),阶段性复盘见 [SnapAI 1.6.62 Iteration Report](docs/ITERATION_REPORT_1.6.62.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.61
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.62
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

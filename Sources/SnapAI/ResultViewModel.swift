@@ -13,15 +13,18 @@ final class ResultViewModel: ObservableObject {
     @Published var isPinned: Bool = false
     @Published var action: AIAction = AIAction()
     @Published var targetLanguage: TargetLanguage = .auto
-    @Published var elapsed: TimeInterval = 0
-    @Published var charCount: Int = 0
     @Published var activeProviderName: String = ""
     @Published var activeModelName: String = ""
     @Published var routeNote: String?
-    @Published var requestDiagnosticText: String = ""
-    @Published var requestDiagnosticBriefText: String = ""
+    @Published private var diagnosticText: ResultDiagnosticTextSnapshot = .empty
     let outputState = ResultOutputState()
     let thinkingState = ResultThinkingState()
+    let completionState = ResultCompletionState()
+
+    var elapsed: TimeInterval { completionState.metrics.elapsed }
+    var charCount: Int { completionState.metrics.characterCount }
+    var requestDiagnosticText: String { diagnosticText.fullText }
+    var requestDiagnosticBriefText: String { diagnosticText.briefText }
 
     var output: String {
         get { outputState.text }
@@ -409,10 +412,10 @@ final class ResultViewModel: ObservableObject {
         errorMessage = nil
         routeNote = nil
         requestDiagnostics = nil
-        requestDiagnosticText = ""
-        requestDiagnosticBriefText = ""
-        elapsed = 0
-        charCount = 0
+        if diagnosticText != .empty {
+            diagnosticText = .empty
+        }
+        completionState.reset()
         savedToHistory = false
         metricsFinished = false
         startTime = Date()
@@ -632,8 +635,11 @@ final class ResultViewModel: ObservableObject {
 
     private func updateRequestDiagnostics(_ diagnostics: AIRequestDiagnostics) {
         requestDiagnostics = diagnostics
-        requestDiagnosticText = diagnostics.summaryText
-        requestDiagnosticBriefText = diagnostics.briefSummaryText
+        let text = ResultDiagnosticTextSnapshot(fullText: diagnostics.summaryText,
+                                                briefText: diagnostics.briefSummaryText)
+        if diagnosticText != text {
+            diagnosticText = text
+        }
     }
 
     private func finishMetrics(recordUsage: Bool, saveHistory: Bool) {
@@ -641,8 +647,7 @@ final class ResultViewModel: ObservableObject {
         metricsFinished = true
         let completion = ResultPersistence.completionMetrics(startTime: startTime,
                                                              outputText: fullText)
-        elapsed = completion.elapsed
-        charCount = completion.characterCount
+        completionState.replace(with: completion)
         if recordUsage {
             // #11 使用统计
             settings.recordActionUsage(actionName: action.name)
