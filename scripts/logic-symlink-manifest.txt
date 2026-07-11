@@ -43,6 +43,7 @@ RequestSession.swift
 ResultCommand.swift
 ResultContentPresentation.swift
 ResultDiagnosticsCommand.swift
+ResultLiveOutputState.swift
 ResultPersistence.swift
 ResultPinCommand.swift
 ResultRecoveryCommand.swift

@@ -72,10 +72,21 @@ require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed
 require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAI/RoutingMetrics.swift
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
-require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultView.swift
+require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
+require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
+require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
-require_no_match "streaming markdown reparse" 'if vm\.isStreaming.*MarkdownView|MarkdownView\(text: vm\.output\).*vm\.isStreaming' Sources/SnapAI/ResultView.swift
+require_match "isolated output observer" '@ObservedObject var state: ResultOutputState' Sources/SnapAI/ResultLiveOutputView.swift
+require_match "isolated thinking observer" '@ObservedObject var state: ResultThinkingState' Sources/SnapAI/ResultLiveOutputView.swift
+require_match "isolated action toolbar observer" '@ObservedObject var outputState: ResultOutputState' Sources/SnapAI/ResultLiveOutputView.swift
+require_no_match "broad published output" '@Published var output:' Sources/SnapAI/ResultViewModel.swift
+require_no_match "broad published thinking" '@Published var thinkingText:' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model SwiftUI dependency" '^import SwiftUI$' Sources/SnapAI/ResultViewModel.swift
+require_match "deduplicated live output publication" 'guard self\.text != text else \{ return false \}' Sources/SnapAILogic/ResultLiveOutputState.swift
+require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
+require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
+require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift
 require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\.scrollTo\("output"' Sources/SnapAI/ResultView.swift
 [ -f Sources/SnapAILogic/ResultContentPresentation.swift ] \
   || fail "SnapAILogic ResultContentPresentation source is missing"
@@ -83,6 +94,12 @@ require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\
   || fail "SnapAILogic ResultContentPresentation must be a real source file"
 [ ! -e Sources/SnapAI/ResultContentPresentation.swift ] \
   || fail "ResultContentPresentation must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultLiveOutputState.swift ] \
+  || fail "SnapAILogic ResultLiveOutputState source is missing"
+[ ! -L Sources/SnapAILogic/ResultLiveOutputState.swift ] \
+  || fail "SnapAILogic ResultLiveOutputState must be a real source file"
+[ ! -e Sources/SnapAI/ResultLiveOutputState.swift ] \
+  || fail "ResultLiveOutputState must not be duplicated in the app target"
 require_line_count_at_most "HistoryWindow view split" Sources/SnapAI/HistoryWindow.swift 500
 require_line_count_at_most "HistoryWindowModel split" Sources/SnapAI/HistoryWindowModel.swift 260
 require_match "history presentation background refresh" 'refreshQueue\.async' Sources/SnapAI/HistoryWindowModel.swift
