@@ -19,7 +19,7 @@ final class ResultViewModel: ObservableObject {
     @Published private var diagnosticText: ResultDiagnosticTextSnapshot = .empty
     let outputState = ResultOutputState()
     let thinkingState = ResultThinkingState()
-    let completionState = ResultCompletionState()
+    var completionState: ResultCompletionState { completionCoordinator.state }
 
     var elapsed: TimeInterval { completionState.metrics.elapsed }
     var charCount: Int { completionState.metrics.characterCount }
@@ -41,10 +41,8 @@ final class ResultViewModel: ObservableObject {
 
     let settings: AppSettings
     private var client: AIClient
+    private let completionCoordinator: ResultCompletionCoordinator
     private var history: [ChatMessage] = []
-    private var startTime: Date?
-    private var savedToHistory = false
-    private var metricsFinished = false
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
@@ -79,6 +77,7 @@ final class ResultViewModel: ObservableObject {
     init(settings: AppSettings) {
         self.settings = settings
         self.client = AIClient(settings: settings)
+        self.completionCoordinator = ResultCompletionCoordinator(settings: settings)
     }
 
     // #3 图片(来自截图/粘贴)
@@ -415,10 +414,7 @@ final class ResultViewModel: ObservableObject {
         if diagnosticText != .empty {
             diagnosticText = .empty
         }
-        completionState.reset()
-        savedToHistory = false
-        metricsFinished = false
-        startTime = Date()
+        completionCoordinator.reset()
     }
 
     private func runStream(hasImage: Bool) {
@@ -525,8 +521,7 @@ final class ResultViewModel: ObservableObject {
 
         isStreaming = true
         streamDone = false
-        startTime = Date()
-        let routeStartedAt = startTime ?? Date()
+        let routeStartedAt = completionCoordinator.markRouteStarted()
         var firstTokenMilliseconds: Int?
         let typewriterOn = settings.typewriterSpeed != .off
         let thinkingEnabled = action.thinkingMode
@@ -643,47 +638,27 @@ final class ResultViewModel: ObservableObject {
     }
 
     private func finishMetrics(recordUsage: Bool, saveHistory: Bool) {
-        guard !metricsFinished else { return }
-        metricsFinished = true
-        let completion = ResultPersistence.completionMetrics(startTime: startTime,
-                                                             outputText: fullText)
-        completionState.replace(with: completion)
-        if recordUsage {
-            // #11 使用统计
-            settings.recordActionUsage(actionName: action.name)
-        }
-        if saveHistory && action.saveHistory {
-            saveToHistoryIfNeeded()
-        } else if recordUsage {
-            settings.save()
-        }
-        if ResultWriteBackCoordinator.shouldAutoReplace(recordUsage: recordUsage,
-                                                        autoReplaceEnabled: autoReplaceEnabled,
-                                                        replaceByDefault: action.replaceByDefault,
-                                                        outputText: fullText,
-                                                        errorMessage: errorMessage) {
-            autoReplaceEnabled = false
-            ResultWriteBackCoordinator.replace(original: replacementOriginalText,
-                                               replacement: fullText,
-                                               handler: onReplace)
-        }
-    }
-
-    private func saveToHistoryIfNeeded() {
-        savedToHistory = ResultPersistence.saveHistoryIfNeeded(
-            settings: settings,
-            alreadySaved: savedToHistory,
+        let context = ResultCompletionContext(
+            recordUsage: recordUsage,
+            saveHistory: saveHistory,
             action: action,
             sourceText: sourceText,
             outputText: fullText,
             errorMessage: errorMessage,
             providerName: activeProviderName,
-            fallbackProviderName: settings.activeProvider?.name ?? "",
             modelName: activeModelName,
-            fallbackModelName: settings.model,
             historyTags: submissionPrivacy?.historyTags ?? [],
-            contentStorage: submissionPrivacy?.effectiveHistoryContentStorage
+            contentStorage: submissionPrivacy?.effectiveHistoryContentStorage,
+            autoReplaceEnabled: autoReplaceEnabled,
+            replacementOriginalText: replacementOriginalText
         )
+        guard let outcome = completionCoordinator.finish(context: context,
+                                                         onReplace: onReplace) else {
+            return
+        }
+        if outcome.didAutoReplace {
+            autoReplaceEnabled = false
+        }
     }
 
     private func startTypewriter() {

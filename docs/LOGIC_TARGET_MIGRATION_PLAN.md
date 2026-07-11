@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.62
-- `SnapAILogic` 真实 Swift 源码:43 个
+- 版本:1.6.63
+- `SnapAILogic` 真实 Swift 源码:44 个
 - `SnapAILogic` 剩余 symlink:36 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 43 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 44 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type 消费者,并用 `boundary` 标记 `cluster` / `app-api` / `isolated`,用于决定下一轮是按簇迁移、加 app bridge/DTO,还是可直接迁移。
 
@@ -21,6 +21,7 @@
 - 历史窗口刷新:`HistoryWindowRefreshPolicy` 集中定义搜索 debounce 与 generation 校验;app target 的 `HistoryWindowModel` 负责后台构建 presentation snapshot,SwiftUI view 不再直接执行数据库与 semantic search。
 - 结果实时状态:`ResultLiveOutputState` 将 output 与 thinking 分为独立 observable source,重复文本更新短路;app target 仅保留具体 SwiftUI 内容、滚动观察器和操作工具栏。
 - 结果完成状态:`ResultCompletionState` 将 elapsed 与 characterCount 合并为可去重 snapshot;`ResultDiagnosticTextSnapshot` 将 full/brief diagnostics 合并为单一根级 value update。
+- 结果完成生命周期:`ResultCompletionLifecycle` 保证每个请求只完成一次并跟踪历史持久化;app target 的 `ResultCompletionCoordinator` 统一完成指标、usage、history、settings save 与 auto replace 副作用。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析
