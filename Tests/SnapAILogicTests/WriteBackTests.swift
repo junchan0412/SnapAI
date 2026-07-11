@@ -183,6 +183,9 @@ func testResultOperationFeedbackAndExportFilenameAreActionable() {
                                                   timestamp: 1)
     expect(longName == "\(String(repeating: "a", count: 64))-1.md",
            "export filenames cap user-controlled action names")
+    expect(ResultExportFilename.suggested(actionName: "SnapAI-History", timestamp: 123)
+           == "SnapAI-History-123.md",
+           "history exports reuse the safe timestamped markdown filename policy")
 }
 
 func testResultCompletionStatePublishesOneDeduplicatedSnapshot() {

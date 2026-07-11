@@ -5,6 +5,7 @@ import SnapAILogic
 struct MarkdownView: View, Equatable {
     let text: String
     var onPresentationReady: () -> Void = {}
+    var onCopyCode: (String) -> Void = { _ in }
     @StateObject private var model = MarkdownPresentationModel()
 
     static func == (lhs: MarkdownView, rhs: MarkdownView) -> Bool {
@@ -79,7 +80,7 @@ struct MarkdownView: View, Equatable {
             .frame(maxWidth: .infinity, alignment: .leading)
 
         case .code(let code, let language):
-            CodeBlockView(code: code, language: language)
+            CodeBlockView(code: code, language: language, onCopy: onCopyCode)
         }
     }
 
@@ -97,6 +98,7 @@ struct MarkdownView: View, Equatable {
 private struct CodeBlockView: View {
     let code: String
     let language: String?
+    let onCopy: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -106,14 +108,13 @@ private struct CodeBlockView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(code, forType: .string)
+                    onCopy(code)
                 } label: {
                     Image(systemName: "doc.on.doc").font(.caption2)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .help("复制代码块")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)

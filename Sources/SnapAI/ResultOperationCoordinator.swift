@@ -42,15 +42,23 @@ final class ResultOperationCoordinator: ObservableObject {
     func export(markdown: String,
                 actionName: String,
                 date: Date = Date()) {
+        export(markdown: markdown,
+               suggestedFilename: ResultExportFilename.suggested(
+                   actionName: actionName,
+                   timestamp: Int(date.timeIntervalSince1970)
+               ),
+               emptyMessage: "当前没有可导出的对话内容。")
+    }
+
+    func export(markdown: String,
+                suggestedFilename: String,
+                emptyMessage: String) {
         guard !markdown.isEmpty else {
-            feedback = .warning("当前没有可导出的对话内容。")
+            feedback = .warning(emptyMessage)
             return
         }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = ResultExportFilename.suggested(
-            actionName: actionName,
-            timestamp: Int(date.timeIntervalSince1970)
-        )
+        panel.nameFieldStringValue = suggestedFilename
         panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .text]
         guard panel.runModal() == .OK, let url = panel.url else { return }
 

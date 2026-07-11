@@ -249,12 +249,13 @@ struct ResultView: View {
                     }
 
                     ResultOutputDisplay(state: vm.outputState,
-                                        isStreaming: vm.isStreaming) {
+                                        isStreaming: vm.isStreaming,
+                                        onMarkdownReady: {
                         vm.markFinalAutoScroll()
                         withAnimation(.easeOut(duration: 0.12)) {
                             proxy.scrollTo("output", anchor: .bottom)
                         }
-                    }
+                    }, onCopyCode: vm.copyCodeBlock)
                 }
                 .padding(14)
             }

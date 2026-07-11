@@ -292,6 +292,10 @@ final class ResultViewModel: ObservableObject {
              success: "对话 Markdown 已复制", empty: "当前没有可复制的对话内容。")
     }
 
+    func copyCodeBlock(_ code: String) {
+        copy(code, success: "代码块已复制", empty: "该代码块没有可复制的内容。")
+    }
+
     func copyRequestDiagnostics() {
         copy(requestDiagnosticText, success: "完整诊断已复制",
              empty: "当前没有可复制的请求诊断。")
