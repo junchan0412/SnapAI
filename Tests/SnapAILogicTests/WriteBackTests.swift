@@ -87,6 +87,32 @@ func testResultLiveOutputStatesPublishIndependently() {
     withExtendedLifetime((outputSubscription, thinkingSubscription)) {}
 }
 
+func testResultOperationFeedbackAndExportFilenameAreActionable() {
+    let success = ResultOperationFeedback.success("结果已复制")
+    let repeated = ResultOperationFeedback.success("结果已复制")
+    let warning = ResultOperationFeedback.warning("导出失败")
+
+    expect(success.kind == .success && success.systemImage == "checkmark.circle.fill",
+           "successful result operations use an affirmative feedback icon")
+    expect(warning.kind == .warning && warning.systemImage == "exclamationmark.triangle.fill",
+           "failed result operations use a warning feedback icon")
+    expect(warning.dismissDelaySeconds > success.dismissDelaySeconds,
+           "failure feedback remains visible longer than success feedback")
+    expect(success.id != repeated.id,
+           "repeating the same operation creates a fresh feedback event")
+
+    expect(ResultExportFilename.suggested(actionName: "总结/报告:\n测试", timestamp: -8)
+           == "总结-报告-测试-0.md",
+           "export filenames remove path separators, controls, and negative timestamps")
+    expect(ResultExportFilename.suggested(actionName: " \n ", timestamp: 42)
+           == "SnapAI-42.md",
+           "empty sanitized action names use a clear export fallback")
+    let longName = ResultExportFilename.suggested(actionName: String(repeating: "a", count: 100),
+                                                  timestamp: 1)
+    expect(longName == "\(String(repeating: "a", count: 64))-1.md",
+           "export filenames cap user-controlled action names")
+}
+
 func testResultCompletionStatePublishesOneDeduplicatedSnapshot() {
     let state = ResultCompletionState()
     var changes = 0

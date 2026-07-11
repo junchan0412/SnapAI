@@ -297,6 +297,8 @@ struct ResultView: View {
 
     private var footer: some View {
         VStack(spacing: 6) {
+            ResultOperationFeedbackHost(coordinator: vm.operationCoordinator)
+
             ResultCompletionMetricsRow(
                 state: vm.completionState,
                 privacyStatus: vm.privacyProtectionStatusText,

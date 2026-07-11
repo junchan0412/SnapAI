@@ -81,6 +81,8 @@ require_line_count_at_most "ResultRouteAttemptCoordinator split" Sources/SnapAI/
 require_line_count_at_most "ResultRequestPreparationCoordinator split" Sources/SnapAI/ResultRequestPreparationCoordinator.swift 140
 require_line_count_at_most "ResultStreamingCoordinator split" Sources/SnapAI/ResultStreamingCoordinator.swift 110
 require_line_count_at_most "ResultSubmissionCoordinator split" Sources/SnapAI/ResultSubmissionCoordinator.swift 70
+require_line_count_at_most "ResultOperationCoordinator split" Sources/SnapAI/ResultOperationCoordinator.swift 90
+require_line_count_at_most "ResultOperationFeedbackView split" Sources/SnapAI/ResultOperationFeedbackView.swift 80
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -126,6 +128,15 @@ require_no_match "result view model pending image retention" 'pendingImage(Data|
 require_no_match "result view model privacy fallback duplication" 'PrivacyRiskAssessment\.assess' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result view model request session assembly" 'RequestSession\.' Sources/SnapAI/ResultViewModel.swift
 require_match "passthrough privacy regression test" 'testPrivacyPreparedSubmissionPassthroughPreservesRiskProtection' Tests/SnapAILogicTests/PrivacyTests.swift
+require_match "result operation coordinator usage" 'operationCoordinator\.copy' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model save panel" 'NSSavePanel|allowedContentTypes|runModal\(\)' Sources/SnapAI/ResultViewModel.swift
+require_no_match "silent conversation export failure in view model" 'try\?.*\.write\(' Sources/SnapAI/ResultViewModel.swift
+require_no_match "silent conversation export failure in coordinator" 'try\?.*\.write\(' Sources/SnapAI/ResultOperationCoordinator.swift
+require_match "isolated result operation feedback observer" '@ObservedObject var coordinator: ResultOperationCoordinator' Sources/SnapAI/ResultOperationFeedbackView.swift
+require_match "isolated result operation feedback publication" '@Published private\(set\) var feedback: ResultOperationFeedback\?' Sources/SnapAI/ResultOperationCoordinator.swift
+require_no_match "broad result operation feedback publication" '@Published.*operationFeedback' Sources/SnapAI/ResultViewModel.swift
+require_match "result operation feedback regression test" 'testResultOperationFeedbackAndExportFilenameAreActionable' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift
@@ -148,6 +159,12 @@ require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\
   || fail "ResultStreamingLifecycle must not be duplicated in the app target"
 [ ! -e Sources/SnapAI/ResultLiveOutputState.swift ] \
   || fail "ResultLiveOutputState must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/ResultOperationFeedback.swift ] \
+  || fail "SnapAILogic ResultOperationFeedback source is missing"
+[ ! -L Sources/SnapAILogic/ResultOperationFeedback.swift ] \
+  || fail "SnapAILogic ResultOperationFeedback must be a real source file"
+[ ! -e Sources/SnapAI/ResultOperationFeedback.swift ] \
+  || fail "ResultOperationFeedback must not be duplicated in the app target"
 [ -f Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
   || fail "SnapAILogic ResultCompletionLifecycle source is missing"
 [ ! -L Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
