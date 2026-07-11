@@ -249,7 +249,12 @@ struct ResultView: View {
                     }
 
                     ResultOutputDisplay(state: vm.outputState,
-                                        isStreaming: vm.isStreaming)
+                                        isStreaming: vm.isStreaming) {
+                        vm.markFinalAutoScroll()
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo("output", anchor: .bottom)
+                        }
+                    }
                 }
                 .padding(14)
             }

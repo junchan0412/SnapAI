@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.68 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.69 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.68 版本重点
+## 1.6.69 版本重点
 
-- 新增 `ResultOperationCoordinator`,统一结果复制、诊断复制、Markdown 导出与写回命令适配。
-- 复制会检查 pasteboard 写入结果;导出失败不再被 `try?` 静默吞掉。
-- footer 新增低干扰操作反馈条,成功/失败使用不同颜色和停留时长,支持手动关闭与自动消失。
-- feedback 使用独立 observable leaf,操作提示不会触发整个结果窗口的 VM invalidation。
-- 导出建议文件名会清理路径分隔符、控制字符和超长动作名。
+- 新增 `MarkdownPresentationBuilder`,完成态 block parse 与 inline `AttributedString` 在后台一次性构建。
+- `MarkdownView.body` 不再同步执行整段 Markdown parse 或逐 block inline parse。
+- presentation 由独立 `MarkdownPresentationModel` 缓存,视图重算复用 immutable snapshot。
+- generation + source text 双校验阻止旧解析结果覆盖新输出。
+- presentation 就绪后补一次最终滚动,避免异步 Markdown 布局停在结果中段。
 
-详细发布说明见 [SnapAI 1.6.68 Release Notes](docs/RELEASE_NOTES_1.6.68.md),阶段性复盘见 [SnapAI 1.6.68 Iteration Report](docs/ITERATION_REPORT_1.6.68.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.69 Release Notes](docs/RELEASE_NOTES_1.6.69.md),阶段性复盘见 [SnapAI 1.6.69 Iteration Report](docs/ITERATION_REPORT_1.6.69.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.68
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.69
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

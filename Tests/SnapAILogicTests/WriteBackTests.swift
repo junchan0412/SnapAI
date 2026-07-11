@@ -59,6 +59,78 @@ func testResultContentRenderModeAvoidsStreamingMarkdownReparse() {
            "completed output always receives a final bottom alignment")
 }
 
+func testMarkdownPresentationBuildsBlocksAndRejectsStaleRefreshes() {
+    let presentation = MarkdownPresentationBuilder.build("""
+    # 标题
+
+    正文 **加粗**
+
+    - 项目一
+    - 项目二
+
+    1. 第一步
+    2. 第二步
+
+    > 引用
+
+    ```swift
+    let value = 1
+    ```
+    """)
+
+    expect(presentation.blocks.count == 6,
+           "markdown presentation builds one immutable snapshot for all block types")
+    if case .heading(let level, let content) = presentation.blocks[0] {
+        expect(level == 1 && String(content.characters) == "标题",
+               "markdown presentation preserves heading level and inline content")
+    } else {
+        expect(false, "markdown presentation starts with a heading")
+    }
+    if case .paragraph(let content) = presentation.blocks[1] {
+        expect(String(content.characters) == "正文 加粗",
+               "markdown inline parsing is completed before SwiftUI rendering")
+    } else {
+        expect(false, "markdown presentation includes a paragraph")
+    }
+    if case .bullet(let items) = presentation.blocks[2] {
+        expect(items.map { String($0.characters) } == ["项目一", "项目二"],
+               "markdown presentation groups bullet items")
+    } else {
+        expect(false, "markdown presentation includes a bullet list")
+    }
+    if case .ordered(let items) = presentation.blocks[3] {
+        expect(items.map { String($0.characters) } == ["第一步", "第二步"],
+               "markdown presentation groups ordered items")
+    } else {
+        expect(false, "markdown presentation includes an ordered list")
+    }
+    if case .quote(let content) = presentation.blocks[4] {
+        expect(String(content.characters) == "引用",
+               "markdown presentation preserves quote content")
+    } else {
+        expect(false, "markdown presentation includes a quote")
+    }
+    if case .code(let code, let language) = presentation.blocks[5] {
+        expect(code == "let value = 1" && language == "swift",
+               "markdown presentation preserves fenced code and language")
+    } else {
+        expect(false, "markdown presentation includes a code block")
+    }
+
+    expect(MarkdownPresentationBuilder.build("").blocks.isEmpty,
+           "empty markdown produces an empty presentation")
+    expect(MarkdownPresentationRefreshPolicy.shouldPublish(requestGeneration: 3,
+                                                           currentGeneration: 3,
+                                                           requestedText: "new",
+                                                           currentText: "new"),
+           "matching markdown generations publish")
+    expect(!MarkdownPresentationRefreshPolicy.shouldPublish(requestGeneration: 2,
+                                                            currentGeneration: 3,
+                                                            requestedText: "old",
+                                                            currentText: "new"),
+           "stale markdown generations cannot replace a newer result")
+}
+
 func testResultLiveOutputStatesPublishIndependently() {
     let output = ResultOutputState()
     let thinking = ResultThinkingState()

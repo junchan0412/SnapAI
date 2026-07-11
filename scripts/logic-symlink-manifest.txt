@@ -33,6 +33,7 @@ LocalModelHealth.swift
 LocalSecretStore.swift
 LoginItem.swift
 MarkdownExportSafety.swift
+MarkdownPresentation.swift
 ModelCapability.swift
 ModelSwitchCommand.swift
 PrivacyFilter.swift
