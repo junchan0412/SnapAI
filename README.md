@@ -2,18 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.53 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.54 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.53 版本重点
+## 1.6.54 版本重点
 
-- `WriteBackCommand` 已从 app symlink 迁移为 `SnapAILogic` 真实源码,通过轻量 DTO 隔离 app-local 写回记录。
-- app target 中的重复 `WriteBackCommand` 定义已删除,命令面板和菜单统一消费 library descriptor。
-- AppKit `MenuCoordinator` 不再进入 logic target;模型菜单复用 `ModelSwitchCommandFactory`,删除重复的供应商/模型过滤与脱敏规则。
-- `SnapAILogic` 基线收紧为最多 39 个 symlink、至少 37 个真实源码。
+- 写回状态、撤销判断、失败诊断与粘贴时序已迁入纯 `TextWriteBackLogic`,logic tests 不再依赖 AppKit 运行对象。
+- `TextEditTransaction` 从 410 行缩减为 145 行 app-only adapter,只负责目标应用激活、粘贴与剪贴板恢复。
+- `WriteBackCompatibility` 已成为 `SnapAILogic` 真实源码,app target 中的重复定义已删除。
+- 写回命令与执行链统一使用 `TextWriteBackOperation`,删除重复 operation enum 和转换 bridge。
+- `SnapAILogic` 基线收紧为最多 37 个 symlink、至少 39 个真实源码。
 
-详细发布说明见 [SnapAI 1.6.53 Release Notes](docs/RELEASE_NOTES_1.6.53.md),阶段性复盘见 [SnapAI 1.6.53 Iteration Report](docs/ITERATION_REPORT_1.6.53.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.54 Release Notes](docs/RELEASE_NOTES_1.6.54.md),阶段性复盘见 [SnapAI 1.6.54 Iteration Report](docs/ITERATION_REPORT_1.6.54.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -293,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.53
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.54
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

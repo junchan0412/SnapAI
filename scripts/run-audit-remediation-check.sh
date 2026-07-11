@@ -315,6 +315,18 @@ registered_logic_tests=$(
   || fail "WriteBackCommand must not be duplicated in the app target"
 [ -f Sources/SnapAI/WriteBackCommandAppBridge.swift ] \
   || fail "WriteBackCommand app bridge is missing"
+[ -f Sources/SnapAILogic/WriteBackCompatibility.swift ] \
+  || fail "SnapAILogic migrated WriteBackCompatibility source is missing"
+[ ! -L Sources/SnapAILogic/WriteBackCompatibility.swift ] \
+  || fail "SnapAILogic migrated WriteBackCompatibility must be a real source file, not a symlink"
+[ ! -e Sources/SnapAI/WriteBackCompatibility.swift ] \
+  || fail "WriteBackCompatibility must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/TextWriteBackLogic.swift ] \
+  || fail "SnapAILogic migrated TextWriteBackLogic source is missing"
+[ ! -L Sources/SnapAILogic/TextWriteBackLogic.swift ] \
+  || fail "SnapAILogic migrated TextWriteBackLogic must be a real source file, not a symlink"
+[ ! -e Sources/SnapAILogic/TextEditTransaction.swift ] \
+  || fail "AppKit TextEditTransaction must stay out of SnapAILogic"
 [ ! -e Sources/SnapAILogic/MenuCoordinator.swift ] \
   || fail "AppKit MenuCoordinator must stay out of SnapAILogic"
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift

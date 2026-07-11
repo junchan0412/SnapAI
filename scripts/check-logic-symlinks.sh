@@ -44,8 +44,8 @@ FORBIDDEN_IMPORTS=(
   "Quartz"
 )
 
-MAX_LOGIC_SYMLINKS=39
-MIN_LOGIC_REAL_SOURCES=37
+MAX_LOGIC_SYMLINKS=37
+MIN_LOGIC_REAL_SOURCES=39
 
 find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
 
