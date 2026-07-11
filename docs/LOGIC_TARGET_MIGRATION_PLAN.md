@@ -2,16 +2,18 @@
 
 ## 当前基线
 
-- 版本:1.6.53
-- `SnapAILogic` 真实 Swift 源码:37 个
-- `SnapAILogic` 剩余 symlink:39 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 39 个,真实源码不得少于 37 个
+- 版本:1.6.54
+- `SnapAILogic` 真实 Swift 源码:39 个
+- `SnapAILogic` 剩余 symlink:37 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 37 个,真实源码不得少于 39 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type 消费者,并用 `boundary` 标记 `cluster` / `app-api` / `isolated`,用于决定下一轮是按簇迁移、加 app bridge/DTO,还是可直接迁移。
 
 ## 已迁移簇
 
-- 写回命令:`WriteBackCommand` 使用 `WriteBackCommandInput` / `WriteBackCommandOperation` DTO,app target 只保留 `TextWriteBackRecord` bridge。
+- 写回命令:`WriteBackCommand` 使用 `WriteBackCommandInput` / `TextWriteBackOperation` DTO,app target 只保留 `TextWriteBackRecord` bridge。
+- 写回状态:`TextWriteBackLogic` 统一撤销状态、目标快照、失败诊断、追加 payload 与粘贴时序;`TextEditTransaction` 保持为 app-only AppKit adapter。
+- 写回兼容性:`WriteBackCompatibility` 已迁为真实 logic 源码,app target 不再保留重复定义。
 - 菜单边界:`MenuCoordinator` 保持为 app-only AppKit adapter,模型切换菜单复用 `ModelSwitchCommandFactory` descriptor,不再进入 logic target。
 - `TypewriterBuffer`:流式 UI 只消费增量 chunk,避免在 app target 中维护长文本索引与重复前缀复制。
 
@@ -53,9 +55,9 @@ scripts/report-logic-migration-candidates.sh
 ## 后续迁移顺序
 
 1. 写回/取词簇
-   - 已完成:`WriteBackCommand`
-   - 候选:`TextEditTransaction`, `WriteBackCompatibility`, `TextCaptureDiagnostic`, `TextCapture`
-   - 注意:这些文件共享 `PasteboardSnapshot`, `TextCaptureMethod`, `TextCaptureFailureReason`, `TextCaptureOutcome`;必须按簇迁移,避免 app target 与 library target 产生同名类型不一致。
+   - 已完成:`WriteBackCommand`, `WriteBackCompatibility`, `TextWriteBackLogic`;`TextEditTransaction` 已收窄为 app-only adapter。
+   - 候选:`TextCapture`
+   - 注意:`TextCapture` 仍与 `PasteboardSnapshot`、AX/AppKit 捕获实现和应用激活强耦合;后续应继续抽取纯状态与诊断,而不是把 AppKit 实现整体迁入 logic target。
 
 2. 设置/自动化簇
    - 候选:`SettingsSection`, `AutomationRouter`, `AutomationURLCommand`, `SettingsToggleCommand`
