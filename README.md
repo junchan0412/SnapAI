@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.55 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.56 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.55 版本重点
+## 1.6.56 版本重点
 
-- 快捷提问图片预览改为一次解码并缓存,SwiftUI 重绘不再重复执行 `NSImage(data:)`。
-- 图片压缩的每档分辨率都使用独立 `autoreleasepool`,及时释放大 bitmap 和编码中间对象。
-- 截图与剪贴板图片统一通过附件入口更新,发送或移除后同时清理 data、preview、MIME 和状态提示。
-- “剪贴板中没有图片”现在会显示明确恢复提示;成功优化改用正常状态样式,不再误显示为橙色警告。
-- 图片移除按钮补齐 Help 与 accessibility label,面板会根据预览和提示自动调整高度。
+- 设置与 onboarding 窗口关闭后会释放 SwiftUI `contentViewController`,避免隐藏窗口长期保留完整视图树。
+- 重新打开窗口时复用轻量 `NSWindow` shell,并按当前设置与导航状态延迟重建内容。
+- 保持 ARC 单一生命周期管理,避免 `isReleasedWhenClosed` 自动释放与 Accessibility 关闭动作产生双重 release。
+- macOS smoke 新增 reusable-window content release 回归测试。
+- 新增 `scripts/profile-runtime-memory.sh`,统一记录 RSS、physical footprint、peak footprint 和重点 VM region。
 
-详细发布说明见 [SnapAI 1.6.55 Release Notes](docs/RELEASE_NOTES_1.6.55.md),阶段性复盘见 [SnapAI 1.6.55 Iteration Report](docs/ITERATION_REPORT_1.6.55.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.56 Release Notes](docs/RELEASE_NOTES_1.6.56.md),阶段性复盘见 [SnapAI 1.6.56 Iteration Report](docs/ITERATION_REPORT_1.6.56.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.55
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.56
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

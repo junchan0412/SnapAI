@@ -141,6 +141,31 @@ if handlerStatus == noErr, hotKeyStatus == noErr {
 }
 if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
 if let hotKeyHandlerRef { RemoveEventHandler(hotKeyHandlerRef) }
+
+final class WindowLifecycleProbeDelegate: NSObject, NSWindowDelegate {
+    private(set) var didHandleClose = false
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        DispatchQueue.main.async { [weak self, weak window] in
+            window?.contentViewController = nil
+            self?.didHandleClose = true
+        }
+    }
+}
+
+let windowLifecycleDelegate = WindowLifecycleProbeDelegate()
+let lifecycleWindow = NSWindow(contentViewController: NSViewController())
+lifecycleWindow.isReleasedWhenClosed = false
+lifecycleWindow.delegate = windowLifecycleDelegate
+lifecycleWindow.close()
+RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.1))
+guard windowLifecycleDelegate.didHandleClose,
+      lifecycleWindow.contentViewController == nil else {
+    fputs("error: reusable window content was not released after close\n", stderr)
+    exit(1)
+}
+
 print("Pasteboard roundtrip: ok")
 print("Pasteboard restore snapshot items: \(snapshot.count)")
 print("Accessibility trusted: \(accessibilityTrusted ? "yes" : "no")")
@@ -148,6 +173,7 @@ print("Screen recording granted: \(screenRecordingGranted ? "yes" : "no")")
 print("Hotkey register probe: \(hotKeyStatus == noErr ? "ok" : "failed(\(hotKeyStatus))")")
 print("Hotkey handler install: \(handlerStatus == noErr ? "ok" : "failed(\(handlerStatus))")")
 print("Hotkey handler dispatch probe: \(hotKeyTriggered.pointee ? "ok" : "failed(\(hotKeyDispatchStatus))")")
+print("Reusable window content release: ok")
 if hotKeyStatus != noErr {
     fputs("error: hotkey register probe failed with status \(hotKeyStatus)\n", stderr)
     exit(1)
