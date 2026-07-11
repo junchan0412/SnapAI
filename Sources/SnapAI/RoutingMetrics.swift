@@ -178,10 +178,21 @@ final class RoutingMetricsStore {
 
     private let url: URL
     private let lock = NSLock()
+    private let persistenceQueue: DispatchQueue
+    private let saveDelay: TimeInterval
+    private let saveHandler: (RoutingMetricsTable, URL) -> Void
     private var cached: RoutingMetricsTable?
+    private var persistenceGeneration = 0
 
-    init(url: URL? = nil) {
+    init(url: URL? = nil,
+         saveDelay: TimeInterval = 0.35,
+         persistenceQueue: DispatchQueue? = nil,
+         saveHandler: ((RoutingMetricsTable, URL) -> Void)? = nil) {
         self.url = url ?? Self.defaultURL()
+        self.saveDelay = max(0, saveDelay)
+        self.persistenceQueue = persistenceQueue
+            ?? DispatchQueue(label: "com.snapai.routing-metrics-persistence", qos: .utility)
+        self.saveHandler = saveHandler ?? Self.save
     }
 
     func snapshot() -> RoutingMetricsTable {
@@ -222,14 +233,38 @@ final class RoutingMetricsStore {
         }
     }
 
+    func flushPersistence() {
+        let snapshot: RoutingMetricsTable
+        let targetURL: URL
+        lock.lock()
+        persistenceGeneration += 1
+        snapshot = cached ?? Self.load(from: url)
+        targetURL = url
+        lock.unlock()
+
+        persistenceQueue.sync {
+            saveHandler(snapshot, targetURL)
+        }
+    }
+
     private func update(_ block: (inout RoutingMetricsTable) -> Void) {
         lock.lock()
         var table = cached ?? Self.load(from: url)
         block(&table)
         cached = table
         let targetURL = url
+        persistenceGeneration += 1
+        let generation = persistenceGeneration
         lock.unlock()
-        Self.save(table, to: targetURL)
+
+        persistenceQueue.asyncAfter(deadline: .now() + saveDelay) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let isLatest = self.persistenceGeneration == generation
+            self.lock.unlock()
+            guard isLatest else { return }
+            self.saveHandler(table, targetURL)
+        }
     }
 
     static func load(from url: URL) -> RoutingMetricsTable {

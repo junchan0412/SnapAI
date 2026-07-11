@@ -2419,6 +2419,59 @@ func testRoutingMetricsRecordPerformanceAndFailures() {
     expect(table.scoreAdjustment(for: route) > 0, "good local performance improves route score")
 }
 
+func testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes() {
+    let route = AIRequestRoute(providerID: "provider-1",
+                               providerName: "Provider",
+                               modelName: "plain-beta",
+                               reason: "备用模型")
+    let lock = NSLock()
+    var writes: [RoutingMetricsTable] = []
+    let firstWrite = DispatchSemaphore(value: 0)
+    let store = RoutingMetricsStore(
+        url: FileManager.default.temporaryDirectory
+            .appendingPathComponent("SnapAI-RoutingMetrics-Coalescing-\(UUID().uuidString).json"),
+        saveDelay: 0.05,
+        persistenceQueue: DispatchQueue(label: "SnapAI.RoutingMetricsStoreTests"),
+        saveHandler: { table, _ in
+            lock.lock()
+            writes.append(table)
+            lock.unlock()
+            firstWrite.signal()
+        }
+    )
+
+    for _ in 0..<12 {
+        store.recordSuccess(route: route,
+                            elapsedMilliseconds: 1_000,
+                            firstTokenMilliseconds: 300)
+    }
+
+    expect(firstWrite.wait(timeout: .now() + 1) == .success,
+           "routing metrics persistence completes in the background")
+    lock.lock()
+    let coalescedWrites = writes
+    lock.unlock()
+    expect(coalescedWrites.count == 1,
+           "rapid routing metric updates coalesce into one disk persistence operation")
+    expect(coalescedWrites.last?.record(for: route)?.successCount == 12,
+           "coalesced persistence keeps the newest routing metrics snapshot")
+
+    store.recordFailure(route: route,
+                        elapsedMilliseconds: 2_000,
+                        firstTokenMilliseconds: nil,
+                        reason: "timeout")
+    store.flushPersistence()
+    Thread.sleep(forTimeInterval: 0.1)
+
+    lock.lock()
+    let flushedWrites = writes
+    lock.unlock()
+    expect(flushedWrites.count == 2,
+           "explicit routing metrics flush writes once and invalidates the delayed save")
+    expect(flushedWrites.last?.record(for: route)?.failureCount == 1,
+           "routing metrics flush persists the latest failure before termination")
+}
+
 func testAIRouterUsesRoutingMetricsForFallbackOrder() {
     let settings = AppSettings()
     var provider = AIProvider(name: "Measured", apiProtocol: .openAI,

@@ -69,6 +69,9 @@ require_match "settings window release lifecycle" 'func windowWillClose' Sources
 require_match "closed window content release" 'closedWindow\.contentViewController = nil' Sources/SnapAI/WindowCoordinator.swift
 require_match "settings content lazy rebuild" 'window\.contentViewController = makeSettingsContentController\(\)' Sources/SnapAI/WindowCoordinator.swift
 require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed = true' Sources/SnapAI/WindowCoordinator.swift
+require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAI/RoutingMetrics.swift
+require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
+require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 
 scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \
