@@ -28,6 +28,7 @@ struct ResultThinkingSection: View {
 struct ResultOutputDisplay: View {
     @ObservedObject var state: ResultOutputState
     let isStreaming: Bool
+    var onMarkdownReady: () -> Void = {}
 
     var body: some View {
         switch ResultContentRenderMode.resolve(text: state.text,
@@ -49,7 +50,7 @@ struct ResultOutputDisplay: View {
             .id("output")
             .accessibilityLabel("AI 正在生成结果")
         case .markdown:
-            MarkdownView(text: state.text)
+            MarkdownView(text: state.text, onPresentationReady: onMarkdownReady)
                 .equatable()
                 .id("output")
         case .empty:

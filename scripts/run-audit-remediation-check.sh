@@ -75,6 +75,9 @@ require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalesc
 require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
 require_line_count_at_most "ResultViewModel submission split" Sources/SnapAI/ResultViewModel.swift 540
 require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
+require_line_count_at_most "MarkdownView presentation split" Sources/SnapAI/MarkdownView.swift 150
+require_line_count_at_most "MarkdownPresentationModel split" Sources/SnapAI/MarkdownPresentationModel.swift 70
+require_line_count_at_most "MarkdownPresentation logic split" Sources/SnapAILogic/MarkdownPresentation.swift 220
 require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
 require_line_count_at_most "ResultCompletionCoordinator split" Sources/SnapAI/ResultCompletionCoordinator.swift 130
 require_line_count_at_most "ResultRouteAttemptCoordinator split" Sources/SnapAI/ResultRouteAttemptCoordinator.swift 140
@@ -140,6 +143,10 @@ require_match "result operation feedback regression test" 'testResultOperationFe
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift
+require_no_match "markdown parsing in SwiftUI body" 'MarkdownParser\.parse|AttributedString\(markdown:' Sources/SnapAI/MarkdownView.swift
+require_match "markdown background presentation refresh" 'refreshQueue\.async' Sources/SnapAI/MarkdownPresentationModel.swift
+require_match "markdown ready final scroll" 'onPresentationReady: onMarkdownReady' Sources/SnapAI/ResultLiveOutputView.swift
+require_match "markdown presentation regression test" 'testMarkdownPresentationBuildsBlocksAndRejectsStaleRefreshes' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\.scrollTo\("output"' Sources/SnapAI/ResultView.swift
 [ -f Sources/SnapAILogic/ResultContentPresentation.swift ] \
   || fail "SnapAILogic ResultContentPresentation source is missing"
@@ -147,6 +154,12 @@ require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\
   || fail "SnapAILogic ResultContentPresentation must be a real source file"
 [ ! -e Sources/SnapAI/ResultContentPresentation.swift ] \
   || fail "ResultContentPresentation must not be duplicated in the app target"
+[ -f Sources/SnapAILogic/MarkdownPresentation.swift ] \
+  || fail "SnapAILogic MarkdownPresentation source is missing"
+[ ! -L Sources/SnapAILogic/MarkdownPresentation.swift ] \
+  || fail "SnapAILogic MarkdownPresentation must be a real source file"
+[ ! -e Sources/SnapAI/MarkdownPresentation.swift ] \
+  || fail "MarkdownPresentation must not be duplicated in the app target"
 [ -f Sources/SnapAILogic/ResultLiveOutputState.swift ] \
   || fail "SnapAILogic ResultLiveOutputState source is missing"
 [ ! -L Sources/SnapAILogic/ResultLiveOutputState.swift ] \
