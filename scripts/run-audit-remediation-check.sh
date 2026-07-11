@@ -62,6 +62,9 @@ require_match "SBOM manifest verification" 'SBOM sha256' scripts/preflight-relea
 
 require_line_count_at_most "SettingsView split" Sources/SnapAI/SettingsView.swift 800
 require_line_count_at_most "Settings split" Sources/SnapAI/Settings.swift 900
+require_match "cached quick-input image preview" 'if let nsImg = model\.imagePreview' Sources/SnapAI/QuickInput.swift
+require_match "bounded quick-input image optimization lifetime" 'autoreleasepool' Sources/SnapAI/QuickInput.swift
+require_no_match "quick-input body image re-decode" 'if let .*model\.imageData.*NSImage\(data:' Sources/SnapAI/QuickInput.swift
 
 scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \
