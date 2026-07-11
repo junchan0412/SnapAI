@@ -2,7 +2,7 @@
 
 ## 当前基线
 
-- 版本:1.6.66
+- 版本:1.6.67
 - `SnapAILogic` 真实 Swift 源码:45 个
 - `SnapAILogic` 剩余 symlink:36 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 45 个
@@ -25,6 +25,7 @@
 - 路由 attempt 协调:`ResultRouteAttemptCoordinator` 在 app target 统一 preflight skip、scoped settings、成功/失败 diagnostics 与 routing metrics;VM 仅保留 streaming UI 状态归约。
 - 请求 preparation 协调:`ResultRequestPreparationCoordinator` 在 app target 统一 privacy payload counts、context/payload/pipeline diagnostics、candidate routes 与 no-candidate recovery;VM 仅解释 ready/unavailable。
 - 流式呈现生命周期:`ResultStreamingLifecycle` 统一 visible/thinking accumulator、typewriter pending chunks 与 provider-finished 状态;app target 的 `ResultStreamingCoordinator` 只管理主线程 Timer 和 leaf-state 回调。
+- 结果 submission 协调:`ResultSubmissionCoordinator` 在 app target 统一 source/follow-up privacy preparation、initial message 和 conversation append;VM 不再持有 history 或 pending image payload。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析

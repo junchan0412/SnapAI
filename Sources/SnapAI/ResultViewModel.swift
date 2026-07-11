@@ -45,7 +45,7 @@ final class ResultViewModel: ObservableObject {
     private let routeAttemptCoordinator: ResultRouteAttemptCoordinator
     private let requestPreparationCoordinator: ResultRequestPreparationCoordinator
     private let streamingCoordinator: ResultStreamingCoordinator
-    private var history: [ChatMessage] = []
+    private let submissionCoordinator: ResultSubmissionCoordinator
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
@@ -72,11 +72,10 @@ final class ResultViewModel: ObservableObject {
         self.routeAttemptCoordinator = ResultRouteAttemptCoordinator(settings: settings)
         self.requestPreparationCoordinator = ResultRequestPreparationCoordinator(settings: settings)
         self.streamingCoordinator = ResultStreamingCoordinator()
+        self.submissionCoordinator = ResultSubmissionCoordinator(settings: settings)
     }
 
     // #3 图片(来自截图/粘贴)
-    private var pendingImageData: Data? = nil
-    private var pendingImageMimeType: String = "image/png"
     private var pendingCaptureMethod: TextCaptureMethod?
     private var pendingSourceContext: SelectionSourceContext?
 
@@ -150,8 +149,6 @@ final class ResultViewModel: ObservableObject {
         self.targetLanguage = action.targetLanguage
         self.sourceText = text
         self.replacementOriginalText = originalText ?? text
-        self.pendingImageData = imageData
-        self.pendingImageMimeType = imageMimeType
         self.pendingCaptureMethod = captureMethod
         self.pendingSourceContext = sourceContext
         self.submissionPrivacy = submissionPrivacy
@@ -160,19 +157,19 @@ final class ResultViewModel: ObservableObject {
         showThinking = false
         showRouteDetails = false
         resetOutput()
-        history = []
-        sendInitial()
+        sendInitial(imageData: imageData, imageMimeType: imageMimeType)
     }
 
     func resendEdited() {
         guard !isStreaming, !sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         var currentAction = action
         currentAction.targetLanguage = targetLanguage
-        guard let prepared = preparedSourceSubmission(for: sourceText, action: currentAction) else { return }
+        guard let prepared = submissionCoordinator.prepare(text: sourceText,
+                                                           action: currentAction,
+                                                           using: prepareSourceSubmission) else { return }
         action = currentAction
         sourceText = prepared.text
         submissionPrivacy = prepared.diagnostic
-        history = []
         thinkingText = ""
         resetOutput()
         sendInitial()
@@ -181,12 +178,13 @@ final class ResultViewModel: ObservableObject {
     func changeLanguage(_ lang: TargetLanguage) {
         var nextAction = action
         nextAction.targetLanguage = lang
-        guard let prepared = preparedSourceSubmission(for: sourceText, action: nextAction) else { return }
+        guard let prepared = submissionCoordinator.prepare(text: sourceText,
+                                                           action: nextAction,
+                                                           using: prepareSourceSubmission) else { return }
         targetLanguage = lang
         action = nextAction
         sourceText = prepared.text
         submissionPrivacy = prepared.diagnostic
-        history = []
         thinkingText = ""
         resetOutput()
         sendInitial()
@@ -194,55 +192,30 @@ final class ResultViewModel: ObservableObject {
 
     /// #4 切换到另一个动作,对相同原文重新发起
     func switchAction(_ newAction: AIAction) {
-        guard let prepared = preparedSourceSubmission(for: sourceText, action: newAction) else { return }
+        guard let prepared = submissionCoordinator.prepare(text: sourceText,
+                                                           action: newAction,
+                                                           using: prepareSourceSubmission) else { return }
         action = newAction
         targetLanguage = newAction.targetLanguage
         sourceText = prepared.text
         submissionPrivacy = prepared.diagnostic
         thinkingText = ""
         showThinking = false
-        history = []
         resetOutput()
         sendInitial()
     }
 
-    private func sendInitial() {
-        let payload = RequestSession.initialMessages(settings: settings,
-                                                     action: action,
-                                                     targetLanguage: targetLanguage,
-                                                     sourceText: sourceText,
-                                                     imageData: pendingImageData,
-                                                     imageMimeType: pendingImageMimeType,
-                                                     sourceContext: pendingSourceContext)
-        pendingImageData = nil
-        history = payload.messages
-        runStream(hasImage: payload.hasImage)
-    }
-
-    private func preparedSourceSubmission(for text: String,
-                                          action: AIAction) -> PrivacyPreparedSubmission? {
-        if let prepareSourceSubmission {
-            return prepareSourceSubmission(text, action)
-        }
-        let risk = PrivacyRiskAssessment.assess(originalText: text,
-                                                redactionPreview: PrivacyRedactionPreview(output: text, reports: []),
-                                                redactionEnabled: false,
-                                                hasImage: false,
-                                                saveHistoryEnabled: action.saveHistory,
-                                                historyContentStorage: settings.historyContentStorage)
-        return PrivacyPreparedSubmission(
-            text: text,
-            diagnostic: PrivacySubmissionDiagnostic(originalCharacterCount: text.count,
-                                                    submittedCharacterCount: text.count,
-                                                    hasImage: false,
-                                                    redactionEnabled: false,
-                                                    redactionMatchCount: 0,
-                                                    invalidRedactionRuleCount: 0,
-                                                    saveHistoryEnabled: action.saveHistory,
-                                                    historyContentStorage: settings.historyContentStorage,
-                                                    previewRequired: false,
-                                                    riskAssessment: risk)
+    private func sendInitial(imageData: Data? = nil,
+                             imageMimeType: String = "image/png") {
+        let hasImage = submissionCoordinator.beginInitialRequest(
+            action: action,
+            targetLanguage: targetLanguage,
+            sourceText: sourceText,
+            imageData: imageData,
+            imageMimeType: imageMimeType,
+            sourceContext: pendingSourceContext
         )
+        runStream(hasImage: hasImage)
     }
 
     // MARK: - 追问
@@ -250,36 +223,13 @@ final class ResultViewModel: ObservableObject {
     func sendFollowUp() {
         let q = followUp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isStreaming else { return }
-        let prepared: PrivacyPreparedSubmission
-        if let prepareFollowUpSubmission {
-            guard let confirmed = prepareFollowUpSubmission(q, action) else { return }
-            prepared = confirmed
-        } else {
-            let risk = PrivacyRiskAssessment.assess(originalText: q,
-                                                    redactionPreview: PrivacyRedactionPreview(output: q, reports: []),
-                                                    redactionEnabled: false,
-                                                    hasImage: false,
-                                                    saveHistoryEnabled: action.saveHistory,
-                                                    historyContentStorage: settings.historyContentStorage)
-            prepared = PrivacyPreparedSubmission(
-                text: q,
-                diagnostic: PrivacySubmissionDiagnostic(originalCharacterCount: q.count,
-                                                        submittedCharacterCount: q.count,
-                                                        hasImage: false,
-                                                        redactionEnabled: false,
-                                                        redactionMatchCount: 0,
-                                                        invalidRedactionRuleCount: 0,
-                                                        saveHistoryEnabled: action.saveHistory,
-                                                        historyContentStorage: settings.historyContentStorage,
-                                                        previewRequired: false,
-                                                        riskAssessment: risk)
-            )
-        }
+        guard let prepared = submissionCoordinator.prepare(text: q,
+                                                           action: action,
+                                                           using: prepareFollowUpSubmission) else { return }
         // #5 追问历史
         followUpHistory.record(q)
-        RequestSession.appendFollowUp(to: &history,
-                                      assistantText: completeText,
-                                      userText: prepared.text)
+        submissionCoordinator.appendFollowUp(assistantText: completeText,
+                                             userText: prepared.text)
         submissionPrivacy = prepared.diagnostic
         followUp = ""
         thinkingText = ""
@@ -411,7 +361,7 @@ final class ResultViewModel: ObservableObject {
         let input = ResultRequestPreparationInput(
             action: action,
             sourceText: sourceText,
-            history: history,
+            history: submissionCoordinator.messages,
             explicitHasImage: hasImage,
             captureMethod: pendingCaptureMethod,
             sourceContext: pendingSourceContext,
@@ -478,7 +428,7 @@ final class ResultViewModel: ObservableObject {
         )
         let typewriterOn = streamingCoordinator.usesTypewriter
 
-        client.stream(messages: history, action: action) { [weak self] token in
+        client.stream(messages: submissionCoordinator.messages, action: action) { [weak self] token in
             guard let self = self else { return }
             if firstTokenMilliseconds == nil {
                 firstTokenMilliseconds = AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt)

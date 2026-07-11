@@ -73,13 +73,14 @@ require_match "routing metrics background persistence" 'persistenceQueue\.asyncA
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
-require_line_count_at_most "ResultViewModel streaming split" Sources/SnapAI/ResultViewModel.swift 590
+require_line_count_at_most "ResultViewModel submission split" Sources/SnapAI/ResultViewModel.swift 540
 require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
 require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
 require_line_count_at_most "ResultCompletionCoordinator split" Sources/SnapAI/ResultCompletionCoordinator.swift 130
 require_line_count_at_most "ResultRouteAttemptCoordinator split" Sources/SnapAI/ResultRouteAttemptCoordinator.swift 140
 require_line_count_at_most "ResultRequestPreparationCoordinator split" Sources/SnapAI/ResultRequestPreparationCoordinator.swift 140
 require_line_count_at_most "ResultStreamingCoordinator split" Sources/SnapAI/ResultStreamingCoordinator.swift 110
+require_line_count_at_most "ResultSubmissionCoordinator split" Sources/SnapAI/ResultSubmissionCoordinator.swift 70
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -119,6 +120,12 @@ require_no_match "result view model typewriter task per tick" 'Task \{ @MainActo
 require_no_match "full output replacement on provider delta" 'self\.output = immediate' Sources/SnapAI/ResultViewModel.swift
 require_no_match "typewriter timer task allocation" 'Task[[:space:]]*\{' Sources/SnapAI/ResultStreamingCoordinator.swift
 require_match "streaming lifecycle test" 'testResultStreamingLifecycleCoordinatesImmediateAndTypewriterPresentation' Tests/SnapAILogicTests/RoutingTests.swift
+require_match "submission coordinator usage" 'submissionCoordinator\.prepare' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model conversation storage" 'private var history: \[ChatMessage\]' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model pending image retention" 'pendingImage(Data|MimeType)' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model privacy fallback duplication" 'PrivacyRiskAssessment\.assess' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model request session assembly" 'RequestSession\.' Sources/SnapAI/ResultViewModel.swift
+require_match "passthrough privacy regression test" 'testPrivacyPreparedSubmissionPassthroughPreservesRiskProtection' Tests/SnapAILogicTests/PrivacyTests.swift
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift

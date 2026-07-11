@@ -286,6 +286,35 @@ struct PrivacySubmissionDiagnostic: Equatable {
 struct PrivacyPreparedSubmission: Equatable {
     var text: String
     var diagnostic: PrivacySubmissionDiagnostic
+
+    /// 未配置额外脱敏/确认 handler 时的保守直通结果，仍执行风险评估与历史保护。
+    static func passthrough(text: String,
+                            saveHistoryEnabled: Bool,
+                            historyContentStorage: HistoryContentStorage) -> PrivacyPreparedSubmission {
+        let risk = PrivacyRiskAssessment.assess(
+            originalText: text,
+            redactionPreview: PrivacyRedactionPreview(output: text, reports: []),
+            redactionEnabled: false,
+            hasImage: false,
+            saveHistoryEnabled: saveHistoryEnabled,
+            historyContentStorage: historyContentStorage
+        )
+        return PrivacyPreparedSubmission(
+            text: text,
+            diagnostic: PrivacySubmissionDiagnostic(
+                originalCharacterCount: text.count,
+                submittedCharacterCount: text.count,
+                hasImage: false,
+                redactionEnabled: false,
+                redactionMatchCount: 0,
+                invalidRedactionRuleCount: 0,
+                saveHistoryEnabled: saveHistoryEnabled,
+                historyContentStorage: historyContentStorage,
+                previewRequired: false,
+                riskAssessment: risk
+            )
+        )
+    }
 }
 
 struct PrivacySubmissionPreview {
