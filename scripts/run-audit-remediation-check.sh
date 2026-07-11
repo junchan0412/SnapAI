@@ -146,6 +146,8 @@ require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|Ma
 require_no_match "markdown parsing in SwiftUI body" 'MarkdownParser\.parse|AttributedString\(markdown:' Sources/SnapAI/MarkdownView.swift
 require_match "markdown background presentation refresh" 'refreshQueue\.async' Sources/SnapAI/MarkdownPresentationModel.swift
 require_match "markdown ready final scroll" 'onPresentationReady: onMarkdownReady' Sources/SnapAI/ResultLiveOutputView.swift
+require_match "markdown code copy feedback route" 'onCopyCode: onCopyCode' Sources/SnapAI/ResultLiveOutputView.swift
+require_no_match "markdown direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/MarkdownView.swift
 require_match "markdown presentation regression test" 'testMarkdownPresentationBuildsBlocksAndRejectsStaleRefreshes' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\.scrollTo\("output"' Sources/SnapAI/ResultView.swift
 [ -f Sources/SnapAILogic/ResultContentPresentation.swift ] \
@@ -194,6 +196,10 @@ require_no_match "history broad settings observation" '@ObservedObject var setti
 require_no_match "history tag draft list invalidation" '@Published var tagDrafts' Sources/SnapAI/HistoryWindowModel.swift
 require_no_match "history synchronous view search" 'private var filtered: \[HistoryEntry\]' Sources/SnapAI/HistoryWindow.swift
 require_no_match "history retained context draft" 'var contextProfileDraft:' Sources/SnapAI/HistoryWindowModel.swift
+require_match "history operation coordinator reuse" 'operationCoordinator\.export' Sources/SnapAI/HistoryWindow.swift
+require_no_match "history direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/HistoryWindow.swift
+require_no_match "silent history export failure" 'try\?.*\.write\(' Sources/SnapAI/HistoryWindow.swift
+require_no_match "history settings direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/HistorySettingsSection.swift
 require_match "history cached compact date formatter" 'static let compact: DateFormatter' Sources/SnapAI/History.swift
 require_no_match "history per-row date formatter allocation" 'let f = DateFormatter\(\)' Sources/SnapAI/History.swift
 [ -f Sources/SnapAILogic/HistoryWindowRefreshPolicy.swift ] \

@@ -1,9 +1,9 @@
 import SwiftUI
-import AppKit
 
 struct HistorySettingsSection: View {
     @ObservedObject var settings: AppSettings
     let commit: () -> Void
+    @StateObject private var operationCoordinator = ResultOperationCoordinator()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -14,6 +14,12 @@ struct HistorySettingsSection: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .bottom) {
+            ResultOperationFeedbackHost(coordinator: operationCoordinator)
+                .frame(maxWidth: 420)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
+        }
     }
 
     @ViewBuilder
@@ -140,8 +146,8 @@ struct HistorySettingsSection: View {
 
     private func copyHistoryOutput(_ entry: HistoryEntry) {
         guard let output = entry.copyableOutputText else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(output, forType: .string)
+        operationCoordinator.copy(text: output,
+                                  successMessage: "结果已复制",
+                                  emptyMessage: "该记录没有可复制的结果。")
     }
 }

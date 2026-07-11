@@ -1,6 +1,6 @@
 import SwiftUI
 import AppKit
-import UniformTypeIdentifiers
+import SnapAILogic
 
 @MainActor
 final class HistoryWindowController: NSObject, NSWindowDelegate {
@@ -46,6 +46,7 @@ struct HistoryWindowView: View {
     let settings: AppSettings
     @ObservedObject var model: HistoryWindowModel
     var reopen: (HistoryEntry) -> Void
+    @StateObject private var operationCoordinator = ResultOperationCoordinator()
     @FocusState private var focusedTagID: String?
 
     var body: some View {
@@ -86,6 +87,12 @@ struct HistoryWindowView: View {
         }
         .onDisappear {
             commitTagDrafts(except: nil)
+        }
+        .overlay(alignment: .bottom) {
+            ResultOperationFeedbackHost(coordinator: operationCoordinator)
+                .frame(maxWidth: 420)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
         }
     }
 
@@ -249,7 +256,9 @@ struct HistoryWindowView: View {
                 .help(entry.isFavorite ? "取消收藏" : "收藏")
                 Button {
                     guard let output = entry.copyableOutputText else { return }
-                    copy(output)
+                    operationCoordinator.copy(text: output,
+                                              successMessage: "结果已复制",
+                                              emptyMessage: "该记录没有可复制的结果。")
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
@@ -257,7 +266,9 @@ struct HistoryWindowView: View {
                 .disabled(entry.copyableOutputText == nil)
                 .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
                 Button {
-                    copy(entry.markdownExport)
+                    operationCoordinator.copy(text: entry.markdownExport,
+                                              successMessage: "完整记录已复制",
+                                              emptyMessage: "该记录没有可复制的内容。")
                 } label: {
                     Image(systemName: "doc.richtext")
                 }
@@ -314,22 +325,23 @@ struct HistoryWindowView: View {
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
-    private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
-
     private func copyFilteredHistory() {
-        copy(historyCollectionExport().markdown)
+        let export = historyCollectionExport()
+        operationCoordinator.copy(text: export.markdown,
+                                  successMessage: "已复制 \(export.entries.count) 条历史记录",
+                                  emptyMessage: "当前没有可复制的历史记录。")
     }
 
-    private func exportFilteredHistory() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "SnapAI-History-\(Int(Date().timeIntervalSince1970)).md"
-        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? historyCollectionExport().markdown.write(to: url, atomically: true, encoding: .utf8)
-        }
+    private func exportFilteredHistory(date: Date = Date()) {
+        let export = historyCollectionExport(date: date)
+        operationCoordinator.export(
+            markdown: export.markdown,
+            suggestedFilename: ResultExportFilename.suggested(
+                actionName: "SnapAI-History",
+                timestamp: Int(date.timeIntervalSince1970)
+            ),
+            emptyMessage: "当前没有可导出的历史记录。"
+        )
     }
 
     private func saveCurrentFilter() {
