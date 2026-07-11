@@ -2,10 +2,10 @@
 
 ## 当前基线
 
-- 版本:1.6.65
-- `SnapAILogic` 真实 Swift 源码:44 个
+- 版本:1.6.66
+- `SnapAILogic` 真实 Swift 源码:45 个
 - `SnapAILogic` 剩余 symlink:36 个
-- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 44 个
+- 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 45 个
 - 发布门禁同时禁止进入 `SnapAILogic` 的源码 `import SnapAILogic`,防止 symlink 文件形成 target 自导入
 - 迁移候选分析:`scripts/report-logic-migration-candidates.sh` 会列出每个剩余 symlink 的 top-level type 消费者,并用 `boundary` 标记 `cluster` / `app-api` / `isolated`,用于决定下一轮是按簇迁移、加 app bridge/DTO,还是可直接迁移。
 
@@ -24,6 +24,7 @@
 - 结果完成生命周期:`ResultCompletionLifecycle` 保证每个请求只完成一次并跟踪历史持久化;app target 的 `ResultCompletionCoordinator` 统一完成指标、usage、history、settings save 与 auto replace 副作用。
 - 路由 attempt 协调:`ResultRouteAttemptCoordinator` 在 app target 统一 preflight skip、scoped settings、成功/失败 diagnostics 与 routing metrics;VM 仅保留 streaming UI 状态归约。
 - 请求 preparation 协调:`ResultRequestPreparationCoordinator` 在 app target 统一 privacy payload counts、context/payload/pipeline diagnostics、candidate routes 与 no-candidate recovery;VM 仅解释 ready/unavailable。
+- 流式呈现生命周期:`ResultStreamingLifecycle` 统一 visible/thinking accumulator、typewriter pending chunks 与 provider-finished 状态;app target 的 `ResultStreamingCoordinator` 只管理主线程 Timer 和 leaf-state 回调。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析
