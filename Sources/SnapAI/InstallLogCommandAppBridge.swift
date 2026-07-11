@@ -2,6 +2,15 @@ import Foundation
 import SnapAILogic
 
 extension UpdateChecker.InstallLogStatus {
+    var permissionHealthStatus: PermissionInstallLogStatus {
+        PermissionInstallLogStatus(
+            diagnosticPath: diagnosticPath,
+            isAvailable: url != nil,
+            diagnosticCode: diagnosticCode,
+            recoverySuggestion: recoverySuggestion
+        )
+    }
+
     var installLogCommandStatus: InstallLogCommandStatus {
         switch self {
         case .noRecord:

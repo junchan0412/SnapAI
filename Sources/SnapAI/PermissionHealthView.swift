@@ -24,7 +24,8 @@ final class PermissionHealthModel: ObservableObject {
                                                  hotKeyFailures: hotKeyFailures(),
                                                  textCaptureStatus: textCaptureStatus(),
                                                  writeBackStatus: writeBackStatus(),
-                                                 recentAIRequestStatus: recentAIRequestStatus())
+                                                 recentAIRequestStatus: recentAIRequestStatus(),
+                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus)
     }
 
     func refresh() {
@@ -32,7 +33,8 @@ final class PermissionHealthModel: ObservableObject {
                                                  hotKeyFailures: hotKeyFailures(),
                                                  textCaptureStatus: textCaptureStatus(),
                                                  writeBackStatus: writeBackStatus(),
-                                                 recentAIRequestStatus: recentAIRequestStatus())
+                                                 recentAIRequestStatus: recentAIRequestStatus(),
+                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus)
     }
 }
 

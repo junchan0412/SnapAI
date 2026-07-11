@@ -768,7 +768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func checkForUpdates() {
-        UpdateChecker.check()
+        UpdateCheckerApp.check()
     }
 
     // MARK: - 引导页(#14)

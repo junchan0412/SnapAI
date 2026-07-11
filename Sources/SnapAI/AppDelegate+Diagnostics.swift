@@ -1,4 +1,5 @@
 import AppKit
+import SnapAILogic
 
 @MainActor
 extension AppDelegate {
@@ -45,6 +46,7 @@ extension AppDelegate {
             textCaptureStatus: currentTextCaptureStatusSummary() ?? "none",
             writeBackStatus: currentWriteBackStatusSummary() ?? "none",
             recentAIRequestStatus: resultVM?.requestHealthStatusText ?? "none",
+            installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus,
             includeSigningSummary: includeSigningSummary
         )
     }
