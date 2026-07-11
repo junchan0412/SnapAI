@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.54 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.55 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.54 版本重点
+## 1.6.55 版本重点
 
-- 写回状态、撤销判断、失败诊断与粘贴时序已迁入纯 `TextWriteBackLogic`,logic tests 不再依赖 AppKit 运行对象。
-- `TextEditTransaction` 从 410 行缩减为 145 行 app-only adapter,只负责目标应用激活、粘贴与剪贴板恢复。
-- `WriteBackCompatibility` 已成为 `SnapAILogic` 真实源码,app target 中的重复定义已删除。
-- 写回命令与执行链统一使用 `TextWriteBackOperation`,删除重复 operation enum 和转换 bridge。
-- `SnapAILogic` 基线收紧为最多 37 个 symlink、至少 39 个真实源码。
+- 快捷提问图片预览改为一次解码并缓存,SwiftUI 重绘不再重复执行 `NSImage(data:)`。
+- 图片压缩的每档分辨率都使用独立 `autoreleasepool`,及时释放大 bitmap 和编码中间对象。
+- 截图与剪贴板图片统一通过附件入口更新,发送或移除后同时清理 data、preview、MIME 和状态提示。
+- “剪贴板中没有图片”现在会显示明确恢复提示;成功优化改用正常状态样式,不再误显示为橙色警告。
+- 图片移除按钮补齐 Help 与 accessibility label,面板会根据预览和提示自动调整高度。
 
-详细发布说明见 [SnapAI 1.6.54 Release Notes](docs/RELEASE_NOTES_1.6.54.md),阶段性复盘见 [SnapAI 1.6.54 Iteration Report](docs/ITERATION_REPORT_1.6.54.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.55 Release Notes](docs/RELEASE_NOTES_1.6.55.md),阶段性复盘见 [SnapAI 1.6.55 Iteration Report](docs/ITERATION_REPORT_1.6.55.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.54
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.55
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
