@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.57 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.58 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.57 版本重点
+## 1.6.58 版本重点
 
-- 1092 行混合 `UpdateChecker` 已拆为 620 行真实 logic core 与 479 行 app-only adapter。
-- 版本比较、Release asset、manifest、signature、digest、安装日志与签名解析不再通过 symlink 重复编译。
-- 网络请求、AppKit alert、解压、签名连续性和安装器保持在 `UpdateCheckerApp` 中。
-- 权限健康诊断改为显式接收安装日志快照,纯诊断构建不再隐式读取更新器全局状态。
-- `SnapAILogic` 基线收紧为最多 36 个 symlink、至少 40 个真实源码。
+- 路由成功、失败和手动偏好不再在请求/UI 调用线程同步 JSON 编码与原子写盘。
+- 350ms 窗口内的连续 metrics 变化会合并为一次后台持久化,减少磁盘写入和主线程卡顿。
+- 后台任务只保存最新 generation,过期 snapshot 不会覆盖新数据。
+- 应用退出时同步 flush 最新 metrics,避免 debounce 窗口内的数据丢失。
+- 新增 12 次快速更新合并为 1 次写入、退出 flush 和延迟写入失效的并发回归测试。
 
-详细发布说明见 [SnapAI 1.6.57 Release Notes](docs/RELEASE_NOTES_1.6.57.md),阶段性复盘见 [SnapAI 1.6.57 Iteration Report](docs/ITERATION_REPORT_1.6.57.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.58 Release Notes](docs/RELEASE_NOTES_1.6.58.md),阶段性复盘见 [SnapAI 1.6.58 Iteration Report](docs/ITERATION_REPORT_1.6.58.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.57
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.58
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

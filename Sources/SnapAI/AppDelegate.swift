@@ -557,6 +557,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        RoutingMetricsStore.shared.flushPersistence()
+    }
+
     // MARK: - 自动化 URL
 
     // MARK: - 快捷键
