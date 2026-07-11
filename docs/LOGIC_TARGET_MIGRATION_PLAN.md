@@ -2,7 +2,7 @@
 
 ## 当前基线
 
-- 版本:1.6.63
+- 版本:1.6.64
 - `SnapAILogic` 真实 Swift 源码:44 个
 - `SnapAILogic` 剩余 symlink:36 个
 - 发布门禁:`scripts/check-logic-symlinks.sh` 要求 symlink 不得超过 36 个,真实源码不得少于 44 个
@@ -22,6 +22,7 @@
 - 结果实时状态:`ResultLiveOutputState` 将 output 与 thinking 分为独立 observable source,重复文本更新短路;app target 仅保留具体 SwiftUI 内容、滚动观察器和操作工具栏。
 - 结果完成状态:`ResultCompletionState` 将 elapsed 与 characterCount 合并为可去重 snapshot;`ResultDiagnosticTextSnapshot` 将 full/brief diagnostics 合并为单一根级 value update。
 - 结果完成生命周期:`ResultCompletionLifecycle` 保证每个请求只完成一次并跟踪历史持久化;app target 的 `ResultCompletionCoordinator` 统一完成指标、usage、history、settings save 与 auto replace 副作用。
+- 路由 attempt 协调:`ResultRouteAttemptCoordinator` 在 app target 统一 preflight skip、scoped settings、成功/失败 diagnostics 与 routing metrics;VM 仅保留 streaming UI 状态归约。
 
 - 结果面板命令:结果操作、固定、诊断、恢复建议、写回协调器
 - 取词辅助:截图权限、截图临时文件、截图失败诊断、取词目标解析

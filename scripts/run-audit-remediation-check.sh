@@ -73,10 +73,11 @@ require_match "routing metrics background persistence" 'persistenceQueue\.asyncA
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
-require_line_count_at_most "ResultViewModel completion split" Sources/SnapAI/ResultViewModel.swift 700
+require_line_count_at_most "ResultViewModel route split" Sources/SnapAI/ResultViewModel.swift 670
 require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
 require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
 require_line_count_at_most "ResultCompletionCoordinator split" Sources/SnapAI/ResultCompletionCoordinator.swift 130
+require_line_count_at_most "ResultRouteAttemptCoordinator split" Sources/SnapAI/ResultRouteAttemptCoordinator.swift 140
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -98,6 +99,11 @@ require_match "completion coordinator usage" 'completionCoordinator\.finish' Sou
 require_no_match "result view model completion flags" 'private var (startTime|savedToHistory|metricsFinished)' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result view model history persistence" 'ResultPersistence\.saveHistoryIfNeeded' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result view model usage persistence" 'settings\.recordActionUsage' Sources/SnapAI/ResultViewModel.swift
+require_match "route attempt coordinator usage" 'routeAttemptCoordinator\.prepare' Sources/SnapAI/ResultViewModel.swift
+require_match "single success elapsed sample" 'let elapsedMilliseconds = AIRequestAttemptDiagnostic\.elapsedMilliseconds' Sources/SnapAI/ResultRouteAttemptCoordinator.swift
+require_no_match "result view model route scoped settings" 'AIRequestRouter\.scopedSettings' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model route fallback decision" 'FallbackRunner\.routeFailure' Sources/SnapAI/ResultViewModel.swift
+require_no_match "result view model route metrics write" 'RoutingMetricsStore\.shared\.record(Success|Failure)' Sources/SnapAI/ResultViewModel.swift
 require_no_match "result root reads live output" 'vm\.(output|thinkingText)\b' Sources/SnapAI/ResultView.swift
 require_match "live output isolation test" 'testResultLiveOutputStatesPublishIndependently' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming markdown reparse" 'if .*isStreaming.*MarkdownView|MarkdownView\(text: state\.text\).*isStreaming' Sources/SnapAI/ResultLiveOutputView.swift
