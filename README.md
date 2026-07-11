@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.67 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.68 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.67 版本重点
+## 1.6.68 版本重点
 
-- 新增 `ResultSubmissionCoordinator`,统一 source resend、动作/语言切换和 follow-up 的隐私准备入口。
-- initial/follow-up conversation messages 由 coordinator 单点持有,VM 不再直接修改 history 数组。
-- 新增 `PrivacyPreparedSubmission.passthrough`,消除两套重复 risk/diagnostic 构造,高风险内容仍自动保护历史与导出。
-- 首次图片直接进入 request session,删除 VM 的 pending image data/mime 强引用。
-- `ResultViewModel` 从 585 行降至 535 行,门禁收紧到 540 行。
+- 新增 `ResultOperationCoordinator`,统一结果复制、诊断复制、Markdown 导出与写回命令适配。
+- 复制会检查 pasteboard 写入结果;导出失败不再被 `try?` 静默吞掉。
+- footer 新增低干扰操作反馈条,成功/失败使用不同颜色和停留时长,支持手动关闭与自动消失。
+- feedback 使用独立 observable leaf,操作提示不会触发整个结果窗口的 VM invalidation。
+- 导出建议文件名会清理路径分隔符、控制字符和超长动作名。
 
-详细发布说明见 [SnapAI 1.6.67 Release Notes](docs/RELEASE_NOTES_1.6.67.md),阶段性复盘见 [SnapAI 1.6.67 Iteration Report](docs/ITERATION_REPORT_1.6.67.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.68 Release Notes](docs/RELEASE_NOTES_1.6.68.md),阶段性复盘见 [SnapAI 1.6.68 Iteration Report](docs/ITERATION_REPORT_1.6.68.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.67
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.68
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

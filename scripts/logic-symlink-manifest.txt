@@ -45,6 +45,7 @@ ResultCompletionLifecycle.swift
 ResultContentPresentation.swift
 ResultDiagnosticsCommand.swift
 ResultLiveOutputState.swift
+ResultOperationFeedback.swift
 ResultPersistence.swift
 ResultPinCommand.swift
 ResultRecoveryCommand.swift

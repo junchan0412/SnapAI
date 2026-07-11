@@ -1,5 +1,5 @@
 import Combine
-import AppKit
+import Foundation
 import SnapAILogic
 
 /// 浮动结果窗口的状态机
@@ -46,6 +46,7 @@ final class ResultViewModel: ObservableObject {
     private let requestPreparationCoordinator: ResultRequestPreparationCoordinator
     private let streamingCoordinator: ResultStreamingCoordinator
     private let submissionCoordinator: ResultSubmissionCoordinator
+    let operationCoordinator: ResultOperationCoordinator
     private var autoReplaceEnabled = false
     private var replacementOriginalText: String = ""
     private var submissionPrivacy: PrivacySubmissionDiagnostic?
@@ -73,6 +74,7 @@ final class ResultViewModel: ObservableObject {
         self.requestPreparationCoordinator = ResultRequestPreparationCoordinator(settings: settings)
         self.streamingCoordinator = ResultStreamingCoordinator()
         self.submissionCoordinator = ResultSubmissionCoordinator(settings: settings)
+        self.operationCoordinator = ResultOperationCoordinator()
     }
 
     // #3 图片(来自截图/粘贴)
@@ -282,48 +284,45 @@ final class ResultViewModel: ObservableObject {
     }
 
     func copyOutput() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(completeText, forType: .string)
+        copy(completeText, success: "结果已复制", empty: "当前没有可复制的结果。")
     }
 
     func copyConversationMarkdown() {
-        guard !completeText.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(conversationExport().markdown, forType: .string)
+        copy(completeText.isEmpty ? "" : conversationExport().markdown,
+             success: "对话 Markdown 已复制", empty: "当前没有可复制的对话内容。")
     }
 
     func copyRequestDiagnostics() {
-        guard !requestDiagnosticText.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(requestDiagnosticText, forType: .string)
+        copy(requestDiagnosticText, success: "完整诊断已复制",
+             empty: "当前没有可复制的请求诊断。")
     }
 
     func copyBriefRequestDiagnostics() {
-        guard !requestDiagnosticBriefText.isEmpty else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(requestDiagnosticBriefText, forType: .string)
+        copy(requestDiagnosticBriefText, success: "精简诊断已复制",
+             empty: "当前没有可复制的请求诊断。")
     }
 
     /// #3 替换原文
     func replaceOriginal() {
-        ResultWriteBackCoordinator.replace(original: replacementOriginalText,
-                                           replacement: completeText,
-                                           handler: onReplace)
+        operationCoordinator.replace(original: replacementOriginalText,
+                                     replacement: completeText, handler: onReplace)
     }
 
     /// #8 追加到文档
     func appendToDocument() {
-        ResultWriteBackCoordinator.append(text: completeText,
-                                          handler: onAppend)
+        operationCoordinator.append(text: completeText, handler: onAppend)
     }
 
     func exportConversation() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(action.name)-\(Int(Date().timeIntervalSince1970)).md"
-        panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .text]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? conversationExport().markdown.write(to: url, atomically: true, encoding: .utf8)
-        }
+        operationCoordinator.export(
+            markdown: completeText.isEmpty ? "" : conversationExport().markdown,
+            actionName: action.name
+        )
+    }
+
+    private func copy(_ text: String, success: String, empty: String) {
+        operationCoordinator.copy(text: text, successMessage: success,
+                                  emptyMessage: empty)
     }
 
     private func conversationExport(date: Date = Date()) -> ConversationExport {
@@ -350,6 +349,7 @@ final class ResultViewModel: ObservableObject {
         showRouteDetails = false
         errorMessage = nil
         routeNote = nil
+        operationCoordinator.clearFeedback()
         requestDiagnostics = nil
         if diagnosticText != .empty {
             diagnosticText = .empty
