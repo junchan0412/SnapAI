@@ -24,6 +24,7 @@ History.swift
 HistoryContextCommand.swift
 HistoryExportCommand.swift
 HistoryStore.swift
+HistoryWindowRefreshPolicy.swift
 HotKeyCoordinator.swift
 HotKeyManager.swift
 HotKeyUtilities.swift

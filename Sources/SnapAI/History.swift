@@ -1,5 +1,17 @@
 import Foundation
 
+private enum HistoryDateFormatting {
+    static let compact: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter
+    }()
+
+    static let iso8601 = ISO8601DateFormatter()
+}
+
 /// 一条历史记录(一次问答)
 struct HistoryEntry: Codable, Identifiable, Equatable {
     var id: String = UUID().uuidString
@@ -164,13 +176,11 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
     }
 
     var dateString: String {
-        let f = DateFormatter()
-        f.dateFormat = "MM-dd HH:mm"
-        return f.string(from: date)
+        HistoryDateFormatting.compact.string(from: date)
     }
 
     var markdownExport: String {
-        let fullDate = ISO8601DateFormatter().string(from: date)
+        let fullDate = HistoryDateFormatting.iso8601.string(from: date)
         let actionTitle = displayActionName.snapAIHistoryMarkdownMetadata(fallback: "未命名动作", maxLength: 80)
         let modelText = modelDisplayText.snapAIHistoryMarkdownMetadata(fallback: "未知模型", maxLength: 160)
         let tagText = markdownTagText
@@ -588,7 +598,7 @@ struct HistoryCollectionExport {
     var date: Date = Date()
 
     var markdown: String {
-        let generatedAt = ISO8601DateFormatter().string(from: date)
+        let generatedAt = HistoryDateFormatting.iso8601.string(from: date)
         let exportTitle = title.snapAIHistoryMarkdownMetadata(fallback: "SnapAI 历史记录", maxLength: 80)
         let criteriaSummary = criteria.summaryText.snapAIHistoryMarkdownMetadata(fallback: "全部历史", maxLength: 240)
         var sections = [
@@ -670,7 +680,7 @@ enum HistoryContextProfileBuilder {
         var lines = [
             "# SnapAI 历史上下文",
             "",
-            "- 生成时间: \(ISO8601DateFormatter().string(from: generatedAt))",
+            "- 生成时间: \(HistoryDateFormatting.iso8601.string(from: generatedAt))",
             "- 来源筛选: \(metadata(criteria.summaryText, fallback: "全部历史", maxLength: 240))",
             "- 原始记录: \(originalCount)",
             "- 写入记录: \(entries.count)",

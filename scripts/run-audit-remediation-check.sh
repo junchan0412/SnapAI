@@ -83,6 +83,24 @@ require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\
   || fail "SnapAILogic ResultContentPresentation must be a real source file"
 [ ! -e Sources/SnapAI/ResultContentPresentation.swift ] \
   || fail "ResultContentPresentation must not be duplicated in the app target"
+require_line_count_at_most "HistoryWindow view split" Sources/SnapAI/HistoryWindow.swift 500
+require_line_count_at_most "HistoryWindowModel split" Sources/SnapAI/HistoryWindowModel.swift 260
+require_match "history presentation background refresh" 'refreshQueue\.async' Sources/SnapAI/HistoryWindowModel.swift
+require_match "history query debounce" 'HistoryWindowRefreshPolicy\.delay' Sources/SnapAI/HistoryWindowModel.swift
+require_match "history stale refresh protection" 'HistoryWindowRefreshPolicy\.shouldPublish' Sources/SnapAI/HistoryWindowModel.swift
+require_match "history cached presentation" '@Published private\(set\) var presentation' Sources/SnapAI/HistoryWindowModel.swift
+require_no_match "history broad settings observation" '@ObservedObject var settings: AppSettings' Sources/SnapAI/HistoryWindow.swift
+require_no_match "history tag draft list invalidation" '@Published var tagDrafts' Sources/SnapAI/HistoryWindowModel.swift
+require_no_match "history synchronous view search" 'private var filtered: \[HistoryEntry\]' Sources/SnapAI/HistoryWindow.swift
+require_no_match "history retained context draft" 'var contextProfileDraft:' Sources/SnapAI/HistoryWindowModel.swift
+require_match "history cached compact date formatter" 'static let compact: DateFormatter' Sources/SnapAI/History.swift
+require_no_match "history per-row date formatter allocation" 'let f = DateFormatter\(\)' Sources/SnapAI/History.swift
+[ -f Sources/SnapAILogic/HistoryWindowRefreshPolicy.swift ] \
+  || fail "SnapAILogic HistoryWindowRefreshPolicy source is missing"
+[ ! -L Sources/SnapAILogic/HistoryWindowRefreshPolicy.swift ] \
+  || fail "SnapAILogic HistoryWindowRefreshPolicy must be a real source file"
+[ ! -e Sources/SnapAI/HistoryWindowRefreshPolicy.swift ] \
+  || fail "HistoryWindowRefreshPolicy must not be duplicated in the app target"
 
 scripts/check-logic-symlinks.sh >/dev/null
 [ -x scripts/report-logic-migration-candidates.sh ] \

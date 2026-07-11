@@ -940,3 +940,20 @@ func testConversationExportMarkdown() {
     expect(protectedMarkdown.contains("Privacy Risk: high"),
            "protected conversation export still includes safe diagnostics")
 }
+
+func testHistoryWindowRefreshPolicyDebouncesQueriesAndRejectsStaleResults() {
+    expect(HistoryWindowRefreshPolicy.delay(queryChanged: false) == 0,
+           "facet and history changes refresh without artificial latency")
+    expect(HistoryWindowRefreshPolicy.delay(queryChanged: true) ==
+            HistoryWindowRefreshPolicy.queryDebounceInterval,
+           "query typing uses the shared debounce interval")
+    expect(HistoryWindowRefreshPolicy.queryDebounceInterval >= 0.15 &&
+            HistoryWindowRefreshPolicy.queryDebounceInterval <= 0.25,
+           "query debounce stays responsive while coalescing rapid keystrokes")
+    expect(HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: 9,
+                                                     latestGeneration: 9),
+           "latest background search result may publish")
+    expect(!HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: 8,
+                                                      latestGeneration: 9),
+           "stale background search result cannot replace newer filters")
+}

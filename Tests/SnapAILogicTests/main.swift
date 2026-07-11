@@ -961,6 +961,7 @@ testHistoryExportCommandFactoryBuildsRankedFacetCommands()
 testHistoryExportCommandFactoryKeepsPrivacyTagsBeyondFacetLimit()
 testHistoryExportCommandIDsAreStableSlugs()
 testConversationExportMarkdown()
+testHistoryWindowRefreshPolicyDebouncesQueriesAndRejectsStaleResults()
 testResultPersistenceAndWriteBackCoordinator()
 
     return failures

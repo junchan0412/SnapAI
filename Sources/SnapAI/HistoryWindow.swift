@@ -2,49 +2,17 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-final class HistoryWindowModel: ObservableObject {
-    @Published var query = ""
-    @Published var actionFilter = HistoryFilterCriteria.allActions
-    @Published var modelFilter = HistoryFilterCriteria.allModels
-    @Published var tagFilter = HistoryFilterCriteria.allTags
-    @Published var favoriteOnly = false
-    @Published var tagDrafts: [String: String] = [:]
-
-    func resetFilters() {
-        query = ""
-        actionFilter = HistoryFilterCriteria.allActions
-        modelFilter = HistoryFilterCriteria.allModels
-        tagFilter = HistoryFilterCriteria.allTags
-        favoriteOnly = false
-    }
-
-    func apply(criteria: HistoryFilterCriteria) {
-        query = criteria.query
-        actionFilter = criteria.actionFilter
-        modelFilter = criteria.modelFilter
-        tagFilter = criteria.tagFilter
-        favoriteOnly = criteria.favoriteOnly
-    }
-
-    var criteria: HistoryFilterCriteria {
-        HistoryFilterCriteria(query: query,
-                              actionFilter: actionFilter,
-                              modelFilter: modelFilter,
-                              tagFilter: tagFilter,
-                              favoriteOnly: favoriteOnly)
-    }
-}
-
 @MainActor
 final class HistoryWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
     private let reopen: (HistoryEntry) -> Void
-    private let model = HistoryWindowModel()
+    private let model: HistoryWindowModel
 
     init(settings: AppSettings, reopen: @escaping (HistoryEntry) -> Void) {
         self.settings = settings
         self.reopen = reopen
+        self.model = HistoryWindowModel(settings: settings)
         super.init()
     }
 
@@ -75,59 +43,36 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
 }
 
 struct HistoryWindowView: View {
-    @ObservedObject var settings: AppSettings
+    let settings: AppSettings
     @ObservedObject var model: HistoryWindowModel
     var reopen: (HistoryEntry) -> Void
     @FocusState private var focusedTagID: String?
 
-    private var actionNames: [String] {
-        facetOptions(allValue: HistoryFilterCriteria.allActions,
-                     values: settings.history.map(\.displayActionName),
-                     currentValue: model.actionFilter)
-    }
-
-    private var modelNames: [String] {
-        facetOptions(allValue: HistoryFilterCriteria.allModels,
-                     values: settings.history.map(\.displayModelFilterName),
-                     currentValue: model.modelFilter)
-    }
-
-    private var tagNames: [String] {
-        facetOptions(allValue: HistoryFilterCriteria.allTags,
-                     values: settings.history.flatMap(\.displayTags),
-                     currentValue: model.tagFilter)
-    }
-
-    private var filtered: [HistoryEntry] {
-        HistorySearch.filteredEntries(criteria: model.criteria,
-                                      memoryEntries: settings.history,
-                                      limit: settings.historyLimit,
-                                      searchStore: HistoryStore.shared.search)
-    }
-
-    private var contextProfileDraft: HistoryContextProfileDraft? {
-        HistoryContextProfileBuilder.draft(entries: filtered,
-                                           criteria: model.criteria)
-    }
-
     var body: some View {
+        let presentation = model.presentation
         VStack(alignment: .leading, spacing: 12) {
-            historyToolbar
-            filterSummaryBar
+            historyToolbar(presentation: presentation)
+            filterSummaryBar(presentation: presentation)
 
-            if filtered.isEmpty {
+            if presentation.entries.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text(settings.history.isEmpty ? "暂无历史记录" : "没有匹配的历史记录")
+                    if model.isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.largeTitle)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(model.isRefreshing ? "正在筛选历史记录…" :
+                            (presentation.totalCount == 0 ? "暂无历史记录" : "没有匹配的历史记录"))
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(filtered) { entry in
+                        ForEach(presentation.entries) { entry in
                             historyCard(entry)
                         }
                     }
@@ -144,12 +89,13 @@ struct HistoryWindowView: View {
         }
     }
 
-    private var historyToolbar: some View {
+    private func historyToolbar(presentation: HistoryWindowPresentation) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 TextField("搜索历史、语义、原文、结果或模型…", text: $model.query)
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 220)
+                    .onSubmit { model.refreshImmediately() }
                 Toggle(isOn: $model.favoriteOnly) {
                     Image(systemName: "star.fill")
                 }
@@ -164,19 +110,19 @@ struct HistoryWindowView: View {
                 .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
                 .help("清空筛选")
                 Spacer(minLength: 0)
-                historyToolbarActions
+                historyToolbarActions(presentation: presentation)
             }
             HStack(spacing: 8) {
                 Picker("", selection: $model.actionFilter) {
-                    ForEach(actionNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(presentation.actionNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 132)
                 Picker("", selection: $model.modelFilter) {
-                    ForEach(modelNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(presentation.modelNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 158)
                 Picker("", selection: $model.tagFilter) {
-                    ForEach(tagNames, id: \.self) { Text($0).tag($0) }
+                    ForEach(presentation.tagNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 132)
                 Spacer(minLength: 0)
@@ -185,7 +131,7 @@ struct HistoryWindowView: View {
         }
     }
 
-    private var historyToolbarActions: some View {
+    private func historyToolbarActions(presentation: HistoryWindowPresentation) -> some View {
         HStack(spacing: 6) {
             savedFilterMenu
             Button {
@@ -194,7 +140,7 @@ struct HistoryWindowView: View {
                 Image(systemName: "doc.on.doc")
             }
             .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
-            .disabled(filtered.isEmpty)
+            .disabled(model.isRefreshing || presentation.entries.isEmpty)
             .help("复制当前筛选结果")
             Button {
                 exportFilteredHistory()
@@ -202,7 +148,7 @@ struct HistoryWindowView: View {
                 Image(systemName: "square.and.arrow.down")
             }
             .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
-            .disabled(filtered.isEmpty)
+            .disabled(model.isRefreshing || presentation.entries.isEmpty)
             .help("导出当前筛选结果")
             Button {
                 createContextProfileFromFilteredHistory()
@@ -210,8 +156,8 @@ struct HistoryWindowView: View {
                 Image(systemName: "text.badge.plus")
             }
             .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
-            .disabled(contextProfileDraft == nil)
-            .help(contextProfileDraft == nil ? "当前筛选没有可写入上下文的历史内容" : "从当前筛选创建上下文包")
+            .disabled(model.isRefreshing || !presentation.canCreateContextProfile)
+            .help(presentation.canCreateContextProfile ? "从当前筛选创建上下文包" : "当前筛选没有可写入上下文的历史内容")
         }
     }
 
@@ -224,9 +170,9 @@ struct HistoryWindowView: View {
             }
             .disabled(model.criteria.isDefault)
 
-            if !settings.savedHistoryFilters.isEmpty {
+            if !model.savedFilters.isEmpty {
                 Divider()
-                ForEach(settings.savedHistoryFilters) { filter in
+                ForEach(model.savedFilters) { filter in
                     Button {
                         applySavedFilter(filter)
                     } label: {
@@ -237,7 +183,7 @@ struct HistoryWindowView: View {
 
                 Divider()
                 Menu("删除已保存筛选") {
-                    ForEach(settings.savedHistoryFilters) { filter in
+                    ForEach(model.savedFilters) { filter in
                         Button(role: .destructive) {
                             settings.deleteSavedHistoryFilter(id: filter.id)
                         } label: {
@@ -254,21 +200,25 @@ struct HistoryWindowView: View {
         .help("已保存筛选")
     }
 
-    private var filterSummaryBar: some View {
-        HStack(spacing: 6) {
-            SnapAIStatusPill(title: "\(filtered.count) / \(settings.history.count)",
+    private func filterSummaryBar(presentation: HistoryWindowPresentation) -> some View {
+        let criteria = presentation.criteria
+        return HStack(spacing: 6) {
+            SnapAIStatusPill(title: "\(presentation.entries.count) / \(presentation.totalCount)",
                              systemImage: "clock.arrow.circlepath")
-            if model.favoriteOnly {
+            if model.isRefreshing {
+                SnapAIStatusPill(title: "筛选中", systemImage: "arrow.triangle.2.circlepath", tint: .accentColor)
+            }
+            if criteria.favoriteOnly {
                 SnapAIStatusPill(title: "收藏", systemImage: "star.fill", tint: .yellow, filled: true)
             }
-            if model.actionFilter != HistoryFilterCriteria.allActions {
-                SnapAIStatusPill(title: model.actionFilter, systemImage: "wand.and.stars")
+            if criteria.actionFilter != HistoryFilterCriteria.allActions {
+                SnapAIStatusPill(title: criteria.actionFilter, systemImage: "wand.and.stars")
             }
-            if model.modelFilter != HistoryFilterCriteria.allModels {
-                SnapAIStatusPill(title: model.modelFilter, systemImage: "cpu")
+            if criteria.modelFilter != HistoryFilterCriteria.allModels {
+                SnapAIStatusPill(title: criteria.modelFilter, systemImage: "cpu")
             }
-            if model.tagFilter != HistoryFilterCriteria.allTags {
-                SnapAIStatusPill(title: "#\(model.tagFilter)", systemImage: "tag")
+            if criteria.tagFilter != HistoryFilterCriteria.allTags {
+                SnapAIStatusPill(title: "#\(criteria.tagFilter)", systemImage: "tag")
             }
             Spacer(minLength: 0)
         }
@@ -410,7 +360,11 @@ struct HistoryWindowView: View {
     }
 
     private func createContextProfileFromFilteredHistory() {
-        guard let draft = contextProfileDraft else { return }
+        let presentation = model.presentation
+        guard let draft = HistoryContextProfileBuilder.draft(entries: presentation.entries,
+                                                              criteria: presentation.criteria) else {
+            return
+        }
         let willUpdate = settings.hasContextProfile(named: draft.name)
 
         let alert = NSAlert()
@@ -436,8 +390,8 @@ struct HistoryWindowView: View {
     }
 
     private func historyCollectionExport(date: Date = Date()) -> HistoryCollectionExport {
-        HistoryCollectionExport(entries: filtered,
-                                criteria: model.criteria,
+        HistoryCollectionExport(entries: model.presentation.entries,
+                                criteria: model.presentation.criteria,
                                 date: date)
     }
 
@@ -446,18 +400,6 @@ struct HistoryWindowView: View {
         return text.components(separatedBy: separators)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-    }
-
-    private func facetOptions(allValue: String,
-                              values: [String],
-                              currentValue: String) -> [String] {
-        var options = [allValue] + HistoryFilterCriteria.facetValues(values)
-        if currentValue != allValue,
-           HistoryFilterCriteria.normalizedFacetValue(currentValue) != nil,
-           !options.contains(currentValue) {
-            options.append(currentValue)
-        }
-        return options
     }
 
     private func tagBinding(for entry: HistoryEntry) -> Binding<String> {
