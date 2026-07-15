@@ -105,12 +105,18 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     // 点击面板外部 / 按 Esc 时关闭(固定状态下不关闭)。
     // 流式生成中点击外部不再静默关闭,避免丢失正在生成的结果;用户可显式固定或关闭。
+    // 失焦行为受 resultPanelDismissMode 控制:仅 autoDismiss 注册点外部即关监听器。
     private func installDismissMonitors() {
         removeDismissMonitors()
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self = self, !self.vm.isPinned else { return }
-            if self.vm.isStreaming { return }
-            self.hide()
+        let mode = settings.resultPanelDismissMode
+        // 仅「自动关闭」模式注册点外部即关的全局监听器;
+        // keepAfterResult / alwaysKeep 依靠 Esc / X 按钮 / 写回关闭,点外部不关。
+        if mode == .autoDismiss {
+            globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                guard let self = self, !self.vm.isPinned else { return }
+                if self.vm.isStreaming { return }
+                self.hide()
+            }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             guard let self = self else { return event }

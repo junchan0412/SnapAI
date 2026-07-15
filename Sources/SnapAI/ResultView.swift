@@ -227,6 +227,13 @@ struct ResultView: View {
                         )
                     }
 
+                    if let notice = vm.transientNotice {
+                        SnapAITransientNoticeBanner(
+                            title: notice,
+                            onDismiss: { vm.dismissTransientNotice() }
+                        )
+                    }
+
                     if let err = vm.errorMessage {
                         errorBlock(err)
                     }
