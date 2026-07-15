@@ -39,6 +39,25 @@ final class ResultViewModel: ObservableObject {
     @Published var showThinking: Bool = false
     @Published var showRouteDetails: Bool = false
 
+    /// 取消生成或流式中途出错后,若保留了部分结果,则标记原因以提示用户当前不完整。
+    @Published var incompleteResultReason: IncompleteResultReason?
+
+    enum IncompleteResultReason {
+        case cancelled
+        case interrupted
+
+        var title: String {
+            switch self {
+            case .cancelled: return "已停止生成,当前为部分结果"
+            case .interrupted: return "生成被中断,当前为部分结果"
+            }
+        }
+    }
+
+    func dismissIncompleteResultNotice() {
+        incompleteResultReason = nil
+    }
+
     let settings: AppSettings
     private var client: AIClient
     private let completionCoordinator: ResultCompletionCoordinator
@@ -280,6 +299,7 @@ final class ResultViewModel: ObservableObject {
         streamingCoordinator.stopAndDiscardPendingPresentation()
         output = completeText
         isStreaming = false
+        if !completeText.isEmpty { incompleteResultReason = .cancelled }
         finishMetrics(recordUsage: false, saveHistory: false)
     }
 
@@ -353,6 +373,7 @@ final class ResultViewModel: ObservableObject {
         showRouteDetails = false
         errorMessage = nil
         routeNote = nil
+        incompleteResultReason = nil
         operationCoordinator.clearFeedback()
         requestDiagnostics = nil
         if diagnosticText != .empty {
@@ -486,6 +507,7 @@ final class ResultViewModel: ObservableObject {
                 self.streamingCoordinator.stopAndDiscardPendingPresentation()
                 self.output = self.completeText
                 self.isStreaming = false
+                if !self.completeText.isEmpty { self.incompleteResultReason = .interrupted }
                 self.finishMetrics(recordUsage: false, saveHistory: false)
             } else {
                 let completedDiagnostics = self.routeAttemptCoordinator.recordSuccess(

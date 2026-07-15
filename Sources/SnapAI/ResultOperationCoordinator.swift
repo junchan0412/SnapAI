@@ -21,7 +21,7 @@ final class ResultOperationCoordinator: ObservableObject {
         }
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else {
-            feedback = .warning("复制失败，请检查剪贴板权限后重试。")
+            feedback = .error("复制失败，请检查剪贴板权限后重试。")
             return
         }
         feedback = .success(successMessage)
@@ -68,13 +68,18 @@ final class ResultOperationCoordinator: ObservableObject {
         } catch {
             let reason = SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription,
                                                                  limit: 120)
-            feedback = .warning(reason.isEmpty ? "导出失败，请检查保存位置后重试。" : "导出失败：\(reason)")
+            feedback = .error(reason.isEmpty ? "导出失败，请检查保存位置后重试。" : "导出失败：\(reason)")
         }
     }
 
     func dismissFeedback(id: UUID) {
         guard feedback?.id == id else { return }
         feedback = nil
+    }
+
+    /// 直接展示一条成功反馈(用于非复制/导出场景,如上下文包创建完成)。
+    func showSuccess(_ message: String) {
+        feedback = .success(message)
     }
 
     func clearFeedback() {

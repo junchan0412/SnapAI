@@ -5,6 +5,7 @@ struct PrivacySettingsSection: View {
     @ObservedObject var ui: AISettingsUI
     let commit: () -> Void
     let applyCommit: (SettingsCommitPolicy) -> Void
+    @State private var pendingRestoreRedactionDefault = false
 
     var body: some View {
         section("隐私") {
@@ -25,17 +26,56 @@ struct PrivacySettingsSection: View {
                     set: { settings.redactionEnabled = $0; commit() }
                 )
             )
-            if settings.redactionEnabled {
-                compactDivider
-                redactionRulesEditor
-            }
+            // 规则常驻可见:即便脱敏关闭也能看到已有规则数量与有效性,提升可发现性。
+            compactDivider
+            redactionRulesEditor
+        }
+        .snapAIConfirmDestructive(
+            isPresented: $pendingRestoreRedactionDefault,
+            title: "恢复默认脱敏规则",
+            message: "将用内置规则覆盖当前所有自定义规则,此操作不可撤销。"
+        ) {
+            settings.redactionRules = PrivacyRedactionRule.defaults()
+            commit()
         }
     }
 
     private var redactionRulesEditor: some View {
         let preview = redactionPreview
         let patternError = newRedactionPatternError
+        let enabledCount = settings.redactionRules.filter { $0.isEnabled }.count
+        let invalidCount = preview.invalidReports.count
         return VStack(alignment: .leading, spacing: 6) {
+            // 顶部状态汇总,让规则数量与有效性一目了然(可发现性)。
+            HStack(spacing: 6) {
+                Text("脱敏规则")
+                    .font(.caption.weight(.semibold))
+                SnapAIStatusPill(title: "共 \(settings.redactionRules.count) 条",
+                                 systemImage: "shield",
+                                 tint: .secondary)
+                SnapAIStatusPill(title: "启用 \(enabledCount)",
+                                 systemImage: "checkmark.circle",
+                                 tint: enabledCount > 0 ? SnapAIUI.StatusColor.success : .secondary,
+                                 filled: enabledCount > 0)
+                if invalidCount > 0 {
+                    SnapAIStatusPill(title: "无效 \(invalidCount)",
+                                     systemImage: "exclamationmark.triangle.fill",
+                                     tint: SnapAIUI.StatusColor.error,
+                                     filled: true)
+                }
+                Spacer()
+            }
+            if !settings.redactionEnabled {
+                // 关闭时规则仍可见但不生效,明确告知避免误以为已脱敏。
+                Label("脱敏当前已关闭,规则仅在开启后生效。",
+                      systemImage: "eye.slash")
+                    .font(.caption2)
+                    .foregroundStyle(SnapAIUI.StatusColor.warning)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(SnapAIUI.StatusColor.warning.opacity(0.1),
+                                in: RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+            }
             ForEach(settings.redactionRules) { rule in
                 redactionRuleRow(rule, preview: preview)
             }
@@ -43,7 +83,7 @@ struct PrivacySettingsSection: View {
             if let patternError {
                 Label(patternError, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SnapAIUI.StatusColor.error)
             }
             Divider().padding(.vertical, 2)
             redactionPreviewPanel(preview)
@@ -81,7 +121,7 @@ struct PrivacySettingsSection: View {
             Label(report?.statusText ?? "未检测",
                   systemImage: report?.isValid == false ? "exclamationmark.triangle.fill" : "checkmark.circle")
                 .font(.caption2)
-                .foregroundStyle(report?.isValid == false ? Color.red : Color.secondary)
+                .foregroundStyle(report?.isValid == false ? SnapAIUI.StatusColor.error : Color.secondary)
         }
         .padding(6)
         .background(Color.primary.opacity(0.025))
@@ -105,8 +145,7 @@ struct PrivacySettingsSection: View {
             }
             .disabled(!canAddRedactionRule)
             Button("恢复默认") {
-                settings.redactionRules = PrivacyRedactionRule.defaults()
-                commit()
+                pendingRestoreRedactionDefault = true
             }
             .font(.caption)
         }
@@ -119,7 +158,7 @@ struct PrivacySettingsSection: View {
                 Spacer()
                 Text("命中 \(preview.totalMatches) 处 · 错误 \(preview.invalidReports.count) 条")
                     .font(.caption2)
-                    .foregroundStyle(preview.invalidReports.isEmpty ? Color.secondary : Color.red)
+                    .foregroundStyle(preview.invalidReports.isEmpty ? Color.secondary : SnapAIUI.StatusColor.error)
             }
             TextEditor(text: $ui.redactionSample)
                 .font(.system(size: 12))

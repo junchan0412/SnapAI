@@ -47,13 +47,15 @@ struct MarkdownView: View, Equatable {
                 .font(headingFont(level))
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, level <= 2 ? 8 : 6)
+                .padding(.bottom, 3)
 
         case .paragraph(let content):
             Text(content)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
         case .bullet(let items):
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(items.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: 6) {
                         Text("•").foregroundStyle(.secondary)
@@ -61,9 +63,10 @@ struct MarkdownView: View, Equatable {
                     }
                 }
             }
+            .padding(.leading, 6)
 
         case .ordered(let items):
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 ForEach(items.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: 6) {
                         Text("\(index + 1).").foregroundStyle(.secondary).monospacedDigit()
@@ -71,12 +74,17 @@ struct MarkdownView: View, Equatable {
                     }
                 }
             }
+            .padding(.leading, 6)
 
         case .quote(let content):
             HStack(spacing: 8) {
                 Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 3)
                 Text(content).foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
+            .padding(.horizontal, 8)
+            .background(Color.primary.opacity(0.035))
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .frame(maxWidth: .infinity, alignment: .leading)
 
         case .code(let code, let language):
@@ -94,27 +102,37 @@ struct MarkdownView: View, Equatable {
     }
 }
 
-/// 代码块:等宽字体 + 背景 + 复制按钮
+/// 代码块:等宽字体 + 背景 + 复制按钮(复制后内联显示「已复制」)
 private struct CodeBlockView: View {
     let code: String
     let language: String?
     let onCopy: (String) -> Void
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.isEmpty == false ? language! : "code")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                if let language, !language.isEmpty {
+                    Text(language)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button {
                     onCopy(code)
+                    withAnimation(.easeOut(duration: 0.15)) { copied = true }
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.4))
+                        withAnimation(.easeIn(duration: 0.2)) { copied = false }
+                    }
                 } label: {
-                    Image(systemName: "doc.on.doc").font(.caption2)
+                    Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption2)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(copied ? SnapAIUI.StatusColor.success : .secondary)
                 .help("复制代码块")
+                .accessibilityLabel(copied ? "已复制" : "复制代码块")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)

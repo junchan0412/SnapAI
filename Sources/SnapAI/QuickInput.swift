@@ -12,8 +12,15 @@ final class QuickInputModel: ObservableObject {
     @Published private(set) var imageMimeType: String = "image/png"
     @Published private(set) var imageNotice: QuickInputImageNotice? = nil
     @Published var isCapturing = false
+    /// 发送后短暂为 true,用于在发送按钮上显示「已发送」反馈。
+    @Published private(set) var didJustSend = false
+    /// 通用瞬时状态(如「诊断已复制」),到期自动清除。
+    @Published private(set) var transientStatus: String? = nil
     let settings: AppSettings
     var onSubmit: ((String, AIAction, Data?, String) -> Void)?
+
+    private var sendFeedbackWork: DispatchWorkItem?
+    private var transientWork: DispatchWorkItem?
 
     init(settings: AppSettings) { self.settings = settings }
 
@@ -26,6 +33,32 @@ final class QuickInputModel: ObservableObject {
         onSubmit?(t, act, imageData, imageMimeType)
         text = ""
         clearImage()
+        flashSendConfirmation()
+    }
+
+    /// 闪现「已发送」反馈,明确告知用户输入已提交。
+    private func flashSendConfirmation() {
+        didJustSend = true
+        sendFeedbackWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.didJustSend = false }
+        sendFeedbackWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1, execute: work)
+    }
+
+    /// 展示一条通用瞬时状态(如复制诊断成功),到期自动消失。
+    func showTransientStatus(_ text: String, autoDismiss: Double = 1.8) {
+        transientWork?.cancel()
+        transientStatus = text
+        let work = DispatchWorkItem { [weak self] in self?.transientStatus = nil }
+        transientWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + autoDismiss, execute: work)
+    }
+
+    func clearImage() {
+        imageData = nil
+        imagePreview = nil
+        imageMimeType = "image/png"
+        imageNotice = nil
     }
 
     /// 从剪贴板读取图片(#3)
@@ -59,13 +92,6 @@ final class QuickInputModel: ObservableObject {
         imagePreview = preview
         imageMimeType = payload.mimeType
         imageNotice = .success(QuickInputImageStatus.optimizedMessage(payload: payload))
-    }
-
-    func clearImage() {
-        imageData = nil
-        imagePreview = nil
-        imageMimeType = "image/png"
-        imageNotice = nil
     }
 }
 
@@ -116,6 +142,8 @@ struct QuickInputView: View {
                     .clipShape(Capsule())
                 }
                 .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel("选择动作")
+                .help("选择用于本次提问的动作")
             }
 
             // 图片预览
@@ -124,10 +152,13 @@ struct QuickInputView: View {
                     Image(nsImage: nsImg).resizable().scaledToFit().frame(maxHeight: 80)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     Button { model.clearImage() } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.white, Color.black.opacity(0.55))
+                            .shadow(color: .black.opacity(0.3), radius: 1)
                     }
                     .buttonStyle(.plain)
-                    .padding(2)
+                    .padding(4)
                     .help("移除图片附件")
                     .accessibilityLabel("移除图片附件")
                 }
@@ -135,7 +166,7 @@ struct QuickInputView: View {
             if let notice = model.imageNotice {
                 Label(notice.message, systemImage: notice.systemImage)
                     .font(.caption)
-                    .foregroundStyle(notice.isWarning ? Color.orange : Color.secondary)
+                    .foregroundStyle(notice.isWarning ? SnapAIUI.StatusColor.warning : SnapAIUI.StatusColor.neutral)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("图片状态: \(notice.message)")
@@ -143,48 +174,84 @@ struct QuickInputView: View {
 
             QuickPromptEditor(
                 text: $model.text,
-                placeholder: "输入你的问题,回车发送…",
+                placeholder: "输入你的问题…  (↩ 发送 · ⇧↩ 换行)",
                 onSubmit: { model.submit() }
             )
             .frame(height: 76)
 
-            HStack {
-                // #3 截图 / 粘贴图片
-                Button { onCapture() } label: {
-                    if model.isCapturing {
-                        Label("截图中", systemImage: "camera")
-                    } else {
-                        Label("截图", systemImage: "camera")
-                    }
-                }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .help(model.isCapturing ? "正在截取当前屏幕" : "截取当前屏幕")
-                .disabled(model.isCapturing)
-                if model.isCapturing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityLabel("正在截取当前屏幕")
-                }
-                Button { model.pasteImageFromClipboard() } label: {
-                    Label("粘贴图片", systemImage: "photo")
-                }
-                .buttonStyle(.borderless).controlSize(.small).help("粘贴剪贴板中的图片")
+            HStack(spacing: 8) {
+                // #3 截图 / 粘贴图片:用胶囊背景让次要操作可被发现
+                secondaryActionButton(
+                    label: model.isCapturing ? "截图中" : "截图",
+                    icon: "camera",
+                    help: model.isCapturing ? "正在截取当前屏幕" : "截取当前屏幕作为附件",
+                    isDisabled: model.isCapturing,
+                    showSpinner: model.isCapturing
+                ) { onCapture() }
+                secondaryActionButton(
+                    label: "粘贴图片",
+                    icon: "photo",
+                    help: "粘贴剪贴板中的图片作为附件",
+                    isDisabled: false,
+                    showSpinner: false
+                ) { model.pasteImageFromClipboard() }
 
                 Spacer()
+                if let status = model.transientStatus {
+                    Label(status, systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(SnapAIUI.StatusColor.success)
+                        .transition(.opacity)
+                        .accessibilityLabel(status)
+                }
                 Button { model.submit() } label: {
-                    Label("发送", systemImage: "paperplane.fill")
+                    Label(model.didJustSend ? "已发送" : "发送",
+                          systemImage: model.didJustSend ? "checkmark.circle.fill" : "paperplane.fill")
                         .font(.callout.weight(.semibold))
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(!canSubmit)
+                .disabled(!canSubmit || model.didJustSend)
+                .help("发送 (↩ 发送,⇧↩ 换行)")
+                .accessibilityLabel(model.didJustSend ? "已发送" : "发送提问")
             }
             .font(.caption)
+            .animation(.easeInOut(duration: 0.18), value: model.didJustSend)
+            .animation(.easeInOut(duration: 0.18), value: model.transientStatus)
         }
         .padding(18)
         .frame(width: 500)
         .background(.ultraThinMaterial)
+    }
+
+    /// 次要操作(截图 / 粘贴图片)统一为带胶囊背景的可发现按钮。
+    @ViewBuilder
+    private func secondaryActionButton(label: String,
+                                       icon: String,
+                                       help: String,
+                                       isDisabled: Bool,
+                                       showSpinner: Bool,
+                                       action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if showSpinner {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: icon)
+                }
+                Text(label)
+            }
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Color.primary.opacity(isDisabled ? 0.03 : 0.06), in: Capsule())
+            .foregroundStyle(isDisabled ? Color.secondary : Color.primary)
+            .opacity(isDisabled ? 0.6 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .help(help)
+        .accessibilityLabel(label)
     }
 
     private var currentAction: AIAction? {
@@ -210,6 +277,8 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
     let model: QuickInputModel
     private let captureQueue = DispatchQueue(label: "com.snapai.screen-capture", qos: .userInitiated)
+    /// 记忆上次面板位置,避免每次都强制居中打断用户习惯的位置。
+    private var lastOrigin: NSPoint?
 
     init(model: QuickInputModel) { self.model = model; super.init() }
 
@@ -227,13 +296,16 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         } else {
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 210))
             panel.contentView = hosting; panel.minSize = NSSize(width: 420, height: 180)
+            panel.delegate = self
             self.panel = panel
         }
         hosting.layoutSubtreeIfNeeded()
         let fittingSize = hosting.fittingSize
         panel.setContentSize(NSSize(width: max(500, fittingSize.width),
                                     height: max(210, fittingSize.height)))
-        if let screen = NSScreen.main {
+        if let origin = lastOrigin {
+            panel.setFrameOrigin(origin)
+        } else if let screen = NSScreen.main {
             let vf = screen.visibleFrame
             let origin = NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.midY + 80)
             panel.setFrameOrigin(origin)
@@ -241,6 +313,11 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
+    }
+
+    // 窗口移动后记忆位置,下次沿用。
+    func windowDidMove(_ notification: Notification) {
+        lastOrigin = panel?.frame.origin
     }
 
     func hide() { panel?.orderOut(nil); removeEscMonitor() }
@@ -357,6 +434,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         case .alertThirdButtonReturn:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(diagnostic.shareableText, forType: .string)
+            model.showTransientStatus("诊断已复制到剪贴板")
         default:
             break
         }
@@ -535,14 +613,15 @@ final class PlaceholderTextView: NSTextView {
             width: bounds.width - textContainerInset.width * 2 - 8,
             height: bounds.height - textContainerInset.height * 2
         )
+        // 占位符按词换行,确保「↩ 发送 · ⇧↩ 换行」提示完整可见。
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
+        paragraph.lineBreakMode = .byWordWrapping
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize),
             .foregroundColor: NSColor.placeholderTextColor,
             .paragraphStyle: paragraph
         ]
-        placeholderString.draw(in: rect, withAttributes: attributes)
+        (placeholderString as NSString).draw(in: rect, withAttributes: attributes)
     }
 }
 

@@ -19,7 +19,7 @@ final class FloatingPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         isOpaque = false
-        minSize = NSSize(width: 320, height: 200)
+        minSize = NSSize(width: 360, height: 420)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         animationBehavior = .utilityWindow
     }
@@ -103,11 +103,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel.setFrameOrigin(origin)
     }
 
-    // 点击面板外部 / 按 Esc 时关闭(固定状态下不关闭)
+    // 点击面板外部 / 按 Esc 时关闭(固定状态下不关闭)。
+    // 流式生成中点击外部不再静默关闭,避免丢失正在生成的结果;用户可显式固定或关闭。
     private func installDismissMonitors() {
         removeDismissMonitors()
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard let self = self, !self.vm.isPinned else { return }
+            if self.vm.isStreaming { return }
             self.hide()
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in

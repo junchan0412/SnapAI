@@ -36,7 +36,8 @@ struct ResultOutputDisplay: View {
                                                isStreaming: isStreaming) {
         case .waiting:
             HStack(spacing: 6) {
-                Text("思考中").foregroundStyle(.secondary)
+                ProgressView().controlSize(.small)
+                Text("等待响应…").foregroundStyle(.secondary)
                 TypingCursor()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -56,6 +57,7 @@ struct ResultOutputDisplay: View {
                          onCopyCode: onCopyCode)
                 .equatable()
                 .id("output")
+                .transition(.opacity)
         case .empty:
             EmptyView()
         }
@@ -85,26 +87,30 @@ struct ResultActionsToolbar: View {
         HStack(spacing: 7) {
             Spacer(minLength: 0)
 
+            // 主操作:复制结果、替换原文(最常用,保留可见图标按钮)
             commandButton(.copyOutput,
                           action: vm.copyOutput,
                           shortcut: KeyboardShortcut("c", modifiers: [.command, .shift]),
-                          state: state)
-            commandButton(.copyMarkdown,
-                          action: vm.copyConversationMarkdown,
-                          shortcut: KeyboardShortcut("c", modifiers: [.command, .option]),
                           state: state)
             commandButton(.replaceOriginal,
                           action: vm.replaceOriginal,
                           shortcut: KeyboardShortcut(.return, modifiers: [.command]),
                           state: state)
-            commandButton(.appendToDocument,
-                          action: vm.appendToDocument,
-                          shortcut: KeyboardShortcut(.return, modifiers: [.command, .shift]),
-                          state: state)
-            commandButton(.exportConversation,
-                          action: vm.exportConversation,
-                          shortcut: KeyboardShortcut("e", modifiers: [.command]),
-                          state: state)
+
+            // 次要操作收纳为单一菜单,降低按钮密度;快捷键作为菜单快捷键仍生效。
+            Menu {
+                menuButton(.copyMarkdown, action: vm.copyConversationMarkdown,
+                           shortcut: "c", modifiers: [.command, .option], state: state)
+                menuButton(.appendToDocument, action: vm.appendToDocument,
+                           shortcut: "\r", modifiers: [.command, .shift], state: state)
+                Divider()
+                menuButton(.exportConversation, action: vm.exportConversation,
+                           shortcut: "e", modifiers: [.command], state: state)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .controlSize(.small)
+            .help("更多操作:复制完整结果、追加到文档、导出对话")
 
             if vm.isStreaming {
                 commandButton(.stop,
@@ -131,6 +137,26 @@ struct ResultActionsToolbar: View {
         .keyboardShortcut(shortcut)
         .help(ResultCommandFactory.helpText(for: command, in: state))
         .accessibilityLabel(ResultCommandFactory.accessibilityLabel(for: command, in: state))
+        .disabled(!ResultCommandFactory.isEnabled(command, in: state))
+    }
+
+    @ViewBuilder
+    private func menuButton(_ command: ResultCommandAction,
+                            action handler: @escaping () -> Void,
+                            shortcut keyEquivalent: String,
+                            modifiers: EventModifiers,
+                            state: ResultCommandState) -> some View {
+        Button {
+            handler()
+        } label: {
+            if ResultCommandFactory.isEnabled(command, in: state) {
+                Label(ResultCommandFactory.menuTitle(for: command, in: state),
+                      systemImage: ResultCommandFactory.descriptor(for: command, in: state).systemImage)
+            } else {
+                Text(ResultCommandFactory.menuTitle(for: command, in: state))
+            }
+        }
+        .keyboardShortcut(KeyEquivalent(Character(keyEquivalent)), modifiers: modifiers)
         .disabled(!ResultCommandFactory.isEnabled(command, in: state))
     }
 

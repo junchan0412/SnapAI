@@ -48,6 +48,8 @@ struct HistoryWindowView: View {
     var reopen: (HistoryEntry) -> Void
     @StateObject private var operationCoordinator = ResultOperationCoordinator()
     @FocusState private var focusedTagID: String?
+    @State private var pendingDeleteEntry: HistoryEntry?
+    @State private var expandedEntryIDs: Set<String> = []
 
     var body: some View {
         let presentation = model.presentation
@@ -56,18 +58,33 @@ struct HistoryWindowView: View {
             filterSummaryBar(presentation: presentation)
 
             if presentation.entries.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     if model.isRefreshing {
                         ProgressView()
                             .controlSize(.small)
-                    } else {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.largeTitle)
+                        Text("正在筛选历史记录…")
                             .foregroundStyle(.secondary)
+                    } else {
+                        Image(systemName: presentation.totalCount == 0 ? "clock.arrow.circlepath" : "magnifyingglass")
+                            .font(.largeTitle)
+                            .foregroundStyle(.tertiary)
+                        Text(presentation.totalCount == 0 ? "暂无历史记录" : "没有匹配的历史记录")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        if presentation.totalCount == 0 {
+                            Text("选中文字或截图后调用动作,结果会自动记录在这里。")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: 320)
+                                .multilineTextAlignment(.center)
+                        } else {
+                            Text("试试更换关键词,或点击下方徽标移除某个筛选条件。")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: 320)
+                                .multilineTextAlignment(.center)
+                        }
                     }
-                    Text(model.isRefreshing ? "正在筛选历史记录…" :
-                            (presentation.totalCount == 0 ? "暂无历史记录" : "没有匹配的历史记录"))
-                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -94,21 +111,57 @@ struct HistoryWindowView: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
         }
+        .confirmationDialog(
+            "删除该历史记录?",
+            isPresented: Binding(get: { pendingDeleteEntry != nil },
+                                 set: { if !$0 { pendingDeleteEntry = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDeleteEntry
+        ) { entry in
+            Button("删除", role: .destructive) {
+                settings.deleteHistory(id: entry.id)
+                expandedEntryIDs.remove(entry.id)
+                pendingDeleteEntry = nil
+            }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("该记录将被永久删除,此操作不可撤销。")
+        }
     }
 
     private func historyToolbar(presentation: HistoryWindowPresentation) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                TextField("搜索历史、语义、原文、结果或模型…", text: $model.query)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 220)
-                    .onSubmit { model.refreshImmediately() }
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("搜索历史、语义、原文、结果或模型…", text: $model.query)
+                        .textFieldStyle(.plain)
+                        .onSubmit { model.refreshImmediately() }
+                    if !model.query.isEmpty {
+                        Button {
+                            model.query = ""
+                            model.refreshImmediately()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("清空搜索")
+                        .accessibilityLabel("清空搜索")
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .frame(minWidth: 220)
                 Toggle(isOn: $model.favoriteOnly) {
                     Image(systemName: "star.fill")
                 }
                 .toggleStyle(.button)
                 .controlSize(.small)
                 .help("只看收藏")
+                .accessibilityLabel("只看收藏")
                 Button {
                     model.resetFilters()
                 } label: {
@@ -116,6 +169,7 @@ struct HistoryWindowView: View {
                 }
                 .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
                 .help("清空筛选")
+                .accessibilityLabel("清空筛选")
                 Spacer(minLength: 0)
                 historyToolbarActions(presentation: presentation)
             }
@@ -124,14 +178,20 @@ struct HistoryWindowView: View {
                     ForEach(presentation.actionNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 132)
+                .help("按动作筛选")
+                .accessibilityLabel("按动作筛选")
                 Picker("", selection: $model.modelFilter) {
                     ForEach(presentation.modelNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 158)
+                .help("按模型筛选")
+                .accessibilityLabel("按模型筛选")
                 Picker("", selection: $model.tagFilter) {
                     ForEach(presentation.tagNames, id: \.self) { Text($0).tag($0) }
                 }
                 .frame(width: 132)
+                .help("按标签筛选")
+                .accessibilityLabel("按标签筛选")
                 Spacer(minLength: 0)
             }
             .controlSize(.small)
@@ -216,23 +276,52 @@ struct HistoryWindowView: View {
                 SnapAIStatusPill(title: "筛选中", systemImage: "arrow.triangle.2.circlepath", tint: .accentColor)
             }
             if criteria.favoriteOnly {
-                SnapAIStatusPill(title: "收藏", systemImage: "star.fill", tint: .yellow, filled: true)
+                removablePill(title: "收藏", systemImage: "star.fill", tint: .yellow, filled: true) {
+                    model.favoriteOnly = false
+                }
             }
             if criteria.actionFilter != HistoryFilterCriteria.allActions {
-                SnapAIStatusPill(title: criteria.actionFilter, systemImage: "wand.and.stars")
+                removablePill(title: criteria.actionFilter, systemImage: "wand.and.stars", tint: .accentColor, filled: false) {
+                    model.actionFilter = HistoryFilterCriteria.allActions
+                }
             }
             if criteria.modelFilter != HistoryFilterCriteria.allModels {
-                SnapAIStatusPill(title: criteria.modelFilter, systemImage: "cpu")
+                removablePill(title: criteria.modelFilter, systemImage: "cpu", tint: .accentColor, filled: false) {
+                    model.modelFilter = HistoryFilterCriteria.allModels
+                }
             }
             if criteria.tagFilter != HistoryFilterCriteria.allTags {
-                SnapAIStatusPill(title: "#\(criteria.tagFilter)", systemImage: "tag")
+                removablePill(title: "#\(criteria.tagFilter)", systemImage: "tag", tint: .accentColor, filled: false) {
+                    model.tagFilter = HistoryFilterCriteria.allTags
+                }
             }
             Spacer(minLength: 0)
         }
     }
 
+    /// 可点击移除的筛选徽标:点击即清除对应筛选条件,提升可发现性与操作效率。
+    @ViewBuilder
+    private func removablePill(title: String,
+                               systemImage: String,
+                               tint: Color,
+                               filled: Bool,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                SnapAIStatusPill(title: title, systemImage: systemImage, tint: tint, filled: filled)
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .help("点击移除该筛选")
+        .accessibilityLabel("移除筛选 \(title)")
+    }
+
     private func historyCard(_ entry: HistoryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        let isExpanded = expandedEntryIDs.contains(entry.id)
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
                 SnapAIStatusPill(title: entry.displayActionName,
                                  systemImage: "wand.and.stars",
@@ -247,13 +336,16 @@ struct HistoryWindowView: View {
                 Text(entry.dateString)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                // 主操作:收藏 / 复制结果 / 重开;次要操作收纳为 Menu,降低按钮密度。
                 Button {
                     settings.toggleHistoryFavorite(id: entry.id)
                 } label: {
                     Image(systemName: entry.isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(entry.isFavorite ? Color.yellow : Color.secondary)
                 }
                 .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .help(entry.isFavorite ? "取消收藏" : "收藏")
+                .accessibilityLabel(entry.isFavorite ? "取消收藏" : "收藏")
                 Button {
                     guard let output = entry.copyableOutputText else { return }
                     operationCoordinator.copy(text: output,
@@ -265,15 +357,7 @@ struct HistoryWindowView: View {
                 .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .disabled(entry.copyableOutputText == nil)
                 .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
-                Button {
-                    operationCoordinator.copy(text: entry.markdownExport,
-                                              successMessage: "完整记录已复制",
-                                              emptyMessage: "该记录没有可复制的内容。")
-                } label: {
-                    Image(systemName: "doc.richtext")
-                }
-                .buttonStyle(SnapAIIconButtonStyle(size: 24))
-                .help("复制完整记录")
+                .accessibilityLabel("复制结果")
                 Button {
                     reopen(entry)
                 } label: {
@@ -282,26 +366,41 @@ struct HistoryWindowView: View {
                 .buttonStyle(SnapAIIconButtonStyle(size: 24))
                 .disabled(!entry.canReopen)
                 .help(entry.reopenHelpText)
-                Button(role: .destructive) {
-                    settings.deleteHistory(id: entry.id)
+                .accessibilityLabel("重新打开该记录")
+                Menu {
+                    Button {
+                        operationCoordinator.copy(text: entry.markdownExport,
+                                                  successMessage: "完整记录已复制",
+                                                  emptyMessage: "该记录没有可复制的内容。")
+                    } label: {
+                        Label("复制完整记录", systemImage: "doc.richtext")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        pendingDeleteEntry = entry
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
                 } label: {
-                    Image(systemName: "trash")
+                    Image(systemName: "ellipsis.circle")
                 }
-                .buttonStyle(SnapAIIconButtonStyle(size: 24))
-                .help("删除")
+                .menuStyle(.borderlessButton)
+                .frame(width: 26, height: 26)
+                .help("更多操作")
+                .accessibilityLabel("更多操作")
             }
 
             if let source = entry.sourceDisplayText {
                 Text(source)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(isExpanded ? nil : 2)
                     .textSelection(.enabled)
             }
             if let output = entry.outputDisplayText {
                 Text(output)
                     .font(.callout)
-                    .lineLimit(4)
+                    .lineLimit(isExpanded ? nil : 4)
                     .textSelection(.enabled)
             } else if entry.sourceDisplayText == nil {
                 Text(entry.emptyContentPlaceholder)
@@ -309,6 +408,18 @@ struct HistoryWindowView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .textSelection(.enabled)
+            }
+            if entry.canExpandContent {
+                Button {
+                    toggleExpand(entry.id)
+                } label: {
+                    Label(isExpanded ? "收起" : "展开全部",
+                          systemImage: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起内容" : "展开全部内容")
             }
             HStack(spacing: 6) {
                 Image(systemName: "tag")
@@ -323,6 +434,14 @@ struct HistoryWindowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+    }
+
+    private func toggleExpand(_ id: String) {
+        if expandedEntryIDs.contains(id) {
+            expandedEntryIDs.remove(id)
+        } else {
+            expandedEntryIDs.insert(id)
+        }
     }
 
     private func copyFilteredHistory() {
@@ -394,11 +513,12 @@ struct HistoryWindowView: View {
         let result = settings.upsertContextProfile(from: draft)
         iCloudSync.shared.scheduleUpload(settings)
 
-        let done = NSAlert()
-        done.messageText = result.didUpdate ? "上下文包已更新" : "上下文包已创建"
-        done.informativeText = "后续请求会自动合并「\(result.profile.name)」中的历史上下文。你可以在设置页继续编辑。"
-        done.addButton(withTitle: "好")
-        done.runModal()
+        // 成功结果改为非模态反馈横幅,避免再用一个模态弹窗打断用户。
+        operationCoordinator.showSuccess(
+            result.didUpdate
+                ? "上下文包「\(result.profile.name)」已更新并启用"
+                : "上下文包「\(result.profile.name)」已创建并启用"
+        )
     }
 
     private func historyCollectionExport(date: Date = Date()) -> HistoryCollectionExport {
