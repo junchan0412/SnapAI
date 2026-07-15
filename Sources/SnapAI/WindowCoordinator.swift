@@ -9,6 +9,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let settingsWindowPinState = SettingsWindowPinState()
     private let onSettingsChange: () -> Void
     private let onPinStateChange: () -> Void
+    private let onTryQuickInput: () -> Void
 
     private var settingsWindow: NSWindow?
     private var settingsWindowPinned = false
@@ -16,10 +17,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     init(settings: AppSettings,
          onSettingsChange: @escaping () -> Void,
-         onPinStateChange: @escaping () -> Void = {}) {
+         onPinStateChange: @escaping () -> Void = {},
+         onTryQuickInput: @escaping () -> Void = {}) {
         self.settings = settings
         self.onSettingsChange = onSettingsChange
         self.onPinStateChange = onPinStateChange
+        self.onTryQuickInput = onTryQuickInput
         super.init()
     }
 
@@ -95,7 +98,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         let window = NSWindow(contentViewController: makeOnboardingContentController())
         window.title = "欢迎使用 SnapAI"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
@@ -107,6 +110,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let closedWindow = notification.object as? NSWindow else { return }
         guard closedWindow === settingsWindow || closedWindow === onboardingWindow else { return }
+        // 引导窗口被关闭(含红色关闭按钮)即视为完成引导,避免下次启动重复弹出。
+        if closedWindow === onboardingWindow && !settings.onboardingDone {
+            settings.onboardingDone = true
+            settings.save()
+            onSettingsChange()
+        }
         DispatchQueue.main.async { [weak self, weak closedWindow] in
             guard let self, let closedWindow else { return }
             guard closedWindow === self.settingsWindow || closedWindow === self.onboardingWindow else { return }
@@ -136,6 +145,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             self.onSettingsChange()
         } openSettings: { [weak self] in
             self?.openSettings()
+        } onTryQuickInput: { [weak self] in
+            self?.onTryQuickInput()
         }
         return NSHostingController(rootView: view)
     }

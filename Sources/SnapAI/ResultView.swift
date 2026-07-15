@@ -19,13 +19,17 @@ struct ResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if vm.isStreaming {
+                SnapAIStreamingProgressBar()
+                    .padding(.bottom, 1)
+            }
             header
             Divider()
             scrollContent
             Divider()
             footer
         }
-        .frame(minWidth: 320, maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
+        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
         .background(.regularMaterial)
     }
 
@@ -44,26 +48,10 @@ struct ResultView: View {
                 .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        if vm.isStreaming {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                    HStack(spacing: 6) {
-                        if vm.isPinned {
-                            Label(ResultPinCommand.statusTitle,
-                                  systemImage: ResultPinCommand.statusSystemImage)
-                        } else if vm.isStreaming {
-                            Label("生成中", systemImage: "sparkles")
-                        } else {
-                            Label("就绪", systemImage: "checkmark.circle")
-                        }
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    headerStatusLabel
                 }
 
                 // #7 翻译类语言切换
@@ -78,9 +66,13 @@ struct ResultView: View {
                             }
                         }
                     } label: {
-                        Label(vm.targetLanguage.rawValue, systemImage: "globe").font(.caption)
+                        Label(vm.targetLanguage.rawValue, systemImage: "globe")
+                            .font(.caption.weight(.medium))
                     }
-                    .menuStyle(.borderlessButton).fixedSize().disabled(vm.isStreaming)
+                    .menuStyle(.borderlessButton).fixedSize()
+                    .disabled(vm.isStreaming)
+                    .opacity(vm.isStreaming ? 0.45 : 1)
+                    .help(vm.isStreaming ? "生成中不可切换语言" : "切换目标语言")
                 }
 
                 Spacer()
@@ -90,13 +82,13 @@ struct ResultView: View {
                 }
                 .buttonStyle(SnapAIIconButtonStyle(size: 26))
                 .keyboardShortcut("p", modifiers: [.command, .shift])
-                .help("\(ResultPinCommand.title(isPinned: vm.isPinned)) (⌘⇧P)")
+                .help("\(ResultPinCommand.title(isPinned: vm.isPinned)) (⌘⇧P)。未固定时点击面板外部或按 Esc 将关闭。")
                 .accessibilityLabel(ResultPinCommand.title(isPinned: vm.isPinned))
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(SnapAIIconButtonStyle(size: 26))
-                .help("关闭")
+                .help("关闭结果面板")
                 .accessibilityLabel("关闭")
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -107,6 +99,22 @@ struct ResultView: View {
         }
     }
 
+    /// 统一的面板状态标签:收敛此前散落的 caption2 次级文字,用语义色一眼区分状态。
+    @ViewBuilder
+    private var headerStatusLabel: some View {
+        let (text, image, tone): (String, String, SnapAISemanticPill.Tone) = {
+            if vm.isStreaming { return ("生成中…", "sparkles", .info) }
+            if vm.isPinned { return ("已固定", ResultPinCommand.statusSystemImage, .info) }
+            return ("就绪", "checkmark.circle", .success)
+        }()
+        HStack(spacing: 4) {
+            Image(systemName: image)
+            Text(text)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(tone.color)
+    }
+
     @ViewBuilder
     private var actionSwitcher: some View {
         let enabled = vm.settings.enabledActions
@@ -114,6 +122,7 @@ struct ResultView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(enabled) { act in
+                        let selected = act.id == vm.action.id
                         Button {
                             if act.id != vm.action.id { vm.switchAction(act) }
                         } label: {
@@ -122,13 +131,14 @@ struct ResultView: View {
                                 Text(act.name).font(.caption2)
                             }
                             .padding(.horizontal, 9).padding(.vertical, 5)
-                            .background(act.id == vm.action.id ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
+                            .background(selected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.045))
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(act.id == vm.action.id ? Color.accentColor.opacity(0.32) : Color.primary.opacity(0.05), lineWidth: 1))
+                            .overlay(Capsule().stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(act.id == vm.action.id ? Color.accentColor : .primary)
+                        .foregroundStyle(selected ? Color.accentColor : .primary)
                         .disabled(vm.isStreaming)
+                        .help(selected ? "当前动作" : "切换到「\(act.name)」(将重新生成)")
                     }
                 }
                 .padding(.horizontal, 14).padding(.bottom, 8)
@@ -139,7 +149,8 @@ struct ResultView: View {
     @ViewBuilder
     private var routeStatusBar: some View {
         let routeText = routeStatusText
-        if routeText.primaryText != "正在准备请求" || !routeText.detailLines.isEmpty || vm.isStreaming {
+        let hasCompletionSummary = !vm.isStreaming && !vm.completeText.isEmpty && !vm.activeModelName.isEmpty
+        if routeText.primaryText != "正在准备请求" || !routeText.detailLines.isEmpty || vm.isStreaming || hasCompletionSummary {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 7) {
                     SnapAIStatusPill(title: vm.isStreaming ? "生成中" : vm.routeStatusTitle,
@@ -208,44 +219,16 @@ struct ResultView: View {
                                           isExpanded: Binding(get: { vm.showThinking },
                                                               set: { vm.showThinking = $0 }))
 
+                    if let reason = vm.incompleteResultReason {
+                        SnapAIIncompleteResultBanner(
+                            title: reason.title,
+                            systemImage: reason == .cancelled ? "stop.circle" : "exclamationmark.bubble",
+                            onDismiss: { vm.dismissIncompleteResultNotice() }
+                        )
+                    }
+
                     if let err = vm.errorMessage {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label(err, systemImage: "exclamationmark.triangle.fill")
-                                .font(.callout).foregroundStyle(.red)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if let recovery = vm.errorRecoverySuggestionText {
-                                Label(recovery, systemImage: "wrench.and.screwdriver")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            // #12 重试按钮
-                            HStack(spacing: 8) {
-                                if vm.errorRecoveryPrimaryAction == .settings {
-                                    errorSettingsButton
-                                    errorRetryButton
-                                } else {
-                                    errorRetryButton
-                                    errorSettingsButton
-                                }
-                                Button { vm.copyBriefRequestDiagnostics() } label: {
-                                    Label("精简",
-                                          systemImage: ResultDiagnosticsCommand.systemImage)
-                                }
-                                .controlSize(.small)
-                                .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
-                                .help(ResultDiagnosticsCommand.briefTitle)
-                                Button { vm.copyRequestDiagnostics() } label: {
-                                    Label("完整",
-                                          systemImage: ResultDiagnosticsCommand.systemImage)
-                                }
-                                .controlSize(.small)
-                                .disabled(!resultCommandEnabled(.copyDiagnostics))
-                                .help(ResultDiagnosticsCommand.title)
-                            }
-                        }
+                        errorBlock(err)
                     }
 
                     ResultOutputDisplay(state: vm.outputState,
@@ -270,6 +253,59 @@ struct ResultView: View {
                     proxy.scrollTo("output", anchor: .bottom)
                 }
             }
+        }
+    }
+
+    /// 错误块:主恢复操作用主按钮强调,诊断类操作收纳为单一菜单,降低按钮密度。
+    @ViewBuilder
+    private func errorBlock(_ err: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(err, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout.weight(.medium))
+                .foregroundStyle(SnapAIUI.StatusColor.error)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let recovery = vm.errorRecoverySuggestionText {
+                Label(recovery, systemImage: "wrench.and.screwdriver")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                if vm.errorRecoveryPrimaryAction == .settings {
+                    errorSettingsButton(primary: true)
+                    errorRetryButton(primary: false)
+                } else {
+                    errorRetryButton(primary: true)
+                    errorSettingsButton(primary: false)
+                }
+                Spacer(minLength: 0)
+                Menu {
+                    Button { vm.copyBriefRequestDiagnostics() } label: {
+                        Label(ResultDiagnosticsCommand.briefTitle,
+                              systemImage: ResultDiagnosticsCommand.systemImage)
+                    }
+                    .disabled(!resultCommandEnabled(.copyBriefDiagnostics))
+                    Button { vm.copyRequestDiagnostics() } label: {
+                        Label(ResultDiagnosticsCommand.title,
+                              systemImage: ResultDiagnosticsCommand.systemImage)
+                    }
+                    .disabled(!resultCommandEnabled(.copyDiagnostics))
+                } label: {
+                    Label("诊断", systemImage: "stethoscope")
+                }
+                .controlSize(.small)
+                .help("复制请求诊断信息以便排查")
+            }
+        }
+        .padding(10)
+        .background(SnapAIUI.StatusColor.error.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                .stroke(SnapAIUI.StatusColor.error.opacity(0.18), lineWidth: 1)
         }
     }
 
@@ -316,6 +352,7 @@ struct ResultView: View {
                 FollowUpField(text: $vm.followUp, onSubmit: vm.sendFollowUp,
                               onHistoryUp: vm.followUpHistoryUp,
                               onHistoryDown: vm.followUpHistoryDown,
+                              historyAvailable: vm.followUpHistoryCount > 0,
                               shouldHandleHistoryNavigation: { text, direction in
                                   vm.shouldHandleFollowUpHistoryNavigation(currentText: text,
                                                                            direction: direction)
@@ -327,8 +364,9 @@ struct ResultView: View {
                 }
                 .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
                 .keyboardShortcut(.return, modifiers: [.command, .option])
-                .help("发送追问 (⌘⌥↩)")
+                .help("发送追问 (↩ 发送，⇧↩ 换行)")
                 .accessibilityLabel("发送追问")
+                .accessibilityHint("按回车发送，Shift 或 Option 加回车换行")
                 .disabled(!canSendFollowUp)
             }
 
@@ -341,21 +379,35 @@ struct ResultView: View {
         !vm.isStreaming && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var errorRetryButton: some View {
-        Button { vm.retry() } label: {
-            Label(vm.errorRecoveryRetryDescriptor.compactTitle,
-                  systemImage: vm.errorRecoveryRetryDescriptor.systemImage)
+    @ViewBuilder
+    private func errorRetryButton(primary: Bool) -> some View {
+        let label = Label(vm.errorRecoveryRetryDescriptor.compactTitle,
+                          systemImage: vm.errorRecoveryRetryDescriptor.systemImage)
+        if primary {
+            Button { vm.retry() } label: { label }
+                .buttonStyle(SnapAIPrimaryButtonStyle())
+                .controlSize(.regular)
+        } else {
+            Button { vm.retry() } label: { label }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
-        .controlSize(.small)
         .help("\(vm.errorRecoveryRetryDescriptor.title): \(vm.errorRecoveryRetryDescriptor.subtitle)")
     }
 
-    private var errorSettingsButton: some View {
-        Button { onOpenAISettings() } label: {
-            Label(vm.errorRecoverySettingsDescriptor.compactTitle,
-                  systemImage: vm.errorRecoverySettingsDescriptor.systemImage)
+    @ViewBuilder
+    private func errorSettingsButton(primary: Bool) -> some View {
+        let label = Label(vm.errorRecoverySettingsDescriptor.compactTitle,
+                          systemImage: vm.errorRecoverySettingsDescriptor.systemImage)
+        if primary {
+            Button { onOpenAISettings() } label: { label }
+                .buttonStyle(SnapAIPrimaryButtonStyle())
+                .controlSize(.regular)
+        } else {
+            Button { onOpenAISettings() } label: { label }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
         }
-        .controlSize(.small)
         .help("\(vm.errorRecoverySettingsDescriptor.title): \(vm.errorRecoverySettingsDescriptor.subtitle)")
     }
 
@@ -381,7 +433,12 @@ struct FollowUpField: View {
     var onSubmit: () -> Void
     var onHistoryUp: () -> Void
     var onHistoryDown: () -> Void
+    var historyAvailable: Bool = false
     var shouldHandleHistoryNavigation: (String, FollowUpHistoryNavigationDirection) -> Bool
+
+    private var placeholderText: String {
+        historyAvailable ? "追问…  (↑ 浏览历史)" : FollowUpInputBehavior.placeholder
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -394,7 +451,7 @@ struct FollowUpField: View {
                        maxHeight: CGFloat(FollowUpInputBehavior.maxHeight))
 
             if text.isEmpty {
-                Text(FollowUpInputBehavior.placeholder)
+                Text(placeholderText)
                     .font(.callout)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 10)

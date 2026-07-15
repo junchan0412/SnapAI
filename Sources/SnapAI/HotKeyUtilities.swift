@@ -99,6 +99,28 @@ enum HotKeyRecorderText {
     static let recordingHelp = "按下带修饰键的组合键完成录制;Esc 取消本次录制,Delete 清除快捷键。"
     static let idleHelp = "点击后录制全局快捷键。Esc 取消,Delete 清除。"
 
+    // 录制态强反馈文案(按钮实时显示,取代静态的「录制中...」占位)
+    /// 录制中、尚未按下任何修饰键时的占位文案。
+    static let recordingPlaceholder = "按下组合键…"
+    /// 录制态尾部提示,让 Esc 取消 / ⌫ 清除 可被发现。
+    static let recordingHint = "Esc 取消 · ⌫ 清除"
+    /// 仅按了普通键(无修饰键)被拒绝时的提示。
+    static let beepTitle = "需含 ⌘/⌥/⌃/⇧"
+    /// 成功捕获后短暂显示的前缀。
+    static let successPrefix = "✓"
+    /// 清除快捷键后短暂显示的文案。
+    static let clearedTitle = "已清除"
+
+    /// 将当前按下的修饰键转为可读串(顺序与 displayString 一致:⌃⌥⇧⌘),用于录制时实时反馈。
+    static func liveModifierDescription(_ flags: NSEvent.ModifierFlags) -> String {
+        var s = ""
+        if flags.contains(.control) { s += "⌃" }
+        if flags.contains(.option) { s += "⌥" }
+        if flags.contains(.shift) { s += "⇧" }
+        if flags.contains(.command) { s += "⌘" }
+        return s
+    }
+
     static func title(for combo: HotKeyCombo, recording: Bool) -> String {
         if recording { return recordingTitle }
         return combo.isUnset ? unsetTitle : combo.displayString

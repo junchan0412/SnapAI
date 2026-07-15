@@ -4,6 +4,7 @@ struct HistorySettingsSection: View {
     @ObservedObject var settings: AppSettings
     let commit: () -> Void
     @StateObject private var operationCoordinator = ResultOperationCoordinator()
+    @State private var showClearHistoryConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -20,6 +21,16 @@ struct HistorySettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 12)
         }
+        .snapAIConfirmDestructive(
+            isPresented: $showClearHistoryConfirm,
+            title: "清空全部历史记录",
+            message: "将永久删除全部 \(settings.history.count) 条历史记录,此操作不可撤销。",
+            action: {
+                settings.clearHistory()
+                commit()
+                operationCoordinator.clearFeedback()
+            }
+        )
     }
 
     @ViewBuilder
@@ -48,7 +59,10 @@ struct HistorySettingsSection: View {
                         settings.actionUsageCounts = [:]
                         commit()
                     }
-                    .font(.caption2).buttonStyle(.plain).foregroundStyle(.secondary)
+                    .font(.caption2)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("仅清空使用次数统计,不影响历史记录")
                 }
             }
             .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
@@ -62,8 +76,11 @@ struct HistorySettingsSection: View {
             Spacer()
             Stepper("保留 \(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
                 .onChange(of: settings.historyLimit) { commit() }
-            Button("清空") { settings.clearHistory() }
-                .disabled(settings.history.isEmpty)
+            Button("清空全部", role: .destructive) {
+                showClearHistoryConfirm = true
+            }
+            .disabled(settings.history.isEmpty)
+            .help("清空全部历史记录(需确认)")
         }
     }
 
@@ -93,8 +110,18 @@ struct HistorySettingsSection: View {
     private var historyList: some View {
         if settings.history.isEmpty {
             Spacer()
-            Text("暂无历史记录").foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .center)
+            VStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.title)
+                    .foregroundStyle(.tertiary)
+                Text("暂无历史记录").foregroundStyle(.secondary)
+                Text("选中文字或截图后调用动作,结果会自动记录在这里。")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: 280)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
             Spacer()
         } else {
             ScrollView {

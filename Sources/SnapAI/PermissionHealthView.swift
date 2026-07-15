@@ -98,6 +98,12 @@ struct PermissionHealthView: View {
     private let healthColumns = [
         GridItem(.adaptive(minimum: 190), spacing: 10)
     ]
+    @State private var copyNotice: String?
+
+    private func flashCopy(_ message: String) {
+        copyNotice = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copyNotice = nil }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -106,23 +112,35 @@ struct PermissionHealthView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     LazyVGrid(columns: healthColumns, alignment: .leading, spacing: 10) {
-                        healthCard("辅助功能", snapshot.accessibilityGranted, "读取选中文字、模拟复制/粘贴") {
+                        healthCard("辅助功能", snapshot.accessibilityGranted,
+                                   "读取选中文字、模拟复制/粘贴",
+                                   actionTitle: snapshot.accessibilityGranted ? "查看" : "去授权") {
                             openPrivacyPane(.accessibility)
                         }
-                        healthCard("屏幕录制", snapshot.screenCaptureGranted, "快捷提问中的截图能力") {
+                        healthCard("屏幕录制", snapshot.screenCaptureGranted,
+                                   "快捷提问中的截图能力",
+                                   actionTitle: snapshot.screenCaptureGranted ? "查看" : "去授权") {
                             openPrivacyPane(.screenCapture)
                         }
-                        healthCard("开机启动", snapshot.launchAtLogin, "登录后自动常驻菜单栏") {
+                        healthCard("开机启动", snapshot.launchAtLogin,
+                                   "登录后自动常驻菜单栏",
+                                   actionTitle: snapshot.launchAtLogin ? "关闭" : "开启") {
                             LoginItem.setEnabled(!snapshot.launchAtLogin)
                             model.refresh()
                         }
-                        healthCard("快捷键注册", snapshot.hotKeyFailures.isEmpty, snapshot.hotKeyFailures.isEmpty ? "全部正常" : snapshot.hotKeyFailures.joined(separator: "；")) {
+                        healthCard("快捷键注册", snapshot.hotKeyFailures.isEmpty,
+                                   snapshot.hotKeyFailures.isEmpty ? "全部正常" : snapshot.hotKeyFailures.joined(separator: "；"),
+                                   actionTitle: "重新检测") {
                             model.refresh()
                         }
-                        healthCard("API Key", snapshot.enabledProviderMissingAPIKeyCount == 0, apiKeyHealthText) {
+                        healthCard("API Key", snapshot.enabledProviderMissingAPIKeyCount == 0,
+                                   apiKeyHealthText,
+                                   actionTitle: "打开 AI 设置") {
                             openSettingsSection("ai")
                         }
-                        healthCard("AI 请求", snapshot.requestReadyProviderCount > 0, requestReadinessText) {
+                        healthCard("AI 请求", snapshot.requestReadyProviderCount > 0,
+                                   requestReadinessText,
+                                   actionTitle: "打开 AI 设置") {
                             openSettingsSection("ai")
                         }
                     }
@@ -131,7 +149,8 @@ struct PermissionHealthView: View {
                         recoverySuggestionPanel
                     }
 
-                    VStack(alignment: .leading, spacing: 6) {
+                    // 详情按主题分组,避免一长串平铺难以扫读。
+                    detailSection("应用与版本") {
                         detailLine("版本", snapshot.appVersion)
                         detailLine("macOS", snapshot.macOSVersion)
                         detailLine("Bundle ID", snapshot.bundleID)
@@ -139,6 +158,8 @@ struct PermissionHealthView: View {
                         detailLine("安装目录可写", snapshot.installDirectoryWritable ? "是" : "否")
                         detailLine("Quarantine", snapshot.quarantineStatus)
                         installLogLine()
+                    }
+                    detailSection("AI 配置") {
                         detailLine("当前模型", snapshot.activeModel)
                         detailLine("工作模式", workModeStatusText)
                         detailLine("AI 请求", requestReadinessDetailText)
@@ -148,17 +169,21 @@ struct PermissionHealthView: View {
                         detailLine("修复建议", snapshot.recoverySuggestionStatusLine)
                         detailLine("上下文", contextStatusText)
                         detailLine("提示长度", promptLengthText)
+                    }
+                    detailSection("取词与写回") {
                         detailLine("取词状态", snapshot.textCaptureStatus)
                         detailLine("写回状态", snapshot.writeBackStatus)
+                    }
+                    detailSection("历史与隐私") {
                         detailLine("隐私预览", snapshot.privacyPreviewEnabled ? "开启" : "关闭")
                         detailLine("本地脱敏", redactionStatusText)
                         detailLine("历史内容", snapshot.historyContentStorage.rawValue)
                         detailLine("历史数据库", snapshot.historyStoreStatus, lineLimit: 2)
+                    }
+                    detailSection("同步与签名") {
                         detailLine("iCloud 同步", snapshot.iCloudSyncStatus, lineLimit: 3)
                         detailLine("签名", snapshot.signingSummary, lineLimit: 3)
                     }
-                    .font(.caption)
-                    .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -170,6 +195,35 @@ struct PermissionHealthView: View {
                minHeight: 500,
                idealHeight: 560,
                maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            if let notice = copyNotice {
+                Label(notice, systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(SnapAIUI.StatusColor.success)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
+                    .accessibilityLabel(notice)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: copyNotice)
+    }
+
+    /// 详情分组:带小标题的卡片,让长列表更易扫读。
+    private func detailSection<Content: View>(_ title: String,
+                                              @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 6) { content() }
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private var header: some View {
@@ -273,17 +327,20 @@ struct PermissionHealthView: View {
     private func copyDiagnostics(full: Bool) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(full ? snapshot.diagnosticText : snapshot.briefDiagnosticText, forType: .string)
+        flashCopy(full ? "完整诊断已复制" : "精简诊断已复制")
     }
 
     private func copyRecoverySuggestions() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(snapshot.recoverySuggestionClipboardText, forType: .string)
+        flashCopy("修复建议已复制")
     }
 
     private func copyInstallLogPath() {
         guard snapshot.latestInstallLogAvailable else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(snapshot.latestInstallLogPath, forType: .string)
+        flashCopy("日志路径已复制")
     }
 
     private func revealInstallLog() {
@@ -304,17 +361,18 @@ struct PermissionHealthView: View {
     private func healthCard(_ title: String,
                             _ ok: Bool,
                             _ note: String,
+                            actionTitle: String,
                             action: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(ok ? .green : .red)
+                    .foregroundStyle(ok ? SnapAIUI.StatusColor.success : SnapAIUI.StatusColor.error)
                     .font(.system(size: 14, weight: .semibold))
                 Text(title)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Button(ok ? "查看" : "修复") { action() }
+                Button(actionTitle) { action() }
                     .controlSize(.mini)
             }
             Text(note)

@@ -11,6 +11,14 @@ struct ActionSettingsSection: View {
     let applyCommit: (SettingsCommitPolicy) -> Void
 
     private let labelWidth: CGFloat = 76
+    @State private var pendingRestoreHotKeys = false
+    @State private var pendingDeleteAction: AIAction?
+    @State private var actionLibraryNotice: String?
+
+    private func flashNotice(_ message: String) {
+        actionLibraryNotice = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { actionLibraryNotice = nil }
+    }
 
     var body: some View {
         ScrollView {
@@ -29,6 +37,42 @@ struct ActionSettingsSection: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .snapAIConfirmDestructive(
+            isPresented: $pendingRestoreHotKeys,
+            title: "恢复默认快捷键",
+            message: "将覆盖所有动作的当前快捷键,此操作不可撤销。"
+        ) {
+            settings.restoreDefaultHotKeys()
+            ui.hotKeyError = nil
+            ui.hotKeyConflictDestination = nil
+            commit()
+        }
+        .confirmationDialog(
+            "删除动作「\(pendingDeleteAction?.name ?? "")」",
+            isPresented: Binding(get: { pendingDeleteAction != nil },
+                                 set: { if !$0 { pendingDeleteAction = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDeleteAction
+        ) { action in
+            Button("删除", role: .destructive) { deleteAction(action.id) }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("该动作及其快捷键将被移除,此操作不可撤销。")
+        }
+        .overlay(alignment: .bottom) {
+            if let notice = actionLibraryNotice {
+                Label(notice, systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(SnapAIUI.StatusColor.success)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
+                    .accessibilityLabel(notice)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: actionLibraryNotice)
     }
 
     private var actionToolbar: some View {
@@ -144,14 +188,7 @@ struct ActionSettingsSection: View {
                         .background(Color.primary.opacity(0.08)).clipShape(Capsule())
                 }
                 Spacer()
-                Button { moveAction(action.id, up: true) } label: { Image(systemName: "chevron.up.circle") }
-                    .buttonStyle(.plain)
-                    .disabled(settings.actions.first?.id == action.id)
-                    .accessibilityLabel("上移动作 \(action.name)")
-                Button { moveAction(action.id, up: false) } label: { Image(systemName: "chevron.down.circle") }
-                    .buttonStyle(.plain)
-                    .disabled(settings.actions.last?.id == action.id)
-                    .accessibilityLabel("下移动作 \(action.name)")
+                // 标题行只保留展开/收起,上移/下移等次要操作收纳进展开区,降低视觉密度。
                 Button {
                     ui.expandedActionID = isExpanded ? nil : action.id
                 } label: { Image(systemName: isExpanded ? "chevron.up" : "chevron.down") }
@@ -325,14 +362,35 @@ struct ActionSettingsSection: View {
 
     private func deleteActionRow(_ action: AIAction) -> some View {
         HStack {
+            // 排序与删除同属「管理此动作」,合并到底部一行,标题行因此更清爽。
+            Button {
+                moveAction(action.id, up: true)
+            } label: {
+                Label("上移", systemImage: "chevron.up")
+            }
+            .controlSize(.small)
+            .disabled(settings.actions.first?.id == action.id)
+            .help("上移到上一行")
+            Button {
+                moveAction(action.id, up: false)
+            } label: {
+                Label("下移", systemImage: "chevron.down")
+            }
+            .controlSize(.small)
+            .disabled(settings.actions.last?.id == action.id)
+            .help("下移到下一行")
             Spacer()
             Button(role: .destructive) {
-                settings.actions.removeAll { $0.id == action.id }
-                if ui.expandedActionID == action.id { ui.expandedActionID = nil }
-                commit()
+                pendingDeleteAction = action
             } label: { Label("删除动作", systemImage: "trash") }
             .disabled(settings.actions.count <= 1)
         }
+    }
+
+    private func deleteAction(_ id: String) {
+        settings.actions.removeAll { $0.id == id }
+        if ui.expandedActionID == id { ui.expandedActionID = nil }
+        commit()
     }
 
     private var systemPromptBinding: Binding<String> {
@@ -368,10 +426,7 @@ struct ActionSettingsSection: View {
     }
 
     private func restoreDefaultHotKeys() {
-        settings.restoreDefaultHotKeys()
-        ui.hotKeyError = nil
-        ui.hotKeyConflictDestination = nil
-        commit()
+        pendingRestoreHotKeys = true
     }
 
     private func importActionLibrary() {
@@ -382,26 +437,45 @@ struct ActionSettingsSection: View {
         panel.canChooseFiles = true
         panel.title = "导入 SnapAI 动作库"
         guard panel.runModal() == .OK,
-              let url = panel.url,
-              let data = try? Data(contentsOf: url),
-              let imported = try? ActionTemplateLibrary.importedActions(from: data) else { return }
+              let url = panel.url else { return }
+        guard let data = try? Data(contentsOf: url) else {
+            flashNotice("读取文件失败")
+            return
+        }
+        guard let imported = try? ActionTemplateLibrary.importedActions(from: data) else {
+            flashNotice("文件格式无法识别")
+            return
+        }
         let installed = ActionTemplateLibrary.installedActions(from: imported,
                                                                existingActions: settings.actions.actionTemplateActions).aiActions
-        guard !installed.isEmpty else { return }
+        guard !installed.isEmpty else {
+            flashNotice("没有可导入的新动作")
+            return
+        }
+        let count = installed.count
         settings.actions.append(contentsOf: installed)
         ui.expandedActionID = installed.first?.id
         commit()
+        flashNotice("已导入 \(count) 个动作")
     }
 
     private func exportActionLibrary() {
-        guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions.actionTemplateActions) else { return }
+        guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions.actionTemplateActions) else {
+            flashNotice("导出失败,没有可导出的动作")
+            return
+        }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "SnapAI-Actions.json"
         panel.title = "导出 SnapAI 动作库"
         guard panel.runModal() == .OK,
               let url = panel.url else { return }
-        try? data.write(to: url, options: .atomic)
+        do {
+            try data.write(to: url, options: .atomic)
+            flashNotice("已导出到 \(url.lastPathComponent)")
+        } catch {
+            flashNotice("写入文件失败")
+        }
     }
 
     private func moveAction(_ id: String, up: Bool) {

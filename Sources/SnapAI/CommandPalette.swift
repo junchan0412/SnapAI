@@ -182,6 +182,7 @@ struct CommandPaletteView: View {
     let items: [CommandPaletteItem]
     @ObservedObject var model: CommandPaletteModel
     var onClose: () -> Void
+    var openPaletteHint: String? = nil
 
     private var filteredItems: [CommandPaletteItem] {
         model.filteredItems(from: items)
@@ -217,12 +218,17 @@ struct CommandPaletteView: View {
             Divider()
 
             if filteredItems.isEmpty {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.largeTitle)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                     Text("没有匹配项")
                         .foregroundStyle(.secondary)
+                    Text("试试输入「翻译」「润色」「切换模型」或「清空历史」等关键词。")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: 360)
+                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -285,6 +291,22 @@ struct CommandPaletteView: View {
                     }
                 }
             }
+
+            Divider()
+            HStack(spacing: 14) {
+                Label("↑↓ 选择", systemImage: "arrow.up.arrow.down")
+                Label("↩ 执行", systemImage: "return")
+                Label("Esc 关闭", systemImage: "escape")
+                Spacer()
+                if let hint = openPaletteHint, !hint.isEmpty {
+                    Text("打开此面板:\(hint)")
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
         }
         .frame(width: 560, height: 420)
         .background(.ultraThinMaterial)

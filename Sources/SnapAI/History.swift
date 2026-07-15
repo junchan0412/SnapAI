@@ -41,6 +41,13 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
         outputDisplayText
     }
 
+    /// 内容是否长到需要「展开全部」入口(超过卡片预览的截断阈值)。
+    var canExpandContent: Bool {
+        let sourceLen = sourceDisplayText?.count ?? 0
+        let outputLen = outputDisplayText?.count ?? 0
+        return sourceLen > 80 || outputLen > 200
+    }
+
     var reopenSourceText: String? {
         guard !isSourceTruncatedRecord else { return nil }
         return sourceDisplayText

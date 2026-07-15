@@ -10,6 +10,7 @@ struct ProviderSettingsSection: View {
     let applyCommit: (SettingsCommitPolicy) -> Void
 
     private let labelWidth: CGFloat = 76
+    @State private var pendingDeleteProvider: AIProvider?
 
     var body: some View {
         ScrollView {
@@ -28,6 +29,18 @@ struct ProviderSettingsSection: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .confirmationDialog(
+            "删除供应商「\(pendingDeleteProvider?.name ?? "")」",
+            isPresented: Binding(get: { pendingDeleteProvider != nil },
+                                 set: { if !$0 { pendingDeleteProvider = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDeleteProvider
+        ) { provider in
+            Button("删除", role: .destructive) { deleteProvider(provider.id) }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("将同时清除该供应商保存在钥匙串中的 API Key,此操作不可撤销。")
         }
     }
 
@@ -78,9 +91,6 @@ struct ProviderSettingsSection: View {
                     .frame(width: 220)
             }
         }
-        .padding(9)
-        .background(Color.primary.opacity(0.028))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var currentModelDetailText: String {
@@ -148,10 +158,16 @@ struct ProviderSettingsSection: View {
             HStack(alignment: .center, spacing: 12) {
                 settingsMiniHeader("路由策略", systemImage: "point.3.connected.trianglepath.dotted")
                 Spacer()
-                SnapAIStatusPill(title: settings.routingPreference.rawValue,
-                                 systemImage: "slider.horizontal.3",
-                                 tint: .secondary,
-                                 filled: false)
+                if routingHasNoRoutes {
+                    SnapAISemanticPill(title: "无可用路由",
+                                       systemImage: "exclamationmark.triangle.fill",
+                                       tone: .warning)
+                } else {
+                    SnapAIStatusPill(title: settings.routingPreference.rawValue,
+                                     systemImage: "slider.horizontal.3",
+                                     tint: .secondary,
+                                     filled: false)
+                }
             }
             HStack(alignment: .center, spacing: 14) {
                 Toggle("自动选择模型", isOn: $settings.autoRouteEnabled)
@@ -174,9 +190,6 @@ struct ProviderSettingsSection: View {
                 .onChange(of: settings.routingPreference) { commit() }
             }
         }
-        .padding(9)
-        .background(Color.primary.opacity(0.02))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var routingDiagnosticsDisclosure: some View {
@@ -187,7 +200,7 @@ struct ProviderSettingsSection: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(routingPreviewText)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(routingHasNoRoutes ? SnapAIUI.StatusColor.warning : .primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(settings.routingPreference.description)
                     .font(.caption)
@@ -198,9 +211,23 @@ struct ProviderSettingsSection: View {
         } label: {
             Label("路由诊断", systemImage: "stethoscope")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(routingHasNoRoutes ? SnapAIUI.StatusColor.warning : .secondary)
         }
         .padding(.horizontal, 2)
+        .onAppear {
+            if routingHasNoRoutes { ui.showRoutingDiagnostics = true }
+        }
+    }
+
+    private var routingHasNoRoutes: Bool {
+        let action = settings.enabledActions.first ?? settings.actions.first ?? AIAction(name: "提问")
+        let sampleText = settings.activeContextProfile?.content ?? ""
+        let routes = AIRequestRouter.candidates(settings: settings,
+                                                action: action,
+                                                sourceText: sampleText,
+                                                hasImage: false,
+                                                routingTextCharacterCount: max(sampleText.count, 1_200))
+        return routes.first == nil
     }
 
     private var routingPreviewText: String {
@@ -338,21 +365,26 @@ struct ProviderSettingsSection: View {
                 if let err = modelLoader.errors[provider.id] {
                     Text(err)
                         .font(.caption2)
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .foregroundStyle(SnapAIUI.StatusColor.error)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if provider.apiKey.isEmpty {
+                    Text("请先填写 API Key 后再获取模型")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Spacer(minLength: 8)
                 Button {
                     modelLoader.load(providerID: provider.id, settings: settings, onChange: onChange)
                 } label: {
                     if modelLoader.isLoading(provider.id) {
                         ProgressView().controlSize(.small)
                     } else {
-                        Image(systemName: "arrow.clockwise")
+                        Label("获取模型", systemImage: "arrow.clockwise")
                     }
                 }
-                .frame(width: 30, height: 26)
+                .controlSize(.small)
                 .help("获取模型列表")
                 .disabled(modelLoader.isLoading(provider.id) || provider.apiKey.isEmpty)
             }
@@ -391,11 +423,12 @@ struct ProviderSettingsSection: View {
             testResultLabel(provider.id)
             Spacer()
             Button(role: .destructive) {
-                deleteProvider(provider.id)
+                pendingDeleteProvider = provider
             } label: {
                 Label("删除此供应商", systemImage: "trash")
             }
             .disabled(settings.providers.count <= 1)
+            .help("删除该供应商(需确认,会同时清除 API Key)")
         }
     }
 

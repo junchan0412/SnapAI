@@ -4,6 +4,7 @@ public struct ResultOperationFeedback: Identifiable, Equatable {
     public enum Kind: Equatable {
         case success
         case warning
+        case error
     }
 
     public var id: UUID
@@ -20,13 +21,16 @@ public struct ResultOperationFeedback: Identifiable, Equatable {
         switch kind {
         case .success: return "checkmark.circle.fill"
         case .warning: return "exclamationmark.triangle.fill"
+        case .error: return "xmark.octagon.fill"
         }
     }
 
+    /// 成功类自动消失;警告/错误类需手动关闭,避免用户错过关键反馈。
     public var dismissDelaySeconds: Double {
         switch kind {
         case .success: return 2.2
         case .warning: return 4.5
+        case .error: return .infinity
         }
     }
 
@@ -36,6 +40,10 @@ public struct ResultOperationFeedback: Identifiable, Equatable {
 
     public static func warning(_ message: String) -> Self {
         Self(message: message, kind: .warning)
+    }
+
+    public static func error(_ message: String) -> Self {
+        Self(message: message, kind: .error)
     }
 }
 

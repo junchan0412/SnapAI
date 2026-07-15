@@ -47,6 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             },
             onPinStateChange: { [weak self] in
                 self?.installMainMenu()
+            },
+            onTryQuickInput: { [weak self] in
+                self?.toggleQuickInput()
             }
         )
 
@@ -204,7 +207,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let switchItem = NSMenuItem(title: "切换模型", action: nil, keyEquivalent: "")
         switchItem.submenu = MenuCoordinator.modelSwitchMenu(settings: settings,
                                                              target: self,
-                                                             action: #selector(switchModel(_:)))
+                                                             action: #selector(switchModel(_:)),
+                                                             settingsTarget: self,
+                                                             settingsAction: #selector(openSettingsFromMenu(_:)))
         menu.addItem(switchItem)
 
         // 历史

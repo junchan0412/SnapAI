@@ -57,17 +57,27 @@ struct WorkModeSettingsSection: View {
                         .lineLimit(1)
                     Text(mode.summary)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isCurrent ? Color.accentColor.opacity(0.8) : .secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .background {
+                if isCurrent {
+                    RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                        .fill(Color.accentColor.opacity(SnapAIUI.selectedFillOpacity))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                    .stroke(isCurrent ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.08),
+                            lineWidth: isCurrent ? 1.5 : 1)
+            }
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .tint(isCurrent ? .accentColor : .secondary)
-        .help(mode.summary)
+        .buttonStyle(.plain)
+        .help("切换到「\(mode.shortTitle)」工作模式")
     }
 }
