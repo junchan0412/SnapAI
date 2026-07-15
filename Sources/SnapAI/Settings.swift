@@ -1,6 +1,28 @@
 import Foundation
 import Combine
 
+/// 结果浮窗失焦时的关闭策略
+enum ResultPanelDismissMode: String, CaseIterable, Codable {
+    case autoDismiss      // 点外部即关(旧行为)
+    case keepAfterResult  // 生成完成后保持,仅 Esc/X/写回关闭
+    case alwaysKeep       // 始终保持,仅 Esc/X/写回关闭
+
+    var title: String {
+        switch self {
+        case .autoDismiss: return "自动关闭"
+        case .keepAfterResult: return "生成后保持"
+        case .alwaysKeep: return "始终保持"
+        }
+    }
+    var description: String {
+        switch self {
+        case .autoDismiss: return "点击结果窗口外部即关闭(需手动固定才能保留)。"
+        case .keepAfterResult: return "结果生成完成后点击外部不关闭;生成中点击外部也不关闭。"
+        case .alwaysKeep: return "始终保留,仅按 Esc、点关闭按钮或写回原文时关闭。"
+        }
+    }
+}
+
 /// 全局设置,持久化到 UserDefaults
 final class AppSettings: ObservableObject, Codable {
     static let shared = AppSettings.load()
@@ -84,6 +106,8 @@ final class AppSettings: ObservableObject, Codable {
     @Published var onboardingDone: Bool = false
     @Published var panelWidth: Double = AppSettings.defaultPanelWidth
     @Published var panelHeight: Double = AppSettings.defaultPanelHeight
+    // 结果浮窗失焦行为(#bug1)
+    @Published var resultPanelDismissMode: ResultPanelDismissMode = .keepAfterResult
     // 统计(#11) 动作使用次数,key = 动作名
     @Published var actionUsageCounts: [String: Int] = [:]
     // iCloud 同步开关(#9)
@@ -180,6 +204,7 @@ final class AppSettings: ObservableObject, Codable {
         case privacyPreviewEnabled, redactionEnabled, redactionRules
         case contextProfiles, activeContextProfileID
         case history, historyLimit, historyContentStorage, savedHistoryFilters, onboardingDone, panelWidth, panelHeight
+        case resultPanelDismissMode
         case actionUsageCounts, iCloudSyncEnabled
         case iCloudDeviceID, iCloudRevision, iCloudUpdatedAt, iCloudLastSyncAt, iCloudLastSyncStatus, iCloudLastRemoteDeviceID
         case iCloudHasLocalChanges
@@ -295,6 +320,7 @@ final class AppSettings: ObservableObject, Codable {
         if panelWidth != decodedPanelWidth || panelHeight != decodedPanelHeight {
             needsPostLoadSave = true
         }
+        resultPanelDismissMode = (try? c.decode(ResultPanelDismissMode.self, forKey: .resultPanelDismissMode)) ?? .keepAfterResult
         let decodedActionUsageCounts = (try? c.decode([String: Int].self, forKey: .actionUsageCounts)) ?? [:]
         actionUsageCounts = Self.sanitizedStoredActionUsageCounts(decodedActionUsageCounts)
         if actionUsageCounts != decodedActionUsageCounts {
@@ -390,6 +416,7 @@ final class AppSettings: ObservableObject, Codable {
         try c.encode(onboardingDone, forKey: .onboardingDone)
         try c.encode(panelWidth, forKey: .panelWidth)
         try c.encode(panelHeight, forKey: .panelHeight)
+        try c.encode(resultPanelDismissMode, forKey: .resultPanelDismissMode)
         try c.encode(actionUsageCounts, forKey: .actionUsageCounts)
         try c.encode(iCloudSyncEnabled, forKey: .iCloudSyncEnabled)
         try c.encode(iCloudDeviceID, forKey: .iCloudDeviceID)

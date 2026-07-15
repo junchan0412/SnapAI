@@ -10,6 +10,7 @@ extension AppSettings {
         exportSettings.actionUsageCounts = [:]
         exportSettings.panelWidth = Self.defaultPanelWidth
         exportSettings.panelHeight = Self.defaultPanelHeight
+        exportSettings.resultPanelDismissMode = .keepAfterResult
         exportSettings.iCloudSyncEnabled = false
         exportSettings.iCloudRevision = 0
         exportSettings.iCloudUpdatedAt = nil

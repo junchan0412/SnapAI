@@ -270,3 +270,39 @@ struct SnapAIIncompleteResultBanner: View {
     }
 }
 
+// MARK: - 瞬时非模态提示(#bug2:取代「未检测到选中文字」阻塞式模态 alert)
+
+struct SnapAITransientNoticeBanner: View {
+    let title: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "exclamationmark.triangle.fill")
+            Text(title)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭提示")
+        }
+        .font(.caption)
+        .foregroundStyle(SnapAIUI.StatusColor.error)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(SnapAIUI.StatusColor.error.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                .stroke(SnapAIUI.StatusColor.error.opacity(0.2), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+}
+

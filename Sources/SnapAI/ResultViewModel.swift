@@ -58,6 +58,24 @@ final class ResultViewModel: ObservableObject {
         incompleteResultReason = nil
     }
 
+    /// #bug2 瞬时非模态提示(如「未检测到选中的文字」),取代阻塞式模态 alert。
+    @Published var transientNotice: String?
+
+    private var transientNoticeWork: DispatchWorkItem?
+
+    func showTransientNotice(_ message: String, autoDismiss: TimeInterval = 3.0) {
+        transientNoticeWork?.cancel()
+        transientNotice = message
+        let work = DispatchWorkItem { [weak self] in self?.transientNotice = nil }
+        transientNoticeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + autoDismiss, execute: work)
+    }
+
+    func dismissTransientNotice() {
+        transientNoticeWork?.cancel()
+        transientNotice = nil
+    }
+
     let settings: AppSettings
     private var client: AIClient
     private let completionCoordinator: ResultCompletionCoordinator

@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var lastTextCaptureStatusSummary: String?
     var lastWriteBackRecord: TextWriteBackRecord?
     var lastWriteBackStatusSummary: String?
+    /// 文本捕获代际令牌(#bug2):每次新触发自增,旧捕获回调据此自我作废,避免过期结果弹「未检测到选中文字」。
+    private var captureGeneration: Int = 0
 
     /// nonisolated 以便在 main.swift 顶层(非 main-actor 上下文)构造
     nonisolated override init() {
@@ -606,6 +608,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func triggerCapturedSelection(action: AIAction,
                                           preferredTarget: NSRunningApplication? = nil,
                                           forceDismissTransientUIBeforeCopy: Bool = false) {
+        // #bug2 代际令牌:新触发使所有未完成的旧捕获回调失效,避免过期空结果弹「未检测到选中文字」。
+        captureGeneration += 1
+        let gen = captureGeneration
         previousApp = captureTargetApp(preferredTarget: preferredTarget)
         previousSelectionSnapshot = nil
         previousCaptureMethod = nil
@@ -613,10 +618,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                     targetApp: previousApp,
                                     forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy) { [weak self] outcome in
             guard let self = self else { return }
+            // 过期捕获丢弃:已有更新的触发覆盖了本次。
+            guard gen == self.captureGeneration else { return }
+            // 已有动作在跑则丢弃本次空结果,避免在正常生成中弹「未检测到选中文字」。
+            guard !self.resultVM.isStreaming else { return }
             let text = outcome.usableText
             guard let text = text, !text.isEmpty else {
                 self.recordTextCaptureOutcome(outcome)
-                self.notifyNoSelection(action: action)
+                self.showNoSelectionNotice(action: action)
                 return
             }
             self.recordTextCaptureOutcome(outcome)
@@ -731,31 +740,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
-    func notifyNoSelection(action: AIAction? = nil) {
-        let alert = NSAlert()
-        alert.messageText = TextCaptureRecoveryGuide.title
-        alert.informativeText = TextCaptureRecoveryGuide.message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: TextCaptureRecoveryGuide.defaultButtonTitle)
-        alert.addButton(withTitle: TextCaptureRecoveryGuide.quickInputButtonTitle)
-        alert.addButton(withTitle: TextCaptureRecoveryGuide.permissionHealthButtonTitle)
-        alert.addButton(withTitle: TextCaptureRecoveryGuide.accessibilitySettingsButtonTitle)
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        switch response {
-        case .alertSecondButtonReturn:
-            if let action,
-               settings.enabledActions.contains(where: { $0.id == action.id }) {
-                quickInputModel.actionID = action.id
-            }
-            quickInput.show()
-        case .alertThirdButtonReturn:
-            openPermissionHealth()
-        case NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + 3):
-            NSWorkspace.shared.open(TextCaptureRecoveryGuide.accessibilitySettingsURL)
-        default:
-            break
-        }
+    /// #bug2 「未检测到选中的文字」改为非模态提示:在结果窗口显示瞬时横幅,不再弹出阻塞式模态 alert。
+    /// 动作已在执行时不打扰(guard !isStreaming);快捷提问/权限中心入口由用户从状态栏菜单进入。
+    func showNoSelectionNotice(action: AIAction? = nil) {
+        guard !resultVM.isStreaming else { return }
+        resultVM.showTransientNotice(TextCaptureRecoveryGuide.title)
+        panelController.show()
     }
 
     // MARK: - 设置窗口

@@ -45,7 +45,31 @@ struct GeneralSettingsSection: View {
                     set: { settings.showDockIcon = $0; commit() }
                 )
             )
+            compactDivider
+            resultPanelDismissRow
         }
+    }
+
+    private var resultPanelDismissRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("结果窗口失焦行为")
+                    .font(.callout.weight(.medium))
+                Text(settings.resultPanelDismissMode.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 16)
+            Picker("", selection: $settings.resultPanelDismissMode) {
+                ForEach(ResultPanelDismissMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 240)
+            .controlSize(.small)
+            .onChange(of: settings.resultPanelDismissMode) { commit() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var captureSection: some View {
