@@ -48,9 +48,9 @@ struct ConfigMigrationSettingsSection: View {
         }
         .overlay(alignment: .bottom) {
             if let notice = configNotice {
-                Label(notice.message, systemImage: notice.icon)
+                Label(notice.message, systemImage: notice.tone.icon)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(notice.color)
+                    .foregroundStyle(notice.tone.color)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(.regularMaterial, in: Capsule())

@@ -1,4 +1,5 @@
 import SwiftUI
+import SnapAILogic
 
 enum SnapAIUI {
     static let panelRadius: CGFloat = 8
