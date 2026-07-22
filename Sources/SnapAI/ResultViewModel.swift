@@ -33,7 +33,11 @@ final class ResultViewModel: ObservableObject {
 
     /// #2 Thinking/推理文本(Anthropic 或 DeepSeek R1 的 <think> 内容)
     var thinkingText: String {
-        get { thinkingState.text }
+        get {
+            // 读取前冲刷挂起更新,保证 complete/诊断路径看到最新值。
+            thinkingState.flush()
+            return thinkingState.text
+        }
         set { thinkingState.replace(with: newValue) }
     }
     @Published var showThinking: Bool = false
@@ -101,7 +105,11 @@ final class ResultViewModel: ObservableObject {
     var pendingCaptureMethod: TextCaptureMethod?
     var pendingSourceContext: SelectionSourceContext?
 
-    var completeText: String { streamingCoordinator.completeText }
+    var completeText: String {
+        // completeText 用于结束态落盘/导出,先冲刷 UI 缓冲避免漏字。
+        outputState.flush()
+        return streamingCoordinator.completeText
+    }
     var isTranslation: Bool { action.isTranslation }
 
     func shouldAutoScroll(currentTime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
@@ -116,44 +124,6 @@ final class ResultViewModel: ObservableObject {
 
     func markFinalAutoScroll(currentTime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         lastAutoScrollTime = currentTime
-    }
-
-    var privacyProtectionStatusText: String? {
-        submissionPrivacy?.protectionSummaryText
-    }
-    var contentExportProtectionEnabled: Bool {
-        submissionPrivacy?.contentExportProtectionEnabled == true
-    }
-    var errorRecoverySuggestionText: String? {
-        AIRequestDiagnostics.visibleErrorRecoverySuggestion(diagnostics: requestDiagnostics,
-                                                            errorMessage: errorMessage)
-    }
-    var errorRecoveryCode: String? {
-        AIRequestDiagnostics.visibleErrorRecoveryCode(diagnostics: requestDiagnostics,
-                                                      errorMessage: errorMessage)
-    }
-    var errorRecoverySettingsDescriptor: ResultRecoverySettingsDescriptor {
-        ResultRecoveryCommand.openAISettingsDescriptor(recoveryCode: errorRecoveryCode)
-    }
-    var errorRecoveryRetryDescriptor: ResultRecoveryRetryDescriptor {
-        ResultRecoveryCommand.retryDescriptor(recoveryCode: errorRecoveryCode)
-    }
-    var errorRecoveryPrimaryAction: ResultRecoveryPrimaryAction {
-        ResultRecoveryCommand.primaryAction(recoveryCode: errorRecoveryCode)
-    }
-    var requestHealthStatusText: String {
-        requestDiagnostics?.healthStatusLine ?? "none"
-    }
-    var routeExplanationText: String? {
-        requestDiagnostics?.visibleRouteExplanation
-    }
-    var routeStatusTitle: String {
-        requestDiagnostics?.visibleRouteStatusTitle ?? (settings.autoRouteEnabled ? "自动路由" : "固定模型")
-    }
-    var activeContextSummaryText: String? {
-        guard settings.contextStatusSummary.hasActiveContext else { return nil }
-        let summary = settings.contextStatusSummary
-        return "\(summary.activeProfileName) · \(summary.activeContextCharacterCount) 字"
     }
 
     // MARK: - 启动
@@ -277,6 +247,8 @@ final class ResultViewModel: ObservableObject {
         guard isStreaming else { return }
         client.cancel()
         streamingCoordinator.stopAndDiscardPendingPresentation()
+        outputState.flush()
+        thinkingState.flush()
         output = completeText
         isStreaming = false
         if !completeText.isEmpty { incompleteResultReason = .cancelled }
@@ -345,6 +317,8 @@ final class ResultViewModel: ObservableObject {
     // MARK: - 内部
 
     private func resetOutput() {
+        outputState.flush()
+        thinkingState.flush()
         streamingCoordinator.reset()
         output = ""
         thinkingText = ""
@@ -425,6 +399,8 @@ final class ResultViewModel: ObservableObject {
             },
             onDrained: { [weak self] in
                 guard let self else { return }
+                self.outputState.flush()
+                self.thinkingState.flush()
                 self.isStreaming = false
                 self.finishMetrics(recordUsage: true, saveHistory: true)
             }
@@ -439,21 +415,24 @@ final class ResultViewModel: ObservableObject {
             let immediateOutputDelta = self.streamingCoordinator.appendContentToken(
                 token,
                 extractsThinkTags: thinkingEnabled)
-            self.thinkingText = self.streamingCoordinator.thinkingText
+            _ = self.thinkingState.replaceCoalesced(with: self.streamingCoordinator.thinkingText)
             if let immediateOutputDelta {
                 self.outputState.append(immediateOutputDelta)
             }
         } onThinking: { [weak self] thinking in
             // Anthropic extended thinking 块
             guard let self = self else { return }
-            self.thinkingText = self.streamingCoordinator.appendExternalThinking(thinking)
+            let next = self.streamingCoordinator.appendExternalThinking(thinking)
+            _ = self.thinkingState.replaceCoalesced(with: next)
         } onComplete: { [weak self] error in
             guard let self = self else { return }
             let immediateOutputDelta = self.streamingCoordinator.finish()
-            self.thinkingText = self.streamingCoordinator.thinkingText
+            // 结束态立即落定,不再合并延迟。
+            self.thinkingState.replace(with: self.streamingCoordinator.thinkingText)
             if let immediateOutputDelta {
                 self.outputState.append(immediateOutputDelta)
             }
+            self.outputState.flush()
             if let error = error {
                 let recordedFailure = self.routeAttemptCoordinator.recordFailure(
                     error: error,
@@ -496,6 +475,8 @@ final class ResultViewModel: ObservableObject {
                 )
                 self.updateRequestDiagnostics(completedDiagnostics)
                 if !typewriterOn {
+                    self.outputState.flush()
+                    self.thinkingState.flush()
                     self.isStreaming = false
                     self.finishMetrics(recordUsage: true, saveHistory: true)
                 }

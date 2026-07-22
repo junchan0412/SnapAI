@@ -30,11 +30,14 @@ final class ResultStreamingCoordinator {
         self.onOutputChunk = onOutputChunk
         self.onDrained = onDrained
 
-        let timer = Timer(timeInterval: speed.tickInterval, repeats: true) { [weak self] _ in
+        let interval = speed.tickInterval
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.tick()
             }
         }
+        // 允许系统合并相邻 timer 唤醒,减少与滚动/绘制争抢主线程的硬抖动。
+        timer.tolerance = min(0.008, interval * 0.25)
         RunLoop.main.add(timer, forMode: .common)
         typewriterTimer = timer
     }

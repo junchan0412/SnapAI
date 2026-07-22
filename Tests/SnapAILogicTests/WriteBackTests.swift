@@ -48,9 +48,9 @@ func testResultContentRenderModeAvoidsStreamingMarkdownReparse() {
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
                                                currentTime: 1.01,
                                                isStreaming: true) == false,
-           "streaming auto-scroll suppresses updates above the 30 Hz budget")
+           "streaming auto-scroll suppresses updates above the 20 Hz budget")
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
-                                               currentTime: 1.04,
+                                               currentTime: 1.0 + ResultAutoScrollPolicy.streamingMinimumInterval,
                                                isStreaming: true),
            "streaming auto-scroll advances after its frame budget")
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
@@ -144,9 +144,12 @@ func testResultLiveOutputStatesPublishIndependently() {
     expect(thinkingChanges == 0, "output updates do not invalidate thinking observers")
     expect(!output.replace(with: "partial"), "identical output text is ignored")
     expect(outputChanges == 1, "identical output does not publish another update")
-    expect(output.append(" result"), "incremental output text is appended")
-    expect(output.text == "partial result", "incremental output preserves existing text")
-    expect(outputChanges == 2, "incremental output publishes one leaf update")
+    expect(output.append(" res"), "incremental output text is accepted")
+    expect(output.append("ult"), "adjacent incremental chunks are accepted")
+    // 合并发布:同一 runloop 内多次 append 只冲刷一次。
+    output.flush()
+    expect(output.text == "partial result", "incremental output preserves existing text after flush")
+    expect(outputChanges == 2, "coalesced incremental output publishes one leaf update")
     expect(!output.append(""), "empty output chunks are ignored")
     expect(outputChanges == 2, "empty output chunks do not publish")
 
@@ -155,6 +158,11 @@ func testResultLiveOutputStatesPublishIndependently() {
     expect(thinkingChanges == 1, "thinking state publishes its own update")
     expect(!thinking.replace(with: "reasoning"), "identical thinking text is ignored")
     expect(thinkingChanges == 1, "identical thinking does not publish another update")
+    expect(thinking.replaceCoalesced(with: "reasoning…"), "coalesced thinking accepts a newer value")
+    expect(thinking.replaceCoalesced(with: "reasoning…done"), "coalesced thinking keeps only the latest pending value")
+    thinking.flush()
+    expect(thinking.text == "reasoning…done", "coalesced thinking flushes the latest value")
+    expect(thinkingChanges == 2, "coalesced thinking publishes one update for the latest value")
 
     withExtendedLifetime((outputSubscription, thinkingSubscription)) {}
 }

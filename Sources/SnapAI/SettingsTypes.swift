@@ -17,12 +17,13 @@ public enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
     public var id: String { rawValue }
 
     /// 每次 tick 揭示的字符数
+    /// 在保持相近视觉速度的前提下,提高每 tick 字符数并拉长间隔,降低 UI 刷新频率。
     var charsPerTick: Int {
         switch self {
         case .off: return 0       // 0 表示不走打字机,直接整段显示
-        case .slow: return 1
-        case .normal: return 2
-        case .fast: return 5
+        case .slow: return 2
+        case .normal: return 4
+        case .fast: return 8
         }
     }
 
@@ -30,9 +31,9 @@ public enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
     var tickInterval: TimeInterval {
         switch self {
         case .off: return 0
-        case .slow: return 0.03
-        case .normal: return 0.012
-        case .fast: return 0.008
+        case .slow: return 0.036
+        case .normal: return 0.018
+        case .fast: return 0.012
         }
     }
 }

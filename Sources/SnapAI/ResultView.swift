@@ -4,10 +4,12 @@ import SnapAILogic
 
 struct TypingCursor: View {
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { context in
-            let on = Int(context.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+        // 用 continuous 相位插值替代 0.5s 方波,光标闪烁更顺滑且避免硬切换。
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate
+            let opacity = 0.22 + 0.78 * abs(sin(phase * .pi))
             RoundedRectangle(cornerRadius: 1).fill(Color.primary).frame(width: 7, height: 15)
-                .opacity(on ? 1 : 0.15)
+                .opacity(opacity)
         }
     }
 }
@@ -22,6 +24,7 @@ struct ResultView: View {
             if vm.isStreaming {
                 SnapAIStreamingProgressBar()
                     .padding(.bottom, 1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
             header
             Divider()
@@ -29,6 +32,7 @@ struct ResultView: View {
             Divider()
             footer
         }
+        .animation(.easeInOut(duration: 0.16), value: vm.isStreaming)
         .frame(minWidth: 360, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
         .background(.regularMaterial)
     }
@@ -251,7 +255,12 @@ struct ResultView: View {
             }
             .background(ResultOutputAutoScrollObserver(state: vm.outputState) {
                 guard vm.shouldAutoScroll() else { return }
-                proxy.scrollTo("output", anchor: .bottom)
+                // 流式滚动不使用 withAnimation,避免 ScrollView 与打字机刷新叠加产生卡顿。
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo("output", anchor: .bottom)
+                }
             })
             .onChange(of: vm.isStreaming) {
                 guard !vm.isStreaming else { return }

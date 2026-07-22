@@ -275,6 +275,7 @@ struct QuickInputView: View {
 @MainActor
 final class QuickInputController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
+    private var hostingView: NSHostingView<QuickInputView>?
     let model: QuickInputModel
     private let captureQueue = DispatchQueue(label: "com.snapai.screen-capture", qos: .userInitiated)
     /// 记忆上次面板位置,避免每次都强制居中打断用户习惯的位置。
@@ -289,15 +290,20 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     func show() {
         let view = QuickInputView(model: model, onClose: { [weak self] in self?.hide() },
                                   onCapture: { [weak self] in self?.captureScreen() })
-        let hosting = NSHostingView(rootView: view)
         let panel: FloatingPanel
-        if let existing = self.panel {
-            panel = existing; panel.contentView = hosting
+        let hosting: NSHostingView<QuickInputView>
+        if let existing = self.panel, let existingHosting = hostingView {
+            panel = existing
+            hosting = existingHosting
+            hosting.rootView = view
         } else {
+            hosting = NSHostingView(rootView: view)
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 210))
-            panel.contentView = hosting; panel.minSize = NSSize(width: 420, height: 180)
+            panel.contentView = hosting
+            panel.minSize = NSSize(width: 420, height: 180)
             panel.delegate = self
             self.panel = panel
+            self.hostingView = hosting
         }
         hosting.layoutSubtreeIfNeeded()
         let fittingSize = hosting.fittingSize
@@ -310,7 +316,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             let origin = NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.midY + 80)
             panel.setFrameOrigin(origin)
         }
-        panel.makeKeyAndOrderFront(nil)
+        FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
     }
@@ -320,7 +326,10 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         lastOrigin = panel?.frame.origin
     }
 
-    func hide() { panel?.orderOut(nil); removeEscMonitor() }
+    func hide() {
+        removeEscMonitor()
+        FloatingPanelPresentation.dismiss(panel)
+    }
 
     /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
     private func captureScreen() {

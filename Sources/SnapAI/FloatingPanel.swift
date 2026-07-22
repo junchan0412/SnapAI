@@ -1,6 +1,49 @@
 import AppKit
 import SwiftUI
 
+/// 浮动面板统一的淡入/淡出节奏,避免结果窗、快捷提问、命令面板各自硬编码动画。
+enum FloatingPanelPresentation {
+    static let fadeDuration: TimeInterval = 0.16
+
+    static func present(_ panel: NSPanel, animated: Bool = true) {
+        if animated {
+            panel.alphaValue = 0
+            panel.makeKeyAndOrderFront(nil)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = fadeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 1
+            }
+        } else {
+            panel.alphaValue = 1
+            panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    static func dismiss(_ panel: NSPanel?,
+                        animated: Bool = true,
+                        completion: (() -> Void)? = nil) {
+        guard let panel else {
+            completion?()
+            return
+        }
+        let finish = {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            completion?()
+        }
+        if animated && panel.isVisible {
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = fadeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                panel.animator().alphaValue = 0
+            }, completionHandler: finish)
+        } else {
+            finish()
+        }
+    }
+}
+
 /// 一个无标题栏、可成为 key、可调整大小、点击外部自动关闭的浮动面板。
 final class FloatingPanel: NSPanel {
     init(contentRect: NSRect) {
@@ -19,6 +62,7 @@ final class FloatingPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         isOpaque = false
+        alphaValue = 1
         minSize = NSSize(width: 360, height: 420)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         animationBehavior = .utilityWindow
@@ -33,9 +77,11 @@ final class FloatingPanel: NSPanel {
 @MainActor
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
+    private var hostingView: NSHostingView<ResultView>?
     private let vm: ResultViewModel
     private let settings: AppSettings
     private let onOpenAISettings: () -> Void
+    private var isDismissing = false
     private var localMonitor: Any?
     private var globalMonitor: Any?
 
@@ -49,34 +95,41 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     /// 在鼠标位置附近显示面板
     func show() {
+        isDismissing = false
         let rootView = ResultView(vm: vm,
                                   onClose: { [weak self] in self?.hide() },
                                   onOpenAISettings: onOpenAISettings)
-        let hosting = NSHostingView(rootView: rootView)
 
         let panel: FloatingPanel
-        if let existing = self.panel {
+        if let existing = self.panel, let hostingView {
+            // 复用 panel 与 hosting 树,只替换 rootView,避免每次触发都重建 SwiftUI 状态树。
             panel = existing
-            panel.contentView = hosting
+            hostingView.rootView = rootView
         } else {
+            let hosting = NSHostingView(rootView: rootView)
             let w = AppSettings.clampedPanelWidth(settings.panelWidth)
             let h = AppSettings.clampedPanelHeight(settings.panelHeight)
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h))
             panel.contentView = hosting
             panel.delegate = self
             self.panel = panel
+            self.hostingView = hosting
         }
 
         positionNearCursor(panel)
-        panel.makeKeyAndOrderFront(nil)
+        FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         installDismissMonitors()
     }
 
     func hide() {
+        guard !isDismissing else { return }
+        isDismissing = true
         vm.cancel()
-        panel?.orderOut(nil)
         removeDismissMonitors()
+        FloatingPanelPresentation.dismiss(panel) { [weak self] in
+            self?.isDismissing = false
+        }
     }
 
     /// 窗口尺寸变化时记忆(#8)

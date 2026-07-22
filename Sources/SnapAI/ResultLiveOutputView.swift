@@ -42,14 +42,17 @@ struct ResultOutputDisplay: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .id("output")
+            .transition(.opacity)
             .accessibilityLabel("AI 正在生成结果")
         case .streamingText:
             VStack(alignment: .leading, spacing: 4) {
                 Text(state.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentTransition(.opacity)
                 TypingCursor()
             }
             .id("output")
+            .transition(.opacity)
             .accessibilityLabel("AI 正在生成结果")
         case .markdown:
             MarkdownView(text: state.text,
