@@ -77,6 +77,7 @@ final class FloatingPanel: NSPanel {
 @MainActor
 final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
+    private var hostingView: NSHostingView<ResultView>?
     private let vm: ResultViewModel
     private let settings: AppSettings
     private let onOpenAISettings: () -> Void
@@ -98,19 +99,21 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         let rootView = ResultView(vm: vm,
                                   onClose: { [weak self] in self?.hide() },
                                   onOpenAISettings: onOpenAISettings)
-        let hosting = NSHostingView(rootView: rootView)
 
         let panel: FloatingPanel
-        if let existing = self.panel {
+        if let existing = self.panel, let hostingView {
+            // 复用 panel 与 hosting 树,只替换 rootView,避免每次触发都重建 SwiftUI 状态树。
             panel = existing
-            panel.contentView = hosting
+            hostingView.rootView = rootView
         } else {
+            let hosting = NSHostingView(rootView: rootView)
             let w = AppSettings.clampedPanelWidth(settings.panelWidth)
             let h = AppSettings.clampedPanelHeight(settings.panelHeight)
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h))
             panel.contentView = hosting
             panel.delegate = self
             self.panel = panel
+            self.hostingView = hosting
         }
 
         positionNearCursor(panel)

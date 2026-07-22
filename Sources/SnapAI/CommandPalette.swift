@@ -40,36 +40,63 @@ final class CommandPaletteModel: ObservableObject {
         didSet {
             if query != oldValue {
                 selectedIndex = 0
+                recomputeFilteredItems()
             }
         }
     }
     @Published var selectedIndex: Int = 0
+    @Published private(set) var filteredItems: [CommandPaletteItem] = []
 
-    func filteredItems(from items: [CommandPaletteItem]) -> [CommandPaletteItem] {
-        Array(CommandPaletteMatcher.ranked(items, query: query) { item in
-            (title: item.title, subtitle: item.subtitle, keywords: item.searchableKeywords)
-        }.prefix(40))
+    private var sourceItems: [CommandPaletteItem] = []
+
+    func replaceItems(_ items: [CommandPaletteItem]) {
+        sourceItems = items
+        recomputeFilteredItems()
     }
 
-    func moveSelection(delta: Int, itemCount: Int) {
-        guard itemCount > 0 else {
+    func filteredItems(from items: [CommandPaletteItem]) -> [CommandPaletteItem] {
+        // 兼容旧调用点;主路径使用缓存的 filteredItems。
+        if items.count == sourceItems.count,
+           zip(items, sourceItems).allSatisfy({ $0.id == $1.id }) {
+            return filteredItems
+        }
+        return Self.rank(items, query: query)
+    }
+
+    func moveSelection(delta: Int, itemCount: Int? = nil) {
+        let count = itemCount ?? filteredItems.count
+        guard count > 0 else {
             selectedIndex = 0
             return
         }
-        selectedIndex = min(max(selectedIndex + delta, 0), itemCount - 1)
+        selectedIndex = min(max(selectedIndex + delta, 0), count - 1)
     }
 
-    func selectedItem(from items: [CommandPaletteItem]) -> CommandPaletteItem? {
-        let filtered = filteredItems(from: items)
+    func selectedItem(from items: [CommandPaletteItem]? = nil) -> CommandPaletteItem? {
+        let filtered = items.map { filteredItems(from: $0) } ?? filteredItems
         guard !filtered.isEmpty else { return nil }
         let index = min(max(selectedIndex, 0), filtered.count - 1)
         return filtered[index]
+    }
+
+    private func recomputeFilteredItems() {
+        filteredItems = Self.rank(sourceItems, query: query)
+        if selectedIndex >= filteredItems.count {
+            selectedIndex = max(0, filteredItems.count - 1)
+        }
+    }
+
+    private static func rank(_ items: [CommandPaletteItem], query: String) -> [CommandPaletteItem] {
+        Array(CommandPaletteMatcher.ranked(items, query: query) { item in
+            (title: item.title, subtitle: item.subtitle, keywords: item.searchableKeywords)
+        }.prefix(40))
     }
 }
 
 @MainActor
 final class CommandPaletteController: NSObject, NSWindowDelegate {
     private var panel: FloatingPanel?
+    private var hostingView: NSHostingView<CommandPaletteView>?
     private let itemProvider: () -> [CommandPaletteItem]
     private let model = CommandPaletteModel()
     private var escMonitor: Any?
@@ -98,28 +125,30 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
         currentItems = wrapped
         model.query = ""
         model.selectedIndex = 0
-        let view = CommandPaletteView(items: wrapped,
-                                      model: model,
+        model.replaceItems(wrapped)
+        let view = CommandPaletteView(model: model,
                                       onClose: { [weak self] in self?.hide() })
-        let hosting = NSHostingView(rootView: view)
         let panel: FloatingPanel
-        if let existing = self.panel {
+        if let existing = self.panel, let hostingView {
             panel = existing
-            panel.contentView = hosting
+            hostingView.rootView = view
         } else {
+            let hosting = NSHostingView(rootView: view)
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420))
             panel.minSize = NSSize(width: 480, height: 320)
             panel.contentView = hosting
             panel.delegate = self
             self.panel = panel
+            self.hostingView = hosting
         }
         panel.center()
         FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
-        DispatchQueue.main.async { [weak hosting] in
-            if let textField = hosting?.firstSubview(ofType: NSTextField.self) {
-                hosting?.window?.makeFirstResponder(textField)
+        DispatchQueue.main.async { [weak self] in
+            guard let hosting = self?.hostingView else { return }
+            if let textField = hosting.firstSubview(ofType: NSTextField.self) {
+                hosting.window?.makeFirstResponder(textField)
             }
         }
     }
@@ -127,6 +156,7 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     func hide() {
         removeEscMonitor()
         currentItems = []
+        model.replaceItems([])
         FloatingPanelPresentation.dismiss(panel)
     }
 
@@ -144,15 +174,13 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
                 self.hide()
                 return nil
             case 125: // down
-                self.model.moveSelection(delta: 1,
-                                         itemCount: self.model.filteredItems(from: self.currentItems).count)
+                self.model.moveSelection(delta: 1)
                 return nil
             case 126: // up
-                self.model.moveSelection(delta: -1,
-                                         itemCount: self.model.filteredItems(from: self.currentItems).count)
+                self.model.moveSelection(delta: -1)
                 return nil
             case 36, 76: // return / keypad return
-                self.model.selectedItem(from: self.currentItems)?.perform()
+                self.model.selectedItem()?.perform()
                 return nil
             default:
                 break
@@ -179,14 +207,11 @@ private extension NSView {
 }
 
 struct CommandPaletteView: View {
-    let items: [CommandPaletteItem]
     @ObservedObject var model: CommandPaletteModel
     var onClose: () -> Void
     var openPaletteHint: String? = nil
 
-    private var filteredItems: [CommandPaletteItem] {
-        model.filteredItems(from: items)
-    }
+    private var filteredItems: [CommandPaletteItem] { model.filteredItems }
 
     private var selectedIndex: Int {
         guard !filteredItems.isEmpty else { return 0 }
@@ -202,7 +227,7 @@ struct CommandPaletteView: View {
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .onSubmit {
-                        model.selectedItem(from: items)?.perform()
+                        model.selectedItem()?.perform()
                     }
                 Button {
                     onClose()
@@ -314,7 +339,8 @@ struct CommandPaletteView: View {
 
     private func scrollToSelection(with proxy: ScrollViewProxy) {
         guard filteredItems.indices.contains(selectedIndex) else { return }
-        withAnimation(.easeOut(duration: 0.12)) {
+        // 键盘导航保留短动画;搜索过滤时由 onChange(query) 触发,动画更短避免列表闪跳。
+        withAnimation(.easeOut(duration: 0.08)) {
             proxy.scrollTo(filteredItems[selectedIndex].id, anchor: .center)
         }
     }
