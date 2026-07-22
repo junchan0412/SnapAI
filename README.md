@@ -2,19 +2,19 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.71 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.72 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.71 版本重点
+## 1.6.72 版本重点
 
-- 结果窗口新增「失焦行为」设置:自动关闭 / 生成后保持 / 始终保持,默认生成后保持。
-- 「未检测到选中文字」改为结果窗口非模态提示,不再弹出阻塞式 alert。
-- 文本捕获引入代际令牌,过期空选回调不会打断正在生成的结果。
-- 多处界面与人机交互控件统一到共享 UI 组件,设置页、结果页、历史与快捷提问更一致。
-- 快捷键录制、导入导出、权限健康等面板交互细节同步打磨。
+- 浮动面板统一淡入淡出,结果窗/快捷提问/命令面板开启关闭更顺滑。
+- 流式输出与 thinking 增量合并发布,降低打字机期间主线程 invalidation。
+- 结果/快捷提问/命令面板复用 hosting 树,避免每次弹出重建 SwiftUI 状态。
+- 命令面板过滤结果缓存,键盘导航与搜索更轻。
+- 流式进度条与光标动画改为 display-linked 连续相位,减少硬切换感。
 
-详细发布说明见 [SnapAI 1.6.71 Release Notes](docs/RELEASE_NOTES_1.6.71.md),阶段性复盘见 [SnapAI 1.6.71 Iteration Report](docs/ITERATION_REPORT_1.6.71.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.72 Release Notes](docs/RELEASE_NOTES_1.6.72.md),阶段性复盘见 [SnapAI 1.6.72 Iteration Report](docs/ITERATION_REPORT_1.6.72.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -294,7 +294,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.71
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.72
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
