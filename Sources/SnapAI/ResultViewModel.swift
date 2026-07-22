@@ -54,44 +54,27 @@ final class ResultViewModel: ObservableObject {
         }
     }
 
-    func dismissIncompleteResultNotice() {
-        incompleteResultReason = nil
-    }
-
     /// #bug2 瞬时非模态提示(如「未检测到选中的文字」),取代阻塞式模态 alert。
     @Published var transientNotice: String?
 
-    private var transientNoticeWork: DispatchWorkItem?
-
-    func showTransientNotice(_ message: String, autoDismiss: TimeInterval = 3.0) {
-        transientNoticeWork?.cancel()
-        transientNotice = message
-        let work = DispatchWorkItem { [weak self] in self?.transientNotice = nil }
-        transientNoticeWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + autoDismiss, execute: work)
-    }
-
-    func dismissTransientNotice() {
-        transientNoticeWork?.cancel()
-        transientNotice = nil
-    }
+    var transientNoticeWork: DispatchWorkItem?
 
     let settings: AppSettings
-    private var client: AIClient
-    private let completionCoordinator: ResultCompletionCoordinator
-    private let routeAttemptCoordinator: ResultRouteAttemptCoordinator
-    private let requestPreparationCoordinator: ResultRequestPreparationCoordinator
-    private let streamingCoordinator: ResultStreamingCoordinator
-    private let submissionCoordinator: ResultSubmissionCoordinator
+    var client: AIClient
+    let completionCoordinator: ResultCompletionCoordinator
+    let routeAttemptCoordinator: ResultRouteAttemptCoordinator
+    let requestPreparationCoordinator: ResultRequestPreparationCoordinator
+    let streamingCoordinator: ResultStreamingCoordinator
+    let submissionCoordinator: ResultSubmissionCoordinator
     let operationCoordinator: ResultOperationCoordinator
-    private var autoReplaceEnabled = false
-    private var replacementOriginalText: String = ""
-    private var submissionPrivacy: PrivacySubmissionDiagnostic?
-    private var requestDiagnostics: AIRequestDiagnostics?
-    private var lastAutoScrollTime: TimeInterval = 0
+    var autoReplaceEnabled = false
+    var replacementOriginalText: String = ""
+    var submissionPrivacy: PrivacySubmissionDiagnostic?
+    var requestDiagnostics: AIRequestDiagnostics?
+    var lastAutoScrollTime: TimeInterval = 0
 
     // #5 追问历史(↑/↓ 浏览)
-    private var followUpHistory = FollowUpHistoryStore()
+    var followUpHistory = FollowUpHistoryStore()
     var followUpHistoryCount: Int { followUpHistory.count }
 
     /// #3 替换原文回调
@@ -115,8 +98,8 @@ final class ResultViewModel: ObservableObject {
     }
 
     // #3 图片(来自截图/粘贴)
-    private var pendingCaptureMethod: TextCaptureMethod?
-    private var pendingSourceContext: SelectionSourceContext?
+    var pendingCaptureMethod: TextCaptureMethod?
+    var pendingSourceContext: SelectionSourceContext?
 
     var completeText: String { streamingCoordinator.completeText }
     var isTranslation: Bool { action.isTranslation }
@@ -276,26 +259,6 @@ final class ResultViewModel: ObservableObject {
         runStream(hasImage: false)
     }
 
-    /// #5 浏览追问历史
-    func followUpHistoryUp() {
-        if FollowUpInputBehavior.shouldBrowseHistory(currentText: followUp) {
-            followUpHistory.resetNavigation()
-        }
-        guard let previous = followUpHistory.previous() else { return }
-        followUp = previous
-    }
-
-    func followUpHistoryDown() {
-        guard let next = followUpHistory.next() else { return }
-        followUp = next
-    }
-
-    func shouldHandleFollowUpHistoryNavigation(currentText: String,
-                                               direction: FollowUpHistoryNavigationDirection) -> Bool {
-        followUpHistory.shouldHandleNavigation(currentText: currentText,
-                                               direction: direction)
-    }
-
     func regenerate() {
         guard !isStreaming else { return }
         thinkingText = ""
@@ -303,7 +266,6 @@ final class ResultViewModel: ObservableObject {
         runStream(hasImage: false)
     }
 
-    /// #12 错误后重试
     func retry() {
         guard !isStreaming else { return }
         thinkingText = ""
@@ -344,13 +306,11 @@ final class ResultViewModel: ObservableObject {
              empty: "当前没有可复制的请求诊断。")
     }
 
-    /// #3 替换原文
     func replaceOriginal() {
         operationCoordinator.replace(original: replacementOriginalText,
                                      replacement: completeText, handler: onReplace)
     }
 
-    /// #8 追加到文档
     func appendToDocument() {
         operationCoordinator.append(text: completeText, handler: onAppend)
     }

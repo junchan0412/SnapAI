@@ -46,9 +46,13 @@ enum MenuCoordinator {
             let header = NSMenuItem(title: firstDescriptor.providerName, action: nil, keyEquivalent: "")
             header.isEnabled = false
             // 供应商标题加粗,与模型项视觉区分。
+            let headerFont = NSFontManager.shared.convert(
+                NSFont.menuBarFont(ofSize: 0),
+                toHaveTrait: .boldFontMask
+            )
             header.attributedTitle = NSAttributedString(
                 string: firstDescriptor.providerName,
-                attributes: [.font: NSFont.menuBarFont(ofSize: 0).bold(),
+                attributes: [.font: headerFont,
                              .foregroundColor: NSColor.labelColor]
             )
             sub.addItem(header)
