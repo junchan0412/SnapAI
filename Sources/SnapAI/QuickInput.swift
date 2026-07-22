@@ -310,7 +310,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             let origin = NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.midY + 80)
             panel.setFrameOrigin(origin)
         }
-        panel.makeKeyAndOrderFront(nil)
+        FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
     }
@@ -320,7 +320,10 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         lastOrigin = panel?.frame.origin
     }
 
-    func hide() { panel?.orderOut(nil); removeEscMonitor() }
+    func hide() {
+        removeEscMonitor()
+        FloatingPanelPresentation.dismiss(panel)
+    }
 
     /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
     private func captureScreen() {

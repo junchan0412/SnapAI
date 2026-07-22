@@ -214,17 +214,31 @@ extension View {
 
 struct SnapAIStreamingProgressBar: View {
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.9)) { context in
-            let phase = Double(context.date.timeIntervalSinceReferenceDate)
-                .truncatingRemainder(dividingBy: 1.5) / 1.5
+        // 以 display-linked 节奏推进相位,比固定 0.9s 步进更接近原生 indeterminate 条。
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
+            let cycle = 1.35
+            let phase = context.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: cycle) / cycle
             GeometryReader { proxy in
+                let barWidth = max(36, proxy.size.width * 0.28)
+                let travel = max(0, proxy.size.width - barWidth)
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                         .fill(Color.accentColor.opacity(0.14))
                     RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                        .fill(Color.accentColor)
-                        .frame(width: max(28, proxy.size.width * 0.32))
-                        .offset(x: proxy.size.width * phase - proxy.size.width * 0.32 * phase)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.accentColor.opacity(0.35),
+                                    Color.accentColor,
+                                    Color.accentColor.opacity(0.35)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: barWidth)
+                        .offset(x: travel * phase)
                 }
             }
             .frame(height: 2.5)

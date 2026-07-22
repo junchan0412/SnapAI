@@ -48,9 +48,9 @@ func testResultContentRenderModeAvoidsStreamingMarkdownReparse() {
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
                                                currentTime: 1.01,
                                                isStreaming: true) == false,
-           "streaming auto-scroll suppresses updates above the 30 Hz budget")
+           "streaming auto-scroll suppresses updates above the 20 Hz budget")
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,
-                                               currentTime: 1.04,
+                                               currentTime: 1.0 + ResultAutoScrollPolicy.streamingMinimumInterval,
                                                isStreaming: true),
            "streaming auto-scroll advances after its frame budget")
     expect(ResultAutoScrollPolicy.shouldScroll(lastScrollTime: 1,

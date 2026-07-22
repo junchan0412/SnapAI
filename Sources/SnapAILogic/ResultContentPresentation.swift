@@ -16,7 +16,7 @@ public enum ResultContentRenderMode: Equatable {
 }
 
 public enum ResultAutoScrollPolicy {
-    public static let streamingMinimumInterval: TimeInterval = 1.0 / 30.0
+    public static let streamingMinimumInterval: TimeInterval = 1.0 / 20.0
 
     public static func shouldScroll(lastScrollTime: TimeInterval,
                                     currentTime: TimeInterval,

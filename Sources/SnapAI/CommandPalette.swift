@@ -114,7 +114,7 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
             self.panel = panel
         }
         panel.center()
-        panel.makeKeyAndOrderFront(nil)
+        FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
         installEscMonitor()
         DispatchQueue.main.async { [weak hosting] in
@@ -127,7 +127,7 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     func hide() {
         removeEscMonitor()
         currentItems = []
-        panel?.orderOut(nil)
+        FloatingPanelPresentation.dismiss(panel)
     }
 
     // 失焦时关闭
