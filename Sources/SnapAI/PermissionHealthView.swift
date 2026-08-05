@@ -98,11 +98,10 @@ struct PermissionHealthView: View {
     private let healthColumns = [
         GridItem(.adaptive(minimum: 190), spacing: 10)
     ]
-    @State private var copyNotice: String?
+    @StateObject private var copyNotice = SnapAITransientState<String>()
 
     private func flashCopy(_ message: String) {
-        copyNotice = message
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { copyNotice = nil }
+        copyNotice.show(message, autoDismiss: 1.4)
     }
 
     var body: some View {
@@ -196,7 +195,7 @@ struct PermissionHealthView: View {
                idealHeight: 560,
                maxHeight: .infinity)
         .overlay(alignment: .bottom) {
-            if let notice = copyNotice {
+            if let notice = copyNotice.value {
                 Label(notice, systemImage: "checkmark.circle.fill")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(SnapAIUI.StatusColor.success)
@@ -208,7 +207,7 @@ struct PermissionHealthView: View {
                     .accessibilityLabel(notice)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: copyNotice)
+        .animation(.easeInOut(duration: 0.18), value: copyNotice.value)
     }
 
     /// 详情分组:带小标题的卡片,让长列表更易扫读。

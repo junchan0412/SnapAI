@@ -3,14 +3,27 @@ import AppKit
 import SnapAILogic
 
 struct TypingCursor: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        // 用 continuous 相位插值替代 0.5s 方波,光标闪烁更顺滑且避免硬切换。
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate
-            let opacity = 0.22 + 0.78 * abs(sin(phase * .pi))
-            RoundedRectangle(cornerRadius: 1).fill(Color.primary).frame(width: 7, height: 15)
-                .opacity(opacity)
+        Group {
+            if reduceMotion {
+                cursor(opacity: 0.7)
+            } else {
+                // 用 continuous 相位插值替代 0.5s 方波,光标闪烁更顺滑且避免硬切换。
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+                    let phase = context.date.timeIntervalSinceReferenceDate
+                    cursor(opacity: 0.22 + 0.78 * abs(sin(phase * .pi)))
+                }
+            }
         }
+    }
+
+    private func cursor(opacity: Double) -> some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Color.primary)
+            .frame(width: 7, height: 15)
+            .opacity(opacity)
     }
 }
 

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source scripts/configure-swift-toolchain.sh
 
 RUN_PACKAGE=1
 REQUIRE_CLEAN=0

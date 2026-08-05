@@ -6,11 +6,10 @@ struct ConfigMigrationSettingsSection: View {
     @ObservedObject var settings: AppSettings
     let commit: () -> Void
     @State private var pendingImportedConfig: AppSettings?
-    @State private var configNotice: ConfigNotice?
+    @StateObject private var configNotice = SnapAITransientState<ConfigNotice>()
 
     private func flashNotice(_ message: String, tone: ConfigNotice.Tone) {
-        configNotice = ConfigNotice(message: message, tone: tone)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { configNotice = nil }
+        configNotice.show(ConfigNotice(message: message, tone: tone), autoDismiss: 2.0)
     }
 
     var body: some View {
@@ -47,7 +46,7 @@ struct ConfigMigrationSettingsSection: View {
             Text("将用所选文件中的供应商、动作、快捷键、脱敏规则等覆盖当前配置，此操作不可撤销。建议先导出当前配置备份。")
         }
         .overlay(alignment: .bottom) {
-            if let notice = configNotice {
+            if let notice = configNotice.value {
                 Label(notice.message, systemImage: notice.tone.icon)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(notice.tone.color)
@@ -59,7 +58,7 @@ struct ConfigMigrationSettingsSection: View {
                     .accessibilityLabel(notice.message)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: configNotice)
+        .animation(.easeInOut(duration: 0.18), value: configNotice.value)
     }
 
     private func exportConfig() {

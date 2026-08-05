@@ -55,6 +55,12 @@ require_match "result command consistency tests" 'testResultCommandFactoryKeepsM
 
 require_match "macOS hotkey handler dispatch smoke" 'Hotkey handler dispatch probe' scripts/run-macos-smoke-tests.sh
 require_match "app launch smoke preflight" 'scripts/run-app-launch-smoke.sh SnapAI.app' scripts/preflight-release.sh
+require_match "SwiftUI toolchain preflight" 'source scripts/configure-swift-toolchain\.sh' build.sh
+require_match "release SwiftUI toolchain preflight" 'source scripts/configure-swift-toolchain\.sh' scripts/preflight-release.sh
+require_match "reduced-motion panel presentation" 'accessibilityDisplayShouldReduceMotion' Sources/SnapAI/FloatingPanel.swift
+require_match "reduced-motion streaming UI" 'accessibilityReduceMotion' Sources/SnapAI/SnapAIUI.swift
+require_match "cancellable transient UI state" 'SnapAITransientState' Sources/SnapAI/SnapAIUI.swift
+require_no_match "uncancellable settings notice" 'asyncAfter.*(actionLibraryNotice|configNotice|copyNotice)' Sources/SnapAI
 
 require_match "supply-chain preflight" 'scripts/run-supply-chain-scan.sh' scripts/preflight-release.sh
 require_match "SBOM packaging" 'snapai-sbom' scripts/package-release.sh

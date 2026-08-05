@@ -37,6 +37,31 @@ enum SnapAIUI {
     }
 }
 
+@MainActor
+final class SnapAITransientState<Value>: ObservableObject {
+    @Published private(set) var value: Value?
+    private var dismissWorkItem: DispatchWorkItem?
+
+    func show(_ value: Value, autoDismiss: TimeInterval) {
+        dismissWorkItem?.cancel()
+        self.value = value
+
+        guard autoDismiss > 0 else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.value = nil
+            self?.dismissWorkItem = nil
+        }
+        dismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + autoDismiss, execute: workItem)
+    }
+
+    func clear() {
+        dismissWorkItem?.cancel()
+        dismissWorkItem = nil
+        value = nil
+    }
+}
+
 private struct SnapAISurfaceModifier: ViewModifier {
     var padding: CGFloat
     var fillOpacity: Double
@@ -213,38 +238,50 @@ extension View {
 // MARK: - 流式生成进度条(收敛分散的「生成中」弱信号为单一强主视觉)
 
 struct SnapAIStreamingProgressBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        // 以 display-linked 节奏推进相位,比固定 0.9s 步进更接近原生 indeterminate 条。
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { context in
-            let cycle = 1.35
-            let phase = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: cycle) / cycle
-            GeometryReader { proxy in
-                let barWidth = max(36, proxy.size.width * 0.28)
-                let travel = max(0, proxy.size.width - barWidth)
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.14))
-                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.accentColor.opacity(0.35),
-                                    Color.accentColor,
-                                    Color.accentColor.opacity(0.35)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: barWidth)
-                        .offset(x: travel * phase)
+        Group {
+            if reduceMotion {
+                progressTrack(phase: 0.5)
+            } else {
+                // 30Hz 足以保持连续感,同时把持续刷新次数降到原来的一半。
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+                    let cycle = 1.35
+                    let phase = context.date.timeIntervalSinceReferenceDate
+                        .truncatingRemainder(dividingBy: cycle) / cycle
+                    progressTrack(phase: phase)
                 }
             }
-            .frame(height: 2.5)
         }
         .frame(height: 2.5)
         .accessibilityHidden(true)
+    }
+
+    private func progressTrack(phase: Double) -> some View {
+        GeometryReader { proxy in
+            let barWidth = max(36, proxy.size.width * 0.28)
+            let travel = max(0, proxy.size.width - barWidth)
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.accentColor.opacity(0.35),
+                                Color.accentColor,
+                                Color.accentColor.opacity(0.35)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: barWidth)
+                    .offset(x: travel * phase)
+            }
+        }
+        .frame(height: 2.5)
     }
 }
 
@@ -320,4 +357,3 @@ struct SnapAITransientNoticeBanner: View {
         .accessibilityLabel(title)
     }
 }
-

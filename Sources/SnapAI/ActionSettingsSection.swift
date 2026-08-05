@@ -13,11 +13,10 @@ struct ActionSettingsSection: View {
     private let labelWidth: CGFloat = 76
     @State private var pendingRestoreHotKeys = false
     @State private var pendingDeleteAction: AIAction?
-    @State private var actionLibraryNotice: String?
+    @StateObject private var actionLibraryNotice = SnapAITransientState<String>()
 
     private func flashNotice(_ message: String) {
-        actionLibraryNotice = message
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { actionLibraryNotice = nil }
+        actionLibraryNotice.show(message, autoDismiss: 1.8)
     }
 
     var body: some View {
@@ -60,7 +59,7 @@ struct ActionSettingsSection: View {
             Text("该动作及其快捷键将被移除,此操作不可撤销。")
         }
         .overlay(alignment: .bottom) {
-            if let notice = actionLibraryNotice {
+            if let notice = actionLibraryNotice.value {
                 Label(notice, systemImage: "checkmark.circle.fill")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(SnapAIUI.StatusColor.success)
@@ -72,7 +71,7 @@ struct ActionSettingsSection: View {
                     .accessibilityLabel(notice)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: actionLibraryNotice)
+        .animation(.easeInOut(duration: 0.18), value: actionLibraryNotice.value)
     }
 
     private var actionToolbar: some View {

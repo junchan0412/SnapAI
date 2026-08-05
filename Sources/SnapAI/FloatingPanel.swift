@@ -1,12 +1,21 @@
-import AppKit
+@preconcurrency import AppKit
 import SwiftUI
 
+private final class FloatingPanelCompletion: @unchecked Sendable {
+    let action: @MainActor () -> Void
+
+    init(action: @escaping @MainActor () -> Void) {
+        self.action = action
+    }
+}
+
 /// 浮动面板统一的淡入/淡出节奏,避免结果窗、快捷提问、命令面板各自硬编码动画。
+@MainActor
 enum FloatingPanelPresentation {
     static let fadeDuration: TimeInterval = 0.16
 
     static func present(_ panel: NSPanel, animated: Bool = true) {
-        if animated {
+        if shouldAnimate(animated) {
             panel.alphaValue = 0
             panel.makeKeyAndOrderFront(nil)
             NSAnimationContext.runAnimationGroup { context in
@@ -22,25 +31,33 @@ enum FloatingPanelPresentation {
 
     static func dismiss(_ panel: NSPanel?,
                         animated: Bool = true,
-                        completion: (() -> Void)? = nil) {
+                        completion: (@MainActor () -> Void)? = nil) {
         guard let panel else {
             completion?()
             return
         }
-        let finish = {
+        let finish = FloatingPanelCompletion {
             panel.orderOut(nil)
             panel.alphaValue = 1
             completion?()
         }
-        if animated && panel.isVisible {
+        if shouldAnimate(animated) && panel.isVisible {
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = fadeDuration
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 panel.animator().alphaValue = 0
-            }, completionHandler: finish)
+            }, completionHandler: {
+                MainActor.assumeIsolated {
+                    finish.action()
+                }
+            })
         } else {
-            finish()
+            finish.action()
         }
+    }
+
+    private static func shouldAnimate(_ requested: Bool) -> Bool {
+        requested && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 }
 
