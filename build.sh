@@ -1,11 +1,12 @@
 #!/bin/bash
 # 构建 SnapAI 并打包成 macOS .app
 #
-# 注意:本机仅安装了 Command Line Tools,其 SwiftPM (swift build) 存在缺陷
-# (缺少 BuildServerProtocol.framework),因此这里直接用 swiftc 编译,稳定可靠。
+# 直接用 swiftc 编译并组装 bundle;toolchain helper 会在 Command Line Tools
+# 缺少 SwiftUIMacros 时自动查找完整 Xcode。
 set -euo pipefail
 
 cd "$(dirname "$0")"
+source scripts/configure-swift-toolchain.sh
 
 APP_NAME="SnapAI"
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/snapai-build.XXXXXX")
