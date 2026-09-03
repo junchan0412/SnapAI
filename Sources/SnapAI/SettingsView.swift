@@ -33,7 +33,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 760, idealWidth: 840, minHeight: 560, idealHeight: 620)
+        .frame(minWidth: 780, idealWidth: 860, minHeight: 580, idealHeight: 640)
         .onDisappear {
             flushDeferredSave()
         }
@@ -61,23 +61,23 @@ struct SettingsView: View {
     }
 
     private var settingsHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
             Image(systemName: navigation.selectedSection.icon)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.tint)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(navigation.selectedSection.title)
-                    .font(.title3.weight(.semibold))
+                    .font(SnapAIUI.Typography.panelTitle)
                 Text(navigation.selectedSection.subtitle)
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             pinButton
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, SnapAIUI.edgePadding)
+        .padding(.vertical, SnapAIUI.sectionPadding)
         .frame(maxWidth: .infinity)
     }
 
@@ -99,12 +99,12 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .foregroundStyle(isPinned ? Color.accentColor : .secondary)
         .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.045))
+            RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(SnapAIUI.regularFillOpacity))
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1)
         }
         .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
         .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")

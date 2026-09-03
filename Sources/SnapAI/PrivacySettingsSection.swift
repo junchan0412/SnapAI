@@ -89,9 +89,9 @@ struct PrivacySettingsSection: View {
             redactionPreviewPanel(preview)
         }
         .font(.caption)
-        .padding(8)
-        .background(Color.primary.opacity(0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(SnapAIUI.compactPadding)
+        .background(Color.primary.opacity(SnapAIUI.quietFillOpacity))
+        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
     }
 
     private func redactionRuleRow(_ rule: PrivacyRedactionRule,
@@ -352,16 +352,16 @@ struct ContextProfileSettingsSection: View {
 private extension View {
     func section<Content: View>(_ title: String,
                                 @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(SnapAIUI.Typography.sectionLabel)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
                 content()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -369,12 +369,12 @@ private extension View {
     func toggleRow(title: String,
                    description: String,
                    isOn: Binding<Bool>) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.callout.weight(.medium))
+                    .font(SnapAIUI.Typography.bodyText.weight(.medium))
                 Text(description)
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

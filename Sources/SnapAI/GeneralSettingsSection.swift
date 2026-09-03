@@ -10,7 +10,7 @@ struct GeneralSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 WorkModeSettingsSection(settings: settings) {
                     commit()
                 }
@@ -21,7 +21,7 @@ struct GeneralSettingsSection: View {
                 syncAndAnimationSection
                 ConfigMigrationSettingsSection(settings: settings, commit: commit)
             }
-            .padding(14)
+            .padding(SnapAIUI.edgePadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -140,16 +140,16 @@ struct GeneralSettingsSection: View {
 
     private func settingsSection<Content: View>(_ title: String,
                                                 @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(SnapAIUI.Typography.sectionLabel)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
                 content()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -157,12 +157,12 @@ struct GeneralSettingsSection: View {
     private func settingsToggleRow(title: String,
                                    description: String,
                                    isOn: Binding<Bool>) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.callout.weight(.medium))
+                    .font(SnapAIUI.Typography.bodyText.weight(.medium))
                 Text(description)
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -66,7 +66,7 @@ struct ResultView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(vm.action.name.isEmpty ? "SnapAI" : vm.action.name)
-                        .font(.headline)
+                        .font(SnapAIUI.Typography.panelTitle)
                         .lineLimit(1)
                     headerStatusLabel
                 }
@@ -97,18 +97,18 @@ struct ResultView: View {
                     Image(systemName: ResultPinCommand.systemImage(isPinned: vm.isPinned))
                         .foregroundStyle(vm.isPinned ? Color.accentColor : .secondary)
                 }
-                .buttonStyle(SnapAIIconButtonStyle(size: 26))
+                .buttonStyle(SnapAIIconButtonStyle())
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 .help("\(ResultPinCommand.title(isPinned: vm.isPinned)) (⌘⇧P)。未固定时点击面板外部或按 Esc 将关闭。")
                 .accessibilityLabel(ResultPinCommand.title(isPinned: vm.isPinned))
                 Button { onClose() } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(SnapAIIconButtonStyle(size: 26))
+                .buttonStyle(SnapAIIconButtonStyle())
                 .help("关闭结果面板")
                 .accessibilityLabel("关闭")
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, SnapAIUI.edgePadding).padding(.vertical, SnapAIUI.sectionPadding)
 
             // #4 动作切换栏
             actionSwitcher
@@ -147,7 +147,7 @@ struct ResultView: View {
                                 Image(systemName: act.icon.isEmpty ? "sparkles" : act.icon).font(.caption2)
                                 Text(act.name).font(.caption2)
                             }
-                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(selected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.045))
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
@@ -158,7 +158,7 @@ struct ResultView: View {
                         .help(selected ? "当前动作" : "切换到「\(act.name)」(将重新生成)")
                     }
                 }
-                .padding(.horizontal, 14).padding(.bottom, 8)
+                .padding(.horizontal, SnapAIUI.edgePadding).padding(.bottom, SnapAIUI.tightSpacing)
             }
         }
     }
@@ -210,8 +210,8 @@ struct ResultView: View {
                 }
             }
             .font(.caption2)
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
+            .padding(.horizontal, SnapAIUI.edgePadding)
+            .padding(.bottom, SnapAIUI.tightSpacing)
         }
     }
 
@@ -264,7 +264,7 @@ struct ResultView: View {
                         }
                     }, onCopyCode: vm.copyCodeBlock)
                 }
-                .padding(14)
+                .padding(SnapAIUI.edgePadding)
             }
             .background(ResultOutputAutoScrollObserver(state: vm.outputState) {
                 guard vm.shouldAutoScroll() else { return }
@@ -329,7 +329,7 @@ struct ResultView: View {
                 .help("复制请求诊断信息以便排查")
             }
         }
-        .padding(10)
+        .padding(SnapAIUI.compactPadding)
         .background(SnapAIUI.StatusColor.error.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
         .overlay {
@@ -354,12 +354,12 @@ struct ResultView: View {
                 .disabled(vm.isStreaming)
             }
             TextEditor(text: $vm.sourceText)
-                .font(.callout).scrollContentBackground(.hidden)
+                .font(SnapAIUI.Typography.bodyText).scrollContentBackground(.hidden)
                 .frame(minHeight: 34, maxHeight: 92)
-                .padding(8)
-                .background(Color.primary.opacity(0.045))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.06), lineWidth: 1))
+                .padding(SnapAIUI.compactPadding)
+                .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+                .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous).stroke(Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1))
                 .disabled(vm.isStreaming)
         }
     }
@@ -401,7 +401,7 @@ struct ResultView: View {
 
             ResultActionsToolbar(vm: vm, outputState: vm.outputState)
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, SnapAIUI.edgePadding).padding(.vertical, SnapAIUI.compactPadding)
     }
 
     private var canSendFollowUp: Bool {

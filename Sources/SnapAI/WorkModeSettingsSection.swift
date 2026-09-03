@@ -5,22 +5,22 @@ struct WorkModeSettingsSection: View {
     var onCommit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             Text("工作模式")
-                .font(.caption.weight(.semibold))
+                .font(SnapAIUI.Typography.sectionLabel)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
+                HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
                     Image(systemName: settings.matchingWorkModePreset?.systemImage ?? "slider.horizontal.2.square")
                         .font(.title3)
                         .foregroundStyle(.tint)
                         .frame(width: 24)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(settings.workModeStatusTitle)
-                            .font(.callout.weight(.medium))
+                            .font(SnapAIUI.Typography.bodyText.weight(.medium))
                         Text(settings.workModeStatusDetail)
-                            .font(.caption)
+                            .font(SnapAIUI.Typography.metaText)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -30,14 +30,14 @@ struct WorkModeSettingsSection: View {
                 Divider()
                     .opacity(0.55)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: 8)], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: SnapAIUI.tightSpacing)], spacing: SnapAIUI.tightSpacing) {
                     ForEach(WorkModePreset.allCases) { mode in
                         workModeButton(mode)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

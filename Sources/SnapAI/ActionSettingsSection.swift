@@ -21,7 +21,7 @@ struct ActionSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 Text("System Prompt(对所有动作生效)").font(.subheadline.weight(.semibold))
                 promptEditor(text: systemPromptBinding, height: 56)
                 actionToolbar
@@ -33,7 +33,7 @@ struct ActionSettingsSection: View {
                     actionCard(action)
                 }
             }
-            .padding(14)
+            .padding(SnapAIUI.edgePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .snapAIConfirmDestructive(

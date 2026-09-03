@@ -14,7 +14,7 @@ struct ProviderSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 aiOverviewCard
                 Divider()
                 HStack {
@@ -27,7 +27,7 @@ struct ProviderSettingsSection: View {
                 }
                 temperatureRow
             }
-            .padding(14)
+            .padding(SnapAIUI.edgePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .confirmationDialog(
@@ -63,7 +63,7 @@ struct ProviderSettingsSection: View {
             routingDiagnosticsDisclosure
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private var currentModelSummaryRow: some View {
