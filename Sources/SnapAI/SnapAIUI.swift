@@ -2,22 +2,30 @@ import SwiftUI
 import SnapAILogic
 
 enum SnapAIUI {
-    static let panelRadius: CGFloat = 8
-    static let cardRadius: CGFloat = 7
-    static let controlRadius: CGFloat = 6
-    static let compactPadding: CGFloat = 8
-    static let sectionPadding: CGFloat = 9
+    static let panelRadius: CGFloat = 14
+    static let cardRadius: CGFloat = 10
+    static let controlRadius: CGFloat = 8
+    static let compactPadding: CGFloat = 10
+    static let sectionPadding: CGFloat = 12
 
     static let quietFillOpacity: Double = 0.028
-    static let regularFillOpacity: Double = 0.04
+    static let regularFillOpacity: Double = 0.05
     static let selectedFillOpacity: Double = 0.12
-    static let strokeOpacity: Double = 0.075
+    static let strokeOpacity: Double = 0.08
 
     // MARK: - 间距阶(统一各界面留白,避免硬编码)
-    static let tightSpacing: CGFloat = 6
-    static let standardSpacing: CGFloat = 10
-    static let looseSpacing: CGFloat = 16
-    static let edgePadding: CGFloat = 14
+    static let tightSpacing: CGFloat = 8
+    static let standardSpacing: CGFloat = 12
+    static let looseSpacing: CGFloat = 20
+    static let edgePadding: CGFloat = 16
+
+    // MARK: - 字体阶(清晰层级,取代散落的 .headline/.caption 直写)
+    enum Typography {
+        static let panelTitle = Font.system(.title3, design: .rounded).weight(.semibold)
+        static let sectionLabel = Font.caption.weight(.medium)
+        static let bodyText = Font.callout
+        static let metaText = Font.caption
+    }
 
     // MARK: - 语义状态色(取代散落的 .green/.orange/.red 硬编码)
     enum StatusColor {
@@ -108,8 +116,8 @@ struct SnapAIStatusPill: View {
             .font(.caption2.weight(.semibold))
             .lineLimit(1)
             .truncationMode(.middle)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .foregroundStyle(tint)
             .background(filled ? tint.opacity(0.14) : Color.primary.opacity(0.045), in: Capsule())
             .overlay {
@@ -121,26 +129,47 @@ struct SnapAIStatusPill: View {
 
 struct SnapAIIconButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    var size: CGFloat = 26
+    var size: CGFloat = 28
     var circular: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .semibold))
+        SnapAIIconButtonBody(label: configuration.label,
+                             isPressed: configuration.isPressed,
+                             isEnabled: isEnabled,
+                             size: size,
+                             circular: circular)
+    }
+}
+
+private struct SnapAIIconButtonBody: View {
+    let label: ButtonStyleConfiguration.Label
+    let isPressed: Bool
+    let isEnabled: Bool
+    var size: CGFloat
+    var circular: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        let fill: Double = isPressed ? 0.14 : (isHovered ? 0.10 : 0.05)
+        label
+            .font(.system(size: 13, weight: .semibold))
             .frame(width: size, height: size)
-            .foregroundStyle(isEnabled ? Color.secondary : Color.secondary.opacity(0.45))
+            .foregroundStyle(isEnabled ? (isHovered ? Color.primary : Color.secondary) : Color.secondary.opacity(0.45))
             .background {
                 Group {
                     if circular {
-                        Circle()
-                            .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0.055))
+                        Circle().fill(Color.primary.opacity(fill))
                     } else {
                         RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                            .fill(Color.primary.opacity(configuration.isPressed ? 0.12 : 0.055))
+                            .fill(Color.primary.opacity(fill))
                     }
                 }
             }
             .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .scaleEffect(isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.1), value: isPressed)
     }
 }
 
@@ -154,14 +183,16 @@ struct SnapAIPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
             .foregroundStyle(.white)
             .background {
                 RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                    .fill(tint.opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.4))
+                    .fill(tint.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4))
             }
             .contentShape(Rectangle())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 
@@ -190,8 +221,8 @@ struct SnapAISemanticPill: View {
             .font(.caption2.weight(.semibold))
             .lineLimit(1)
             .truncationMode(.middle)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
             .foregroundStyle(tone.color)
             .background(tone.color.opacity(0.14), in: Capsule())
             .overlay {

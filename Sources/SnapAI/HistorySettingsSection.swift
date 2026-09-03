@@ -7,13 +7,13 @@ struct HistorySettingsSection: View {
     @State private var showClearHistoryConfirm = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             usageStatsSection
             historyControls
             historyStorageModeRow
             historyList
         }
-        .padding(14)
+        .padding(SnapAIUI.edgePadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .bottom) {
             ResultOperationFeedbackHost(coordinator: operationCoordinator)
@@ -36,10 +36,10 @@ struct HistorySettingsSection: View {
     @ViewBuilder
     private var usageStatsSection: some View {
         if !settings.actionUsageCounts.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
                 Text("使用统计").font(.subheadline.weight(.semibold))
                 let sorted = settings.actionUsageCounts.sorted { $0.value > $1.value }
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SnapAIUI.tightSpacing) {
                     ForEach(sorted, id: \.key) { name, count in
                         HStack {
                             Text(name).lineLimit(1)
@@ -47,9 +47,9 @@ struct HistorySettingsSection: View {
                             Text("\(count) 次").foregroundStyle(.secondary).monospacedDigit()
                         }
                         .font(.caption)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.04))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, SnapAIUI.tightSpacing).padding(.vertical, 4)
+                        .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
                     }
                 }
                 HStack {
@@ -65,7 +65,7 @@ struct HistorySettingsSection: View {
                     .help("仅清空使用次数统计,不影响历史记录")
                 }
             }
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
             Divider()
         }
     }
@@ -125,7 +125,7 @@ struct HistorySettingsSection: View {
             Spacer()
         } else {
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: SnapAIUI.tightSpacing) {
                     ForEach(settings.history) { entry in
                         historyRow(entry)
                     }
@@ -168,7 +168,7 @@ struct HistorySettingsSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func copyHistoryOutput(_ entry: HistoryEntry) {

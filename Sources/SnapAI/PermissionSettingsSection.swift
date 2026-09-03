@@ -7,41 +7,41 @@ struct PermissionSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 permissionGroup
             }
-            .padding(14)
+            .padding(SnapAIUI.edgePadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var permissionGroup: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             Text("辅助功能")
-                .font(.caption.weight(.semibold))
+                .font(SnapAIUI.Typography.sectionLabel)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
                 permissionStatusRow
                 Divider().opacity(0.55)
                 permissionActionsRow
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var permissionStatusRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: SnapAIUI.standardSpacing) {
             Image(systemName: permissionState.axGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .font(.title3)
                 .foregroundStyle(permissionState.axGranted ? .green : .red)
             VStack(alignment: .leading, spacing: 2) {
                 Text(permissionState.axGranted ? "已授予辅助功能权限" : "未授予辅助功能权限")
-                    .font(.callout.weight(.medium))
+                    .font(SnapAIUI.Typography.bodyText.weight(.medium))
                 Text("SnapAI 需要该权限来读取选中文字并模拟复制按键。")
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -49,7 +49,7 @@ struct PermissionSettingsSection: View {
     }
 
     private var permissionActionsRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: SnapAIUI.tightSpacing) {
             Button("打开系统设置") {
                 NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
             }

@@ -13,24 +13,24 @@ struct ConfigMigrationSettingsSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             Text("配置迁移")
-                .font(.caption.weight(.semibold))
+                .font(SnapAIUI.Typography.sectionLabel)
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
+                HStack(spacing: SnapAIUI.tightSpacing) {
                     Button("导出配置…") { exportConfig() }
                     Button("导入配置…") { importConfig() }
                     Spacer()
                 }
                 Text("导出为 JSON，包含供应商、动作、快捷键等；API Key 不会被导出。")
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(

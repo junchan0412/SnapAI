@@ -101,20 +101,20 @@ struct QuickInputView: View {
     var onCapture: () -> Void   // 触发截图
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
+            HStack(spacing: SnapAIUI.standardSpacing) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
                         .fill(Color.accentColor.opacity(0.16))
                     Image(systemName: "sparkles")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.tint)
                 }
-                .frame(width: 32, height: 32)
+                .frame(width: 34, height: 34)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("SnapAI").font(.headline)
-                    Text("快捷提问").font(.caption).foregroundStyle(.secondary)
+                    Text("SnapAI").font(SnapAIUI.Typography.panelTitle)
+                    Text("快捷提问").font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Menu {
@@ -127,7 +127,7 @@ struct QuickInputView: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: SnapAIUI.tightSpacing) {
                         Image(systemName: currentActionIcon)
                         Text(currentAction?.name ?? "动作")
                             .lineLimit(1)
@@ -135,10 +135,10 @@ struct QuickInputView: View {
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
-                    .font(.caption.weight(.medium))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(Color.primary.opacity(0.06))
+                    .font(SnapAIUI.Typography.sectionLabel)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
                     .clipShape(Capsule())
                 }
                 .menuStyle(.borderlessButton).fixedSize()
@@ -150,7 +150,7 @@ struct QuickInputView: View {
             if let nsImg = model.imagePreview {
                 ZStack(alignment: .topTrailing) {
                     Image(nsImage: nsImg).resizable().scaledToFit().frame(maxHeight: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
                     Button { model.clearImage() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 18, weight: .semibold))
@@ -179,7 +179,7 @@ struct QuickInputView: View {
             )
             .frame(height: 76)
 
-            HStack(spacing: 8) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 // #3 截图 / 粘贴图片:用胶囊背景让次要操作可被发现
                 secondaryActionButton(
                     label: model.isCapturing ? "截图中" : "截图",
@@ -219,7 +219,7 @@ struct QuickInputView: View {
             .animation(.easeInOut(duration: 0.18), value: model.didJustSend)
             .animation(.easeInOut(duration: 0.18), value: model.transientStatus)
         }
-        .padding(18)
+        .padding(SnapAIUI.edgePadding)
         .frame(width: 500)
         .background(.ultraThinMaterial)
     }
@@ -233,7 +233,7 @@ struct QuickInputView: View {
                                        showSpinner: Bool,
                                        action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 if showSpinner {
                     ProgressView().controlSize(.mini)
                 } else {
@@ -241,10 +241,10 @@ struct QuickInputView: View {
                 }
                 Text(label)
             }
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(Color.primary.opacity(isDisabled ? 0.03 : 0.06), in: Capsule())
+            .font(SnapAIUI.Typography.sectionLabel)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(isDisabled ? 0.03 : SnapAIUI.regularFillOpacity), in: Capsule())
             .foregroundStyle(isDisabled ? Color.secondary : Color.primary)
             .opacity(isDisabled ? 0.6 : 1)
         }

@@ -13,12 +13,12 @@ struct HistoryWindowView: View {
 
     var body: some View {
         let presentation = model.presentation
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
             historyToolbar(presentation: presentation)
             filterSummaryBar(presentation: presentation)
 
             if presentation.entries.isEmpty {
-                VStack(spacing: 10) {
+                VStack(spacing: SnapAIUI.standardSpacing) {
                     if model.isRefreshing {
                         ProgressView()
                             .controlSize(.small)
@@ -29,17 +29,17 @@ struct HistoryWindowView: View {
                             .font(.largeTitle)
                             .foregroundStyle(.tertiary)
                         Text(presentation.totalCount == 0 ? "暂无历史记录" : "没有匹配的历史记录")
-                            .font(.headline)
+                            .font(SnapAIUI.Typography.panelTitle)
                             .foregroundStyle(.secondary)
                         if presentation.totalCount == 0 {
                             Text("选中文字或截图后调用动作,结果会自动记录在这里。")
-                                .font(.caption)
+                                .font(SnapAIUI.Typography.metaText)
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: 320)
                                 .multilineTextAlignment(.center)
                         } else {
                             Text("试试更换关键词,或点击下方徽标移除某个筛选条件。")
-                                .font(.caption)
+                                .font(SnapAIUI.Typography.metaText)
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: 320)
                                 .multilineTextAlignment(.center)
@@ -49,7 +49,7 @@ struct HistoryWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
+                    LazyVStack(spacing: SnapAIUI.tightSpacing) {
                         ForEach(presentation.entries) { entry in
                             historyCard(entry)
                         }
@@ -58,7 +58,7 @@ struct HistoryWindowView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(SnapAIUI.edgePadding)
         .onChange(of: focusedTagID) { _, focusedID in
             commitTagDrafts(except: focusedID)
         }
@@ -90,8 +90,8 @@ struct HistoryWindowView: View {
     }
 
     private func historyToolbar(presentation: HistoryWindowPresentation) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 HStack(spacing: 4) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
@@ -111,9 +111,9 @@ struct HistoryWindowView: View {
                         .accessibilityLabel("清空搜索")
                     }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, SnapAIUI.tightSpacing)
                 .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(Color.primary.opacity(SnapAIUI.regularFillOpacity), in: RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
                 .frame(minWidth: 220)
                 Toggle(isOn: $model.favoriteOnly) {
                     Image(systemName: "star.fill")
@@ -127,13 +127,13 @@ struct HistoryWindowView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease.circle")
                 }
-                .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+                .buttonStyle(SnapAIIconButtonStyle(circular: false))
                 .help("清空筛选")
                 .accessibilityLabel("清空筛选")
                 Spacer(minLength: 0)
                 historyToolbarActions(presentation: presentation)
             }
-            HStack(spacing: 8) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 Picker("", selection: $model.actionFilter) {
                     ForEach(presentation.actionNames, id: \.self) { Text($0).tag($0) }
                 }
@@ -159,14 +159,14 @@ struct HistoryWindowView: View {
     }
 
     private func historyToolbarActions(presentation: HistoryWindowPresentation) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: SnapAIUI.tightSpacing) {
             savedFilterMenu
             Button {
                 copyFilteredHistory()
             } label: {
                 Image(systemName: "doc.on.doc")
             }
-            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .buttonStyle(SnapAIIconButtonStyle(circular: false))
             .disabled(model.isRefreshing || presentation.entries.isEmpty)
             .help("复制当前筛选结果")
             Button {
@@ -174,7 +174,7 @@ struct HistoryWindowView: View {
             } label: {
                 Image(systemName: "square.and.arrow.down")
             }
-            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .buttonStyle(SnapAIIconButtonStyle(circular: false))
             .disabled(model.isRefreshing || presentation.entries.isEmpty)
             .help("导出当前筛选结果")
             Button {
@@ -182,7 +182,7 @@ struct HistoryWindowView: View {
             } label: {
                 Image(systemName: "text.badge.plus")
             }
-            .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+            .buttonStyle(SnapAIIconButtonStyle(circular: false))
             .disabled(model.isRefreshing || !presentation.canCreateContextProfile)
             .help(presentation.canCreateContextProfile ? "从当前筛选创建上下文包" : "当前筛选没有可写入上下文的历史内容")
         }
@@ -229,7 +229,7 @@ struct HistoryWindowView: View {
 
     private func filterSummaryBar(presentation: HistoryWindowPresentation) -> some View {
         let criteria = presentation.criteria
-        return HStack(spacing: 6) {
+        return HStack(spacing: SnapAIUI.tightSpacing) {
             SnapAIStatusPill(title: "\(presentation.entries.count) / \(presentation.totalCount)",
                              systemImage: "clock.arrow.circlepath")
             if model.isRefreshing {
@@ -281,8 +281,8 @@ struct HistoryWindowView: View {
 
     private func historyCard(_ entry: HistoryEntry) -> some View {
         let isExpanded = expandedEntryIDs.contains(entry.id)
-        return VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
+        return VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 SnapAIStatusPill(title: entry.displayActionName,
                                  systemImage: "wand.and.stars",
                                  tint: .accentColor,
@@ -381,7 +381,7 @@ struct HistoryWindowView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(isExpanded ? "收起内容" : "展开全部内容")
             }
-            HStack(spacing: 6) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 Image(systemName: "tag")
                     .foregroundStyle(.secondary)
                 TextField("标签,用逗号分隔", text: tagBinding(for: entry), onCommit: {
@@ -393,7 +393,7 @@ struct HistoryWindowView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func toggleExpand(_ id: String) {

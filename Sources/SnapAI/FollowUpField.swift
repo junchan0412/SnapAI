@@ -35,9 +35,9 @@ struct FollowUpField: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(Color.primary.opacity(0.045))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.06), lineWidth: 1))
+        .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous).stroke(Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1))
         .help(FollowUpInputBehavior.helpText)
         .accessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
         .accessibilityHint(FollowUpInputBehavior.helpText)
