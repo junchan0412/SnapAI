@@ -56,7 +56,10 @@ extension HistoryWindowView {
 
     func commitTagDraft(id: String) {
         guard let draft = model.tagDrafts[id] else { return }
-        settings.updateHistoryTags(id: id, tags: parseTags(draft))
+        guard settings.updateHistoryTags(id: id, tags: parseTags(draft)) else {
+            operationCoordinator.showError("标签保存失败，请稍后重试。")
+            return
+        }
         model.tagDrafts[id] = nil
     }
 

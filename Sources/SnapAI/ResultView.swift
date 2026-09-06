@@ -54,7 +54,7 @@ struct ResultView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: SnapAIUI.standardSpacing) {
                 ZStack {
                     RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
                         .fill(Color.accentColor.opacity(0.16))
@@ -137,7 +137,7 @@ struct ResultView: View {
         let enabled = vm.settings.enabledActions
         if enabled.count > 1 {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: SnapAIUI.tightSpacing) {
                     ForEach(enabled) { act in
                         let selected = act.id == vm.action.id
                         Button {
@@ -147,10 +147,12 @@ struct ResultView: View {
                                 Image(systemName: act.icon.isEmpty ? "sparkles" : act.icon).font(.caption2)
                                 Text(act.name).font(.caption2)
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 6)
-                            .background(selected ? Color.accentColor.opacity(0.2) : Color.primary.opacity(0.045))
+                            .padding(.horizontal, SnapAIUI.standardSpacing)
+                            .padding(.vertical, SnapAIUI.tightSpacing)
+                            .background(selected ? SnapAIUI.Surface.selected : SnapAIUI.Surface.quiet)
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(selected ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+                            .overlay(Capsule().stroke(selected ? SnapAIUI.Surface.focus : SnapAIUI.Surface.divider,
+                                                       lineWidth: selected ? 1.5 : 1))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(selected ? Color.accentColor : .primary)
@@ -168,8 +170,8 @@ struct ResultView: View {
         let routeText = routeStatusText
         let hasCompletionSummary = !vm.isStreaming && !vm.completeText.isEmpty && !vm.activeModelName.isEmpty
         if routeText.primaryText != "正在准备请求" || !routeText.detailLines.isEmpty || vm.isStreaming || hasCompletionSummary {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
+                HStack(spacing: SnapAIUI.tightSpacing) {
                     SnapAIStatusPill(title: vm.isStreaming ? "生成中" : vm.routeStatusTitle,
                                      systemImage: vm.isStreaming ? "sparkles" : "point.3.connected.trianglepath.dotted",
                                      tint: vm.isStreaming ? .accentColor : .secondary,
@@ -212,6 +214,7 @@ struct ResultView: View {
             .font(.caption2)
             .padding(.horizontal, SnapAIUI.edgePadding)
             .padding(.bottom, SnapAIUI.tightSpacing)
+            .background(SnapAIUI.Surface.quiet)
         }
     }
 
@@ -339,7 +342,7 @@ struct ResultView: View {
     }
 
     private var sourceEditor: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
             HStack {
                 Label("原文", systemImage: "quote.opening")
                     .font(.caption.weight(.medium))
@@ -357,9 +360,10 @@ struct ResultView: View {
                 .font(SnapAIUI.Typography.bodyText).scrollContentBackground(.hidden)
                 .frame(minHeight: 34, maxHeight: 92)
                 .padding(SnapAIUI.compactPadding)
-                .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+                .background(SnapAIUI.Surface.field)
                 .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous).stroke(Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                    .stroke(SnapAIUI.Surface.divider, lineWidth: 1))
                 .disabled(vm.isStreaming)
         }
     }
@@ -377,7 +381,7 @@ struct ResultView: View {
                 onCopyBriefDiagnostics: vm.copyBriefRequestDiagnostics
             )
 
-            HStack(spacing: 8) {
+            HStack(spacing: SnapAIUI.tightSpacing) {
                 FollowUpField(text: $vm.followUp, onSubmit: vm.sendFollowUp,
                               onHistoryUp: vm.followUpHistoryUp,
                               onHistoryDown: vm.followUpHistoryDown,

@@ -25,6 +25,10 @@ final class QuickInputModel: ObservableObject {
     init(settings: AppSettings) { self.settings = settings }
 
     func submit() {
+        guard !isCapturing else {
+            showTransientStatus("截图完成后才能发送", autoDismiss: 1.6)
+            return
+        }
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty || imageData != nil else { return }
         let act = settings.enabledActions.first(where: { $0.id == actionID })
@@ -192,7 +196,7 @@ struct QuickInputView: View {
                     label: "粘贴图片",
                     icon: "photo",
                     help: "粘贴剪贴板中的图片作为附件",
-                    isDisabled: false,
+                    isDisabled: model.isCapturing,
                     showSpinner: false
                 ) { model.pasteImageFromClipboard() }
 
@@ -211,7 +215,7 @@ struct QuickInputView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(!canSubmit || model.didJustSend)
+                .disabled(!canSubmit || model.didJustSend || model.isCapturing)
                 .help("发送 (↩ 发送,⇧↩ 换行)")
                 .accessibilityLabel(model.didJustSend ? "已发送" : "发送提问")
             }
@@ -220,7 +224,7 @@ struct QuickInputView: View {
             .animation(.easeInOut(duration: 0.18), value: model.transientStatus)
         }
         .padding(SnapAIUI.edgePadding)
-        .frame(width: 500)
+        .frame(minWidth: 420, idealWidth: 500, maxWidth: 620)
         .background(.ultraThinMaterial)
     }
 
@@ -267,7 +271,7 @@ struct QuickInputView: View {
     }
 
     private var canSubmit: Bool {
-        !model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil
+        !model.isCapturing && (!model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil)
     }
 }
 

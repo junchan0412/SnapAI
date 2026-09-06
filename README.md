@@ -2,19 +2,22 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.74 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 1.6.75 UI 总览](docs/snapai-ui-overview.svg)
 
 ![SnapAI 设置界面](docs/snapai-settings.png)
 
-## 1.6.74 版本重点
+## 1.6.75 版本重点
 
 - Reduced Motion 下停用浮动面板、流式进度条和打字光标动画,保留清晰的静态状态反馈。
 - 流式进度条从 60Hz 降为 30Hz,在保持连续感的同时减少持续刷新。
 - 设置页导入、动作库和权限诊断提示支持取消旧计时器,连续操作不会提前清掉新提示。
 - 面板呈现 API 统一在 MainActor 执行,降低 AppKit 动画 completion 的并发风险。
 - 构建脚本自动探测可用的完整 Xcode,避免 Command Line Tools 缺少 SwiftUIMacros 时误报代码编译失败。
+- 快捷提问截图期间锁定发送与粘贴操作,避免并发截图造成结果覆盖或窗口状态错乱。
+- 历史删除、收藏、标签和清空失败时显示可恢复的操作反馈,不再静默伪装成功。
+- 结果操作按钮统一 30pt 命中区域与语义 surface,提高鼠标、键盘和 VoiceOver 使用的一致性。
 
-详细发布说明见 [SnapAI 1.6.74 Release Notes](docs/RELEASE_NOTES_1.6.74.md),阶段性复盘见 [SnapAI 1.6.74 Iteration Report](docs/ITERATION_REPORT_1.6.74.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+详细发布说明见 [SnapAI 1.6.75 Release Notes](docs/RELEASE_NOTES_1.6.75.md),阶段性复盘见 [SnapAI 1.6.75 Iteration Report](docs/ITERATION_REPORT_1.6.75.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
 
 ## 系统要求
 
@@ -300,7 +303,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.74
+SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.75
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

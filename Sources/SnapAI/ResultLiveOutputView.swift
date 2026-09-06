@@ -13,9 +13,9 @@ struct ResultThinkingSection: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
-                    .background(Color.primary.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .padding(SnapAIUI.compactPadding)
+                    .background(SnapAIUI.Surface.quiet)
+                    .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
             } label: {
                 Label("思考过程", systemImage: "brain")
                     .font(.caption)
@@ -87,7 +87,7 @@ struct ResultActionsToolbar: View {
 
     var body: some View {
         let state = commandState
-        HStack(spacing: 7) {
+        HStack(spacing: SnapAIUI.tightSpacing) {
             Spacer(minLength: 0)
 
             // 主操作:复制结果、替换原文(最常用,保留可见图标按钮)
@@ -114,6 +114,7 @@ struct ResultActionsToolbar: View {
             }
             .controlSize(.small)
             .help("更多操作:复制完整结果、追加到文档、导出对话")
+            .accessibilityLabel("更多结果操作")
 
             if vm.isStreaming {
                 commandButton(.stop,
@@ -137,6 +138,7 @@ struct ResultActionsToolbar: View {
             Image(systemName: ResultCommandFactory.descriptor(for: command, in: state).systemImage)
         }
         .controlSize(.small)
+        .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
         .keyboardShortcut(shortcut)
         .help(ResultCommandFactory.helpText(for: command, in: state))
         .accessibilityLabel(ResultCommandFactory.accessibilityLabel(for: command, in: state))

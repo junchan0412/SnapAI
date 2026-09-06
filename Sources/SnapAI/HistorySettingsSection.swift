@@ -26,7 +26,10 @@ struct HistorySettingsSection: View {
             title: "清空全部历史记录",
             message: "将永久删除全部 \(settings.history.count) 条历史记录,此操作不可撤销。",
             action: {
-                settings.clearHistory()
+                guard settings.clearHistory() else {
+                    operationCoordinator.showError("清空历史失败，现有记录未被删除。请稍后重试。")
+                    return
+                }
                 commit()
                 operationCoordinator.clearFeedback()
             }

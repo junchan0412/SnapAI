@@ -79,7 +79,11 @@ struct HistoryWindowView: View {
             presenting: pendingDeleteEntry
         ) { entry in
             Button("删除", role: .destructive) {
-                settings.deleteHistory(id: entry.id)
+                guard settings.deleteHistory(id: entry.id) else {
+                    operationCoordinator.showError("删除失败，历史记录仍保留。请稍后重试。")
+                    pendingDeleteEntry = nil
+                    return
+                }
                 expandedEntryIDs.remove(entry.id)
                 pendingDeleteEntry = nil
             }
@@ -298,7 +302,9 @@ struct HistoryWindowView: View {
                     .foregroundStyle(.secondary)
                 // 主操作:收藏 / 复制结果 / 重开;次要操作收纳为 Menu,降低按钮密度。
                 Button {
-                    settings.toggleHistoryFavorite(id: entry.id)
+                    if !settings.toggleHistoryFavorite(id: entry.id) {
+                        operationCoordinator.showError("收藏状态保存失败，请稍后重试。")
+                    }
                 } label: {
                     Image(systemName: entry.isFavorite ? "star.fill" : "star")
                         .foregroundStyle(entry.isFavorite ? Color.yellow : Color.secondary)

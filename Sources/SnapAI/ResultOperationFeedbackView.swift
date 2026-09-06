@@ -27,7 +27,7 @@ struct ResultOperationFeedbackBanner: View {
     var onDismiss: () -> Void
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: SnapAIUI.tightSpacing) {
             Label(feedback.message, systemImage: feedback.systemImage)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -35,7 +35,7 @@ struct ResultOperationFeedbackBanner: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .frame(width: 22, height: 22)
+                    .frame(width: SnapAIUI.minimumHitTarget, height: SnapAIUI.minimumHitTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -43,12 +43,12 @@ struct ResultOperationFeedbackBanner: View {
         }
         .font(.caption)
         .foregroundStyle(tint)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
+        .padding(.horizontal, SnapAIUI.compactPadding)
+        .padding(.vertical, SnapAIUI.tightSpacing)
         .background(tint.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
                 .stroke(tint.opacity(0.22), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)

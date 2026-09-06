@@ -12,6 +12,8 @@ enum SnapAIUI {
     static let regularFillOpacity: Double = 0.05
     static let selectedFillOpacity: Double = 0.12
     static let strokeOpacity: Double = 0.08
+    static let focusStrokeOpacity: Double = 0.42
+    static let minimumHitTarget: CGFloat = 30
 
     // MARK: - 间距阶(统一各界面留白,避免硬编码)
     static let tightSpacing: CGFloat = 8
@@ -25,6 +27,17 @@ enum SnapAIUI {
         static let sectionLabel = Font.caption.weight(.medium)
         static let bodyText = Font.callout
         static let metaText = Font.caption
+        static let toolbarLabel = Font.caption.weight(.medium)
+    }
+
+    // MARK: - 语义表面(统一浅色/深色模式下的层次)
+    enum Surface {
+        static let field = Color.primary.opacity(0.055)
+        static let control = Color.primary.opacity(regularFillOpacity)
+        static let quiet = Color.primary.opacity(quietFillOpacity)
+        static let selected = Color.accentColor.opacity(selectedFillOpacity)
+        static let divider = Color.primary.opacity(strokeOpacity)
+        static let focus = Color.accentColor.opacity(focusStrokeOpacity)
     }
 
     // MARK: - 语义状态色(取代散落的 .green/.orange/.red 硬编码)
@@ -82,7 +95,7 @@ private struct SnapAISurfaceModifier: ViewModifier {
             .padding(padding)
             .background {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(SnapAIUI.selectedFillOpacity) : Color.primary.opacity(fillOpacity))
+                    .fill(isSelected ? SnapAIUI.Surface.selected : Color.primary.opacity(fillOpacity))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -129,7 +142,7 @@ struct SnapAIStatusPill: View {
 
 struct SnapAIIconButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
-    var size: CGFloat = 28
+    var size: CGFloat = SnapAIUI.minimumHitTarget
     var circular: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
@@ -153,7 +166,8 @@ private struct SnapAIIconButtonBody: View {
         let fill: Double = isPressed ? 0.14 : (isHovered ? 0.10 : 0.05)
         label
             .font(.system(size: 13, weight: .semibold))
-            .frame(width: size, height: size)
+            .frame(width: max(size, SnapAIUI.minimumHitTarget),
+                   height: max(size, SnapAIUI.minimumHitTarget))
             .foregroundStyle(isEnabled ? (isHovered ? Color.primary : Color.secondary) : Color.secondary.opacity(0.45))
             .background {
                 Group {

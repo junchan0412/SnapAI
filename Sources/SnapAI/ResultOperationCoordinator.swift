@@ -78,9 +78,8 @@ final class ResultOperationCoordinator: ObservableObject {
     }
 
     /// 直接展示一条成功反馈(用于非复制/导出场景,如上下文包创建完成)。
-    func showSuccess(_ message: String) {
-        feedback = .success(message)
-    }
+    func showSuccess(_ message: String) { feedback = .success(message) }
+    func showError(_ message: String) { feedback = .error(message) }
 
     func clearFeedback() {
         feedback = nil
