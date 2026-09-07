@@ -39,12 +39,12 @@ final class DiffPreviewWindowController {
         }
         window.contentViewController = NSHostingController(rootView: view)
         window.title = "替换前预览"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = delegate
         window.level = .floating
-        window.setContentSize(NSSize(width: 820, height: 560))
-        window.minSize = NSSize(width: 700, height: 460)
+        window.setContentSize(NSSize(width: 860, height: 600))
+        window.minSize = NSSize(width: 700, height: 500)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -75,6 +75,7 @@ private struct DiffPreviewView: View {
     var onDecision: (DiffPreviewDecision) -> Void
 
     @State private var didCopyRevised = false
+    @StateObject private var operationCoordinator = ResultOperationCoordinator()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -85,28 +86,25 @@ private struct DiffPreviewView: View {
             Divider()
             footer
         }
-        .frame(minWidth: 700, minHeight: 460)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(minWidth: 700, minHeight: 500)
+        .background(SnapAIUI.Surface.content)
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.title2)
-                .foregroundStyle(.tint)
-                .frame(width: 28, height: 28)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("确认替换原文")
-                    .font(.headline)
-                Text(actionName.isEmpty ? "请检查变更后再写回当前应用。" : "动作: \(actionName)")
-                    .font(.caption)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("替换前预览")
+                    .font(SnapAIUI.Typography.windowTitle)
+                Text(actionName.isEmpty ? "检查变更，确认后写回原来的应用。" : "「\(actionName)」的处理结果，确认后写回。")
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             summaryPills
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(24)
+        .background(SnapAIUI.Surface.chrome)
     }
 
     private var summaryPills: some View {
@@ -119,25 +117,27 @@ private struct DiffPreviewView: View {
 
     private func pill(_ title: String, color: Color) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
+            .font(SnapAIUI.Typography.sectionLabel)
             .foregroundStyle(color)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(color.opacity(0.12), in: Capsule())
+            .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var columnHeader: some View {
         HStack(spacing: 0) {
-            Text("原文")
+            Text("当前原文")
+                .padding(.leading, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Divider()
-            Text("将替换为")
+            Text("替换后的文本")
+                .padding(.leading, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.caption.weight(.semibold))
+        .font(SnapAIUI.Typography.sectionLabel)
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .frame(height: 38)
+        .background(SnapAIUI.Surface.quiet)
     }
 
     @ViewBuilder
@@ -149,11 +149,10 @@ private struct DiffPreviewView: View {
                     .font(.largeTitle)
                     .foregroundStyle(.tertiary)
                 Text("文本没有检测到变化")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                    .font(SnapAIUI.Typography.sectionTitle)
                 Text("原文与替换结果一致,无需写回。")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(SnapAIUI.Typography.bodyText)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -176,7 +175,7 @@ private struct DiffPreviewView: View {
             diffCell(row.revised, kind: row.kind, side: .revised)
         }
         .background(rowBackground(row.kind))
-        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .padding(.vertical, 1)
     }
 
@@ -189,15 +188,20 @@ private struct DiffPreviewView: View {
         // 色盲友好:用 +/− 符号区分增删行,不依赖颜色。
         let symbol = leadingSymbol(kind: kind, side: side)
         return HStack(alignment: .firstTextBaseline, spacing: 5) {
-            if let symbol { Text(symbol).foregroundStyle(foreground(kind: kind, side: side, hasText: text != nil)) }
+            Text(symbol ?? " ")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundStyle(foreground(kind: kind, side: side, hasText: text != nil))
+                .frame(width: 14)
             Text(text?.isEmpty == false ? text! : " ")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundStyle(.primary)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .foregroundStyle(foreground(kind: kind, side: side, hasText: text != nil))
+        .padding(.vertical, 8)
     }
 
     /// 行首符号:仅增/删侧显示 +/−,辅助色盲用户识别变更类型。
@@ -205,6 +209,7 @@ private struct DiffPreviewView: View {
         switch (kind, side) {
         case (.inserted, .revised): return "+"
         case (.deleted, .original): return "−"
+        case (.changed, _): return "~"
         default: return nil
         }
     }
@@ -237,42 +242,46 @@ private struct DiffPreviewView: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            ResultOperationFeedbackHost(coordinator: operationCoordinator)
             Text(footerMessage)
-                .font(.caption)
+                .font(SnapAIUI.Typography.metaText)
                 .foregroundStyle(.secondary)
-            Spacer()
-            if isTruncated {
-                Button {
-                    exportFullDiff()
-                } label: {
-                    Label("导出完整差异", systemImage: "square.and.arrow.down")
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                if isTruncated {
+                    Button {
+                        exportFullDiff()
+                    } label: {
+                        Label("导出完整差异", systemImage: "square.and.arrow.down")
+                    }
+                    .help("预览被截断，导出完整原文与结果以便核对")
                 }
-                .help("预览被截断,导出完整的原文/替换结果以便核对")
+                Button {
+                    copyRevised()
+                } label: {
+                    Label(didCopyRevised ? "已复制" : "复制结果",
+                          systemImage: didCopyRevised ? "checkmark" : "doc.on.doc")
+                }
+                .keyboardShortcut("c", modifiers: [.command])
+                .help("复制替换结果 (⌘C)")
+                Spacer(minLength: 12)
+                Button("取消") {
+                    onDecision(.cancel)
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("确认替换") {
+                    onDecision(.replace)
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(!summary.hasChanges)
+                .help(summary.hasChanges ? "写回触发 SnapAI 时的应用 (↩)" : "没有变化，无需替换")
             }
-            Button("取消") {
-                onDecision(.cancel)
-            }
-            .keyboardShortcut(.cancelAction)
-            Button {
-                copyRevised()
-            } label: {
-                Label(didCopyRevised ? "已复制" : "复制结果",
-                      systemImage: didCopyRevised ? "checkmark" : "doc.on.doc")
-            }
-            .keyboardShortcut("c", modifiers: [.command])
-            .help("复制替换结果 (⌘C)")
-            Button("替换原文") {
-                onDecision(.replace)
-            }
-            .keyboardShortcut(.defaultAction)
-            .buttonStyle(.borderedProminent)
-            .disabled(!summary.hasChanges)
-            .help(summary.hasChanges ? "写回触发 SnapAI 时的应用 (↩)" : "没有变化,无需替换")
+            .controlSize(.large)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .animation(.easeInOut(duration: 0.18), value: didCopyRevised)
+        .padding(20)
+        .background(SnapAIUI.Surface.chrome)
     }
 
     private var footerMessage: String {
@@ -283,10 +292,10 @@ private struct DiffPreviewView: View {
     }
 
     private func copyRevised() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(revised, forType: .string)
-        didCopyRevised = true
+        operationCoordinator.copy(text: revised,
+                                  successMessage: "替换结果已复制",
+                                  emptyMessage: "替换结果为空，没有可复制的内容。")
+        didCopyRevised = operationCoordinator.feedback?.kind == .success
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { didCopyRevised = false }
     }
 
@@ -306,6 +315,11 @@ private struct DiffPreviewView: View {
 
         \(revised)
         """
-        try? text.write(to: url, atomically: true, encoding: .utf8)
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            operationCoordinator.showSuccess("完整差异已导出")
+        } catch {
+            operationCoordinator.showError("导出失败：\(SensitiveTextSanitizer.sanitizedMessage(error.localizedDescription, limit: 160))")
+        }
     }
 }

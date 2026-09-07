@@ -1,3 +1,4 @@
+import SnapAILogic
 import SwiftUI
 
 struct WorkModeSettingsSection: View {

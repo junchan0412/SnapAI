@@ -129,33 +129,19 @@ verify_manifest() {
 verify_manifest_signature() {
   local manifest_path="$1"
   local signature_path="$2"
-  local private_key="$3"
-  local verify_dir
-  local public_key
+  local public_key="$3"
 
   if [ ! -s "$signature_path" ]; then
     echo "error: manifest 签名文件为空或不存在: $signature_path" >&2
-    exit 1
-  fi
-
-  verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/snapai-manifest-signature-check.XXXXXX")
-  public_key="$verify_dir/manifest.pub"
-  if ! openssl pkey -in "$private_key" -pubout -out "$public_key" >/dev/null 2>&1; then
-    rm -rf "$verify_dir"
-    echo "error: 无法从 SNAPAI_MANIFEST_PRIVATE_KEY 导出公钥用于签名校验。" >&2
     exit 1
   fi
   if ! openssl dgst -sha256 \
     -verify "$public_key" \
     -signature "$signature_path" \
     "$manifest_path" >/dev/null 2>&1; then
-    rm -rf "$verify_dir"
-    echo "error: manifest 签名校验失败。" >&2
-    echo "manifest:  $manifest_path" >&2
-    echo "signature: $signature_path" >&2
+    echo "error: manifest 签名无法通过已打包应用的内置公钥验证。请使用匹配的发布私钥。" >&2
     exit 1
   fi
-  rm -rf "$verify_dir"
 }
 
 json_escape() {
@@ -241,6 +227,16 @@ if [ "$APP_VERSION" != "$SOURCE_VERSION" ]; then
   exit 1
 fi
 
+APP_CONFIGURATION=$(plist_value SnapAIBuildConfiguration "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || true)
+if [ "$APP_CONFIGURATION" != "release" ]; then
+  echo "error: 发布包必须来自 release 构建，请运行 ./build.sh --release。" >&2
+  exit 1
+fi
+if ! cmp -s Resources/ManifestPublicKey.pem "$APP_BUNDLE/Contents/Resources/ManifestPublicKey.pem"; then
+  echo "error: 源公钥与已构建应用的公钥不一致，请重新构建应用。" >&2
+  exit 1
+fi
+
 mkdir -p "$DIST_DIR"
 rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$DIST_DIR/$SBOM_NAME"
 
@@ -290,7 +286,7 @@ if [ -n "${SNAPAI_MANIFEST_PRIVATE_KEY:-}" ]; then
     -sign "$SNAPAI_MANIFEST_PRIVATE_KEY" \
     -out "$DIST_DIR/$MANIFEST_NAME.sig" \
     "$DIST_DIR/$MANIFEST_NAME"
-  verify_manifest_signature "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$SNAPAI_MANIFEST_PRIVATE_KEY"
+  verify_manifest_signature "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$APP_BUNDLE/Contents/Resources/ManifestPublicKey.pem"
 fi
 
 verify_manifest "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$TAG" "$BUNDLE_ID" "$RELEASE_DESIGNATED_REQUIREMENT" "$RELEASE_CERTIFICATE_FINGERPRINT"

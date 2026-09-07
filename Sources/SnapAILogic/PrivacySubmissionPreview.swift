@@ -1,1 +1,460 @@
-../SnapAI/PrivacySubmissionPreview.swift
+import Foundation
+
+package enum PrivacyRiskLevel: String, Equatable {
+    case low = "low"
+    case medium = "medium"
+    case high = "high"
+
+    package var displayText: String {
+        switch self {
+        case .low: return "低"
+        case .medium: return "中"
+        case .high: return "高"
+        }
+    }
+}
+
+package struct PrivacyRiskAssessment: Equatable {
+    package var level: PrivacyRiskLevel
+    package var detectedSensitiveMatchCount: Int
+    package var redactionMatchCount: Int
+    package var invalidRedactionRuleCount: Int
+    package var hasImage: Bool
+    package var historyStoresContent: Bool
+    package var redactionEnabled: Bool
+
+    package static let low = PrivacyRiskAssessment(level: .low,
+                                           detectedSensitiveMatchCount: 0,
+                                           redactionMatchCount: 0,
+                                           invalidRedactionRuleCount: 0,
+                                           hasImage: false,
+                                           historyStoresContent: false,
+                                           redactionEnabled: false)
+
+    package var summaryText: String {
+        "风险\(level.displayText) · 疑似敏感 \(detectedSensitiveMatchCount) 处 · 脱敏命中 \(redactionMatchCount) 处 · 图片\(hasImage ? "有" : "无") · \(historyStoresContent ? "历史保存正文" : "历史不保存正文")"
+    }
+
+    package var diagnosticLine: String {
+        let imageState = hasImage ? "yes" : "no"
+        let historyState = historyStoresContent ? "yes" : "no"
+        let redactionState = redactionEnabled ? "enabled" : "disabled"
+        return "Privacy Risk: \(level.rawValue) (detected \(detectedSensitiveMatchCount), redaction \(redactionMatchCount), invalid rules \(invalidRedactionRuleCount), image \(imageState), history body \(historyState), redaction \(redactionState))"
+    }
+
+    package var recoverySuggestion: String {
+        var suggestions: [String] = []
+        if invalidRedactionRuleCount > 0 {
+            suggestions.append("修复失效脱敏规则")
+        }
+        if detectedSensitiveMatchCount > 0 && !redactionEnabled {
+            suggestions.append("开启本地脱敏")
+        }
+        if historyStoresContent && detectedSensitiveMatchCount > 0 {
+            suggestions.append("将历史改为仅元信息")
+        }
+        if level == .high || hasImage {
+            suggestions.append("发送前预览并确认")
+        }
+        if hasImage {
+            suggestions.append("确认图片不含敏感信息")
+        }
+        guard !suggestions.isEmpty else {
+            return "当前风险较低,按需发送"
+        }
+        return suggestions.joined(separator: "; ")
+    }
+
+    package static func assess(originalText: String,
+                       redactionPreview: PrivacyRedactionPreview,
+                       redactionEnabled: Bool,
+                       hasImage: Bool,
+                       saveHistoryEnabled: Bool,
+                       historyContentStorage: HistoryContentStorage) -> PrivacyRiskAssessment {
+        let defaultSensitiveMatches = PrivacyFilter.preview(text: originalText,
+                                                            rules: PrivacyRedactionRule.defaults()).totalMatches
+        let redactionMatches = redactionEnabled ? redactionPreview.totalMatches : 0
+        let invalidRules = redactionEnabled ? redactionPreview.invalidReports.count : 0
+        let detectedSensitiveMatches = max(defaultSensitiveMatches, redactionMatches)
+        let historyStoresContent = saveHistoryEnabled && historyContentStorage == .full
+
+        var score = 0
+        if detectedSensitiveMatches > 0 { score += 2 }
+        if detectedSensitiveMatches >= 3 { score += 1 }
+        if hasImage { score += 1 }
+        if !redactionEnabled && detectedSensitiveMatches > 0 { score += 1 }
+        if historyStoresContent && detectedSensitiveMatches > 0 { score += 1 }
+        if invalidRules > 0 { score += 1 }
+
+        let level: PrivacyRiskLevel
+        if score >= 4 {
+            level = .high
+        } else if score >= 2 {
+            level = .medium
+        } else {
+            level = .low
+        }
+
+        return PrivacyRiskAssessment(level: level,
+                                     detectedSensitiveMatchCount: detectedSensitiveMatches,
+                                     redactionMatchCount: redactionMatches,
+                                     invalidRedactionRuleCount: invalidRules,
+                                     hasImage: hasImage,
+                                     historyStoresContent: historyStoresContent,
+                                     redactionEnabled: redactionEnabled)
+    }
+}
+
+package struct PrivacyPreviewRequirement: Equatable {
+    package enum Reason: String, Equatable {
+        case notRequired = "not-required"
+        case userEnabled = "user-enabled"
+        case highPrivacyRisk = "high-privacy-risk"
+
+        package var displayText: String {
+            switch self {
+            case .notRequired: return "不需要"
+            case .userEnabled: return "用户开启"
+            case .highPrivacyRisk: return "高隐私风险"
+            }
+        }
+    }
+
+    package var reason: Reason
+
+    package var isRequired: Bool {
+        reason != .notRequired
+    }
+
+    package func confirmationMessage(redactionEnabled: Bool) -> String {
+        switch reason {
+        case .highPrivacyRisk:
+            return "检测到高隐私风险,本次需要确认即将发送给 AI 的内容。"
+        case .userEnabled:
+            return redactionEnabled
+                ? "你已开启发送前预览,请确认本地脱敏命中情况和最终 Prompt。"
+                : "你已开启发送前预览,请确认即将发送给 AI 的最终 Prompt。"
+        case .notRequired:
+            return redactionEnabled
+                ? "请确认本地脱敏命中情况和最终 Prompt。"
+                : "请确认即将发送给 AI 的最终 Prompt。"
+        }
+    }
+
+    package static func decide(userEnabled: Bool,
+                       riskLevel: PrivacyRiskLevel) -> PrivacyPreviewRequirement {
+        if riskLevel == .high {
+            return PrivacyPreviewRequirement(reason: .highPrivacyRisk)
+        }
+        if userEnabled {
+            return PrivacyPreviewRequirement(reason: .userEnabled)
+        }
+        return PrivacyPreviewRequirement(reason: .notRequired)
+    }
+}
+
+package struct PrivacySubmissionDiagnostic: Equatable {
+    package var originalCharacterCount: Int
+    package var submittedCharacterCount: Int
+    package var processedTextCharacterCount: Int = 0
+    package var finalUserPromptCharacterCount: Int = 0
+    package var systemPromptCharacterCount: Int = 0
+    package var hasImage: Bool
+    package var redactionEnabled: Bool
+    package var redactionMatchCount: Int
+    package var invalidRedactionRuleCount: Int
+    package var saveHistoryEnabled: Bool
+    package var historyContentStorage: HistoryContentStorage = .full
+    package var previewRequired: Bool
+    package var previewReason: PrivacyPreviewRequirement.Reason = .notRequired
+    package var riskAssessment: PrivacyRiskAssessment = .low
+
+    package var historyStorageSummary: String {
+        guard saveHistoryEnabled else { return "不保存" }
+        if highRiskHistoryProtectionEnabled {
+            return "\(HistoryContentStorage.metadataOnly.rawValue) (高风险保护)"
+        }
+        return historyContentStorage.rawValue
+    }
+
+    package var highRiskHistoryProtectionEnabled: Bool {
+        saveHistoryEnabled &&
+        historyContentStorage == .full &&
+        riskAssessment.level == .high
+    }
+
+    package var contentExportProtectionEnabled: Bool {
+        riskAssessment.level == .high
+    }
+
+    package var effectiveHistoryContentStorage: HistoryContentStorage? {
+        guard saveHistoryEnabled else { return nil }
+        return highRiskHistoryProtectionEnabled ? .metadataOnly : historyContentStorage
+    }
+
+    package var protectionSummaryText: String? {
+        var parts: [String] = []
+        if !saveHistoryEnabled {
+            parts.append("不保存历史")
+        } else if effectiveHistoryContentStorage == .metadataOnly {
+            parts.append("历史仅元信息")
+        }
+        if contentExportProtectionEnabled {
+            parts.append("导出省略正文")
+        }
+        guard !parts.isEmpty else { return nil }
+        return "隐私保护：" + parts.joined(separator: "，")
+    }
+
+    package var effectiveProcessedTextCharacterCount: Int {
+        processedTextCharacterCount > 0 ? processedTextCharacterCount : submittedCharacterCount
+    }
+
+    package var effectiveFinalUserPromptCharacterCount: Int {
+        finalUserPromptCharacterCount > 0 ? finalUserPromptCharacterCount : submittedCharacterCount
+    }
+
+    package func withPayloadCharacterCounts(processedTextCharacterCount: Int? = nil,
+                                    finalUserPromptCharacterCount: Int,
+                                    systemPromptCharacterCount: Int) -> PrivacySubmissionDiagnostic {
+        var copy = self
+        if let processedTextCharacterCount {
+            copy.processedTextCharacterCount = max(0, processedTextCharacterCount)
+        } else if copy.processedTextCharacterCount == 0 {
+            copy.processedTextCharacterCount = max(0, copy.submittedCharacterCount)
+        }
+        copy.finalUserPromptCharacterCount = max(0, finalUserPromptCharacterCount)
+        copy.systemPromptCharacterCount = max(0, systemPromptCharacterCount)
+        return copy
+    }
+
+    package var summaryLines: [String] {
+        [
+            "Submission Privacy:",
+            "Original Characters: \(originalCharacterCount)",
+            "Submitted Characters: \(submittedCharacterCount)",
+            "Processed Text Characters: \(effectiveProcessedTextCharacterCount)",
+            "Final User Prompt Characters: \(effectiveFinalUserPromptCharacterCount)",
+            "System Prompt Characters: \(max(0, systemPromptCharacterCount))",
+            "Attached Image: \(hasImage ? "yes" : "no")",
+            "Redaction Enabled: \(redactionEnabled ? "yes" : "no")",
+            "Redaction Matches: \(redactionMatchCount)",
+            "Invalid Redaction Rules: \(invalidRedactionRuleCount)",
+            "Save History: \(saveHistoryEnabled ? "yes" : "no")",
+            "History Content Storage: \(historyStorageSummary)",
+            "Configured History Content Storage: \(saveHistoryEnabled ? historyContentStorage.rawValue : "不保存")",
+            "Content Export Protected: \(contentExportProtectionEnabled ? "yes" : "no")",
+            "Preview Required: \(previewRequired ? "yes" : "no")",
+            "Preview Reason: \(previewReason.rawValue)",
+            riskAssessment.diagnosticLine,
+            "Privacy Recovery: \(riskAssessment.recoverySuggestion)"
+        ]
+    }
+
+    package var historyTags: [String] {
+        var tags: [String] = []
+        if redactionEnabled {
+            tags.append(PrivacyHistoryTag.localRedaction)
+        }
+        if redactionMatchCount > 0 {
+            tags.append(PrivacyHistoryTag.redactionMatched)
+        }
+        if invalidRedactionRuleCount > 0 {
+            tags.append(PrivacyHistoryTag.invalidRedactionRule)
+        }
+        switch riskAssessment.level {
+        case .high:
+            tags.append(PrivacyHistoryTag.highPrivacyRisk)
+        case .medium:
+            tags.append(PrivacyHistoryTag.mediumPrivacyRisk)
+        case .low:
+            break
+        }
+        if previewRequired {
+            tags.append(PrivacyHistoryTag.privacyPreview)
+        }
+        if !saveHistoryEnabled {
+            tags.append(PrivacyHistoryTag.historyDisabled)
+        }
+        if saveHistoryEnabled && effectiveHistoryContentStorage == .metadataOnly {
+            tags.append(PrivacyHistoryTag.metadataOnly)
+        }
+        return tags
+    }
+}
+
+package struct PrivacyPreparedSubmission: Equatable {
+    package var text: String
+    package var diagnostic: PrivacySubmissionDiagnostic
+
+    /// 未配置额外脱敏/确认 handler 时的保守直通结果，仍执行风险评估与历史保护。
+    package static func passthrough(text: String,
+                            saveHistoryEnabled: Bool,
+                            historyContentStorage: HistoryContentStorage) -> PrivacyPreparedSubmission {
+        let risk = PrivacyRiskAssessment.assess(
+            originalText: text,
+            redactionPreview: PrivacyRedactionPreview(output: text, reports: []),
+            redactionEnabled: false,
+            hasImage: false,
+            saveHistoryEnabled: saveHistoryEnabled,
+            historyContentStorage: historyContentStorage
+        )
+        return PrivacyPreparedSubmission(
+            text: text,
+            diagnostic: PrivacySubmissionDiagnostic(
+                originalCharacterCount: text.count,
+                submittedCharacterCount: text.count,
+                hasImage: false,
+                redactionEnabled: false,
+                redactionMatchCount: 0,
+                invalidRedactionRuleCount: 0,
+                saveHistoryEnabled: saveHistoryEnabled,
+                historyContentStorage: historyContentStorage,
+                previewRequired: false,
+                riskAssessment: risk
+            )
+        )
+    }
+
+    package init(text: String,
+                 diagnostic: PrivacySubmissionDiagnostic) {
+        self.text = text
+        self.diagnostic = diagnostic
+    }
+}
+
+package struct PrivacySubmissionPreview {
+    package var actionName: String
+    package var originalText: String
+    package var processedText: String
+    package var systemPrompt: String
+    package var userPrompt: String
+    package var hasImage: Bool
+    package var redactionEnabled: Bool
+    package var redactionReports: [PrivacyRedactionRuleReport]
+    package var saveHistoryEnabled: Bool
+    package var historyContentStorage: HistoryContentStorage
+
+    package init(action: AIAction,
+         originalText: String,
+         redactionPreview: PrivacyRedactionPreview,
+         systemPrompt: String,
+         redactionEnabled: Bool,
+         hasImage: Bool,
+         historyContentStorage: HistoryContentStorage = .full,
+         userPromptOverride: String? = nil) {
+        self.actionName = action.name
+        self.originalText = originalText
+        self.processedText = redactionPreview.output
+        self.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.userPrompt = userPromptOverride ?? action.render(text: redactionPreview.output)
+        self.hasImage = hasImage
+        self.redactionEnabled = redactionEnabled
+        self.redactionReports = redactionPreview.reports
+        self.saveHistoryEnabled = action.saveHistory
+        self.historyContentStorage = historyContentStorage
+    }
+
+    package var totalRedactionMatches: Int {
+        redactionReports.reduce(0) { $0 + $1.matchCount }
+    }
+
+    package var invalidRedactionRuleCount: Int {
+        redactionReports.filter { !$0.isValid }.count
+    }
+
+    package var riskAssessment: PrivacyRiskAssessment {
+        PrivacyRiskAssessment.assess(originalText: originalText,
+                                     redactionPreview: PrivacyRedactionPreview(output: processedText,
+                                                                               reports: redactionReports),
+                                     redactionEnabled: redactionEnabled,
+                                     hasImage: hasImage,
+                                     saveHistoryEnabled: saveHistoryEnabled,
+                                     historyContentStorage: historyContentStorage)
+    }
+
+    package func previewRequirement(userPreferenceEnabled: Bool) -> PrivacyPreviewRequirement {
+        PrivacyPreviewRequirement.decide(userEnabled: userPreferenceEnabled,
+                                         riskLevel: riskAssessment.level)
+    }
+
+    package var summaryText: String {
+        summaryText(previewRequirement: nil)
+    }
+
+    package func summaryText(previewRequirement: PrivacyPreviewRequirement?) -> String {
+        let redactionState: String
+        if redactionEnabled {
+            redactionState = "已启用,命中 \(totalRedactionMatches) 处,失效规则 \(invalidRedactionRuleCount) 条"
+        } else {
+            redactionState = "未启用"
+        }
+        var lines = [
+            "动作: \(actionName)",
+            "原文字符数: \(originalText.count)",
+            "脱敏后文本字符数: \(processedText.count)",
+            "最终 User Prompt 字符数: \(userPrompt.count)",
+            "System Prompt 字符数: \(systemPrompt.count)",
+            "本地脱敏: \(redactionState)",
+            "隐私风险: \(riskAssessment.summaryText)",
+            "隐私建议: \(riskAssessment.recoverySuggestion)",
+            "保存历史: \(saveHistoryEnabled ? "是" : "否")",
+            "历史内容: \(diagnostic(previewRequired: false).historyStorageSummary)",
+            "附加内容: \(hasImage ? "1 张图片" : "无")"
+        ]
+        if let previewRequirement {
+            lines.insert("预览原因: \(previewRequirement.reason.displayText)", at: 5)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    package func diagnostic(previewRequired: Bool) -> PrivacySubmissionDiagnostic {
+        let reason: PrivacyPreviewRequirement.Reason = previewRequired ? .userEnabled : .notRequired
+        return diagnostic(previewRequirement: PrivacyPreviewRequirement(reason: reason))
+    }
+
+    package func diagnostic(previewRequirement: PrivacyPreviewRequirement) -> PrivacySubmissionDiagnostic {
+        PrivacySubmissionDiagnostic(originalCharacterCount: originalText.count,
+                                    submittedCharacterCount: processedText.count,
+                                    processedTextCharacterCount: processedText.count,
+                                    finalUserPromptCharacterCount: userPrompt.count,
+                                    systemPromptCharacterCount: systemPrompt.count,
+                                    hasImage: hasImage,
+                                    redactionEnabled: redactionEnabled,
+                                    redactionMatchCount: totalRedactionMatches,
+                                    invalidRedactionRuleCount: invalidRedactionRuleCount,
+                                    saveHistoryEnabled: saveHistoryEnabled,
+                                    historyContentStorage: historyContentStorage,
+                                    previewRequired: previewRequirement.isRequired,
+                                    previewReason: previewRequirement.reason,
+                                    riskAssessment: riskAssessment)
+    }
+
+    package var redactionReportText: String {
+        guard redactionEnabled else { return "本地脱敏未启用。" }
+        guard !redactionReports.isEmpty else { return "没有配置脱敏规则。" }
+        return redactionReports.map { report in
+            "- \(report.ruleName): \(report.statusText)"
+        }.joined(separator: "\n")
+    }
+
+    package var contentText: String {
+        contentText(previewRequirement: nil)
+    }
+
+    package func contentText(previewRequirement: PrivacyPreviewRequirement?) -> String {
+        let systemText = systemPrompt.isEmpty ? "(空)" : systemPrompt
+        return """
+        \(summaryText(previewRequirement: previewRequirement))
+
+        脱敏规则:
+        \(redactionReportText)
+
+        System Prompt:
+        \(systemText)
+
+        User Prompt:
+        \(userPrompt)
+        """
+    }
+}

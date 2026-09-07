@@ -126,23 +126,22 @@ enum SettingsCommitPolicy {
 
 struct SettingsSidebarRow: View {
     let section: SettingsSection
+    var isSelected: Bool = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: section.icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(section.title)
-                    .lineLimit(1)
-                Text(section.subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+                .font(.system(size: 15, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .frame(width: 20)
+            Text(section.title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                .lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
         .accessibilityLabel(section.title)
+        .accessibilityHint(section.subtitle)
     }
 }

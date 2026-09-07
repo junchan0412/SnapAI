@@ -84,6 +84,16 @@ validate_release_version() {
   fi
 }
 
+validate_binary_deployment() {
+  local binary="$1"
+  local minimum
+  minimum=$(xcrun vtool -show-build "$binary" | awk '/minos/ {print $2; exit}')
+  if [ "$minimum" != "14.0" ]; then
+    echo "error: $binary 最低系统版本为 ${minimum:-unknown}，预期 macOS 14.0。" >&2
+    exit 1
+  fi
+}
+
 if [ "$REQUIRE_CLEAN" -eq 1 ]; then
   step "检查工作区是否干净"
   git diff --quiet
@@ -133,6 +143,10 @@ scripts/run-supply-chain-scan.sh
 step "运行逻辑测试"
 scripts/run-logic-tests.sh
 
+step "运行离线流式与 App 生命周期回归"
+scripts/run-streaming-runtime-tests.sh
+scripts/run-app-runtime-tests.sh
+
 step "运行 macOS smoke 测试"
 scripts/run-macos-smoke-tests.sh --skip-logic
 
@@ -144,6 +158,8 @@ SNAPAI_RELEASE=1 ./build.sh --release
 
 step "验证 app 签名"
 codesign --verify --deep --strict --verbose=2 SnapAI.app
+validate_binary_deployment SnapAI.app/Contents/MacOS/SnapAI
+validate_binary_deployment SnapAI.app/Contents/Helpers/SnapAIUpdater
 
 step "检查 app bundle 版本号"
 APP_VERSION=$(plist_value CFBundleShortVersionString SnapAI.app/Contents/Info.plist)

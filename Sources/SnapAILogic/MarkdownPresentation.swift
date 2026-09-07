@@ -58,6 +58,12 @@ public enum MarkdownPresentationBuilder {
     }
 
     private static func inline(_ raw: String) -> AttributedString {
+        guard raw.utf8.contains(where: { byte in
+            switch byte {
+            case 0x21, 0x26, 0x2A, 0x3C, 0x3E, 0x5B, 0x5C, 0x5D, 0x5F, 0x60: return true
+            default: return false
+            }
+        }) else { return AttributedString(raw) }
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .inlineOnlyPreservingWhitespace
         return (try? AttributedString(markdown: raw, options: options)) ?? AttributedString(raw)
@@ -65,7 +71,10 @@ public enum MarkdownPresentationBuilder {
 
     private static func parse(_ text: String) -> [RawBlock] {
         var blocks: [RawBlock] = []
-        let lines = text.components(separatedBy: "\n")
+        let normalized = text.utf8.contains(0x0D)
+            ? text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            : text
+        let lines = normalized.components(separatedBy: "\n")
         var index = 0
         var paragraphBuffer: [String] = []
 
@@ -81,19 +90,22 @@ public enum MarkdownPresentationBuilder {
             let line = lines[index]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if trimmed.hasPrefix("```") {
+            if let fence = parseFence(trimmed) {
                 flushParagraph()
-                let language = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 var codeLines: [String] = []
                 index += 1
-                while index < lines.count,
-                      !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                while index < lines.count {
+                    let candidate = lines[index].trimmingCharacters(in: .whitespaces)
+                    if let closing = parseFence(candidate),
+                       closing.marker == fence.marker,
+                       closing.length >= fence.length,
+                       closing.info.isEmpty { break }
                     codeLines.append(lines[index])
                     index += 1
                 }
                 if index < lines.count { index += 1 }
                 blocks.append(.code(codeLines.joined(separator: "\n"),
-                                    language: language.isEmpty ? nil : language))
+                                    language: fence.info.isEmpty ? nil : fence.info))
                 continue
             }
 
@@ -163,7 +175,10 @@ public enum MarkdownPresentationBuilder {
         guard line.hasPrefix("#") else { return nil }
         var level = 0
         for character in line {
-            if character == "#" { level += 1 } else { break }
+            if character == "#" {
+                level += 1
+                if level > 6 { return nil }
+            } else { break }
         }
         guard (1...6).contains(level) else { return nil }
         let rest = line.dropFirst(level)
@@ -172,16 +187,25 @@ public enum MarkdownPresentationBuilder {
     }
 
     private static func isBullet(_ line: String) -> Bool {
-        guard line.count >= 2 else { return false }
         let prefix = line.prefix(2)
         return prefix == "- " || prefix == "* " || prefix == "+ "
     }
 
     private static func isOrdered(_ line: String) -> Bool {
+        guard let first = line.first, first.isASCII, first.isNumber else { return false }
         guard let dot = line.firstIndex(of: ".") else { return false }
         let number = line[..<dot]
-        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return false }
+        guard number.count <= 9, number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
         let after = line.index(after: dot)
         return after < line.endIndex && line[after] == " "
+    }
+
+    private static func parseFence(_ line: String) -> (marker: Character, length: Int, info: String)? {
+        guard let marker = line.first, marker == "`" || marker == "~" else { return nil }
+        let length = line.prefix { $0 == marker }.count
+        guard length >= 3 else { return nil }
+        let info = line.dropFirst(length).trimmingCharacters(in: .whitespaces)
+        guard marker != "`" || !info.contains("`") else { return nil }
+        return (marker, length, info)
     }
 }

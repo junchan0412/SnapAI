@@ -1,3 +1,4 @@
+import SnapAILogic
 import SwiftUI
 
 struct ProviderSettingsSection: View {
@@ -40,14 +41,14 @@ struct ProviderSettingsSection: View {
             Button("删除", role: .destructive) { deleteProvider(provider.id) }
             Button("取消", role: .cancel) {}
         } message: { _ in
-            Text("将同时清除该供应商保存在钥匙串中的 API Key,此操作不可撤销。")
+            Text("将同时清除该供应商保存在本地加密存储中的 API Key,此操作不可撤销。")
         }
     }
 
     private var aiOverviewCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("AI 配置").font(.headline)
+                Text("当前工作模型").font(SnapAIUI.Typography.sectionTitle)
                 Spacer()
                 SnapAIStatusPill(title: settings.autoRouteEnabled ? "自动路由" : "固定模型",
                                  systemImage: settings.autoRouteEnabled ? "point.3.connected.trianglepath.dotted" : "cpu",
@@ -67,28 +68,28 @@ struct ProviderSettingsSection: View {
     }
 
     private var currentModelSummaryRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "server.rack")
-                .font(.title3)
-                .foregroundStyle(.tint)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(settings.modelSelectionTitle)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(currentModelDetailText)
-                    .font(.caption)
-                    .foregroundStyle(settings.switchableEntries.isEmpty ? .orange : .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.tint)
+                    .frame(width: 36, height: 36)
+                    .background(SnapAIUI.Surface.selected, in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(settings.modelSelectionTitle)
+                        .font(.system(size: 17, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(currentModelDetailText)
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 12)
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 providerMenu
-                    .frame(width: 180)
                 modelMenu
-                    .frame(width: 220)
             }
         }
     }
@@ -154,42 +155,26 @@ struct ProviderSettingsSection: View {
     }
 
     private var routingPolicyRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
-                settingsMiniHeader("路由策略", systemImage: "point.3.connected.trianglepath.dotted")
+        VStack(alignment: .leading, spacing: 14) {
+            Divider()
+            HStack {
+                Text("自动路由").font(SnapAIUI.Typography.sectionTitle)
                 Spacer()
-                if routingHasNoRoutes {
-                    SnapAISemanticPill(title: "无可用路由",
-                                       systemImage: "exclamationmark.triangle.fill",
-                                       tone: .warning)
-                } else {
-                    SnapAIStatusPill(title: settings.routingPreference.rawValue,
-                                     systemImage: "slider.horizontal.3",
-                                     tint: .secondary,
-                                     filled: false)
-                }
-            }
-            HStack(alignment: .center, spacing: 14) {
-                Toggle("自动选择模型", isOn: $settings.autoRouteEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .onChange(of: settings.autoRouteEnabled) { commit() }
-                Toggle("失败时切换备用模型", isOn: $settings.fallbackEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .onChange(of: settings.fallbackEnabled) { commit() }
-                Spacer(minLength: 12)
-                Picker("", selection: $settings.routingPreference) {
+                Picker("优先偏好", selection: $settings.routingPreference) {
                     ForEach(AIRoutingPreference.allCases) { preference in
                         Text(preference.rawValue).tag(preference)
                     }
                 }
-                .pickerStyle(.segmented)
-                .controlSize(.small)
-                .frame(width: 260)
+                .frame(width: 200)
                 .onChange(of: settings.routingPreference) { commit() }
             }
+            Toggle("根据动作与内容自动选择模型", isOn: $settings.autoRouteEnabled)
+                .onChange(of: settings.autoRouteEnabled) { commit() }
+            Toggle("请求失败时尝试备用模型", isOn: $settings.fallbackEnabled)
+                .onChange(of: settings.fallbackEnabled) { commit() }
         }
+        .toggleStyle(.switch)
+        .controlSize(.small)
     }
 
     private var routingDiagnosticsDisclosure: some View {
@@ -266,58 +251,63 @@ struct ProviderSettingsSection: View {
         .fixedSize()
     }
 
-    @ViewBuilder
     private func providerCard(_ provider: AIProvider) -> some View {
         let isExpanded = ui.expandedProviderID == provider.id
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Toggle("", isOn: bindingForProvider(provider.id, \.isEnabled))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .help("启用 / 关闭该供应商")
-                Text(provider.name.isEmpty ? "(未命名)" : provider.name)
-                    .fontWeight(.medium)
-                    .foregroundStyle(provider.isEnabled ? .primary : .secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if provider.id == settings.activeProviderID {
-                    SnapAIStatusPill(title: "使用中",
-                                     systemImage: "checkmark.circle.fill",
-                                     tint: .accentColor,
-                                     filled: true)
-                }
-                Spacer()
-                Text("\(provider.enabledModelNames.count)/\(provider.models.count) 模型")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button { moveProvider(provider.id, up: true) } label: { Image(systemName: "chevron.up.circle") }
-                    .buttonStyle(.plain)
-                    .disabled(settings.providers.first?.id == provider.id)
-                    .help("上移")
-                    .accessibilityLabel("上移供应商 \(provider.name)")
-                Button { moveProvider(provider.id, up: false) } label: { Image(systemName: "chevron.down.circle") }
-                    .buttonStyle(.plain)
-                    .disabled(settings.providers.last?.id == provider.id)
-                    .help("下移")
-                    .accessibilityLabel("下移供应商 \(provider.name)")
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
                 Button {
                     ui.expandedProviderID = isExpanded ? nil : provider.id
                 } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    HStack(spacing: 12) {
+                        Image(systemName: provider.isLocalEndpoint ? "desktopcomputer" : "network")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(provider.name.isEmpty ? "未命名供应商" : provider.name)
+                                .font(SnapAIUI.Typography.sectionTitle)
+                                .foregroundStyle(provider.isEnabled ? Color.primary : Color.secondary)
+                                .lineLimit(1)
+                            Text("\(provider.enabledModelNames.count) 个启用模型 · \(provider.apiProtocol.rawValue)")
+                                .font(SnapAIUI.Typography.metaText)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        if provider.id == settings.activeProviderID {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.tint)
+                                .accessibilityLabel("当前供应商")
+                        }
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isExpanded ? "收起供应商 \(provider.name)" : "展开供应商 \(provider.name)")
+                .accessibilityLabel("\(isExpanded ? "收起" : "展开")供应商 \(provider.name)")
+                Toggle("启用", isOn: bindingForProvider(provider.id, \.isEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .accessibilityLabel("启用供应商 \(provider.name)")
+                Menu {
+                    Button("上移", systemImage: "arrow.up") { moveProvider(provider.id, up: true) }
+                        .disabled(settings.providers.first?.id == provider.id)
+                    Button("下移", systemImage: "arrow.down") { moveProvider(provider.id, up: false) }
+                        .disabled(settings.providers.last?.id == provider.id)
+                } label: { Image(systemName: "ellipsis") }
+                .menuStyle(.borderlessButton)
+                .frame(width: 24)
+                .accessibilityLabel("供应商排序")
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture { ui.expandedProviderID = isExpanded ? nil : provider.id }
-
             if isExpanded {
-                Divider().padding(.vertical, 6)
+                Divider().padding(.vertical, 16)
                 providerEditor(provider)
             }
         }
-        .snapAISurface(padding: 9,
+        .snapAISurface(padding: 16,
                        fillOpacity: SnapAIUI.quietFillOpacity,
                        isSelected: provider.id == settings.activeProviderID)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -325,7 +315,7 @@ struct ProviderSettingsSection: View {
 
     @ViewBuilder
     private func providerEditor(_ provider: AIProvider) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             editorRow("名称") {
                 TextField("供应商名称", text: bindingForProvider(provider.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)

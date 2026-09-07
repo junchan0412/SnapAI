@@ -1,3 +1,4 @@
+import SnapAILogic
 @preconcurrency import AppKit
 import SwiftUI
 
@@ -14,9 +15,10 @@ private final class FloatingPanelCompletion: @unchecked Sendable {
 enum FloatingPanelPresentation {
     static let fadeDuration: TimeInterval = 0.16
 
-    static func present(_ panel: NSPanel, animated: Bool = true) {
+    static func present(_ panel: FloatingPanel, animated: Bool = true) {
+        panel.presentationID = UUID()
         if shouldAnimate(animated) {
-            panel.alphaValue = 0
+            if !panel.isVisible { panel.alphaValue = 0 }
             panel.makeKeyAndOrderFront(nil)
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = fadeDuration
@@ -29,14 +31,17 @@ enum FloatingPanelPresentation {
         }
     }
 
-    static func dismiss(_ panel: NSPanel?,
+    static func dismiss(_ panel: FloatingPanel?,
                         animated: Bool = true,
                         completion: (@MainActor () -> Void)? = nil) {
         guard let panel else {
             completion?()
             return
         }
+        let presentationID = UUID()
+        panel.presentationID = presentationID
         let finish = FloatingPanelCompletion {
+            guard panel.presentationID == presentationID else { return }
             panel.orderOut(nil)
             panel.alphaValue = 1
             completion?()
@@ -63,6 +68,7 @@ enum FloatingPanelPresentation {
 
 /// 一个无标题栏、可成为 key、可调整大小、点击外部自动关闭的浮动面板。
 final class FloatingPanel: NSPanel {
+    fileprivate var presentationID = UUID()
     init(contentRect: NSRect) {
         super.init(contentRect: contentRect,
                    styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
@@ -80,7 +86,7 @@ final class FloatingPanel: NSPanel {
         hasShadow = true
         isOpaque = false
         alphaValue = 1
-        minSize = NSSize(width: 360, height: 420)
+        minSize = NSSize(width: 480, height: 480)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         animationBehavior = .utilityWindow
     }
@@ -124,8 +130,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             hostingView.rootView = rootView
         } else {
             let hosting = NSHostingView(rootView: rootView)
-            let w = AppSettings.clampedPanelWidth(settings.panelWidth)
-            let h = AppSettings.clampedPanelHeight(settings.panelHeight)
+            let w = max(480, AppSettings.clampedPanelWidth(settings.panelWidth))
+            let h = max(480, AppSettings.clampedPanelHeight(settings.panelHeight))
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h))
             panel.contentView = hosting
             panel.delegate = self
@@ -133,6 +139,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             self.hostingView = hosting
         }
 
+        panel.title = "SnapAI · \(vm.action.name)"
         positionNearCursor(panel)
         FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
@@ -163,13 +170,17 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             panel.center(); return
         }
         let size = panel.frame.size
-        var origin = NSPoint(x: mouse.x + 12, y: mouse.y - size.height - 12)
         let vf = screen.visibleFrame
+        let fittedSize = NSSize(width: min(size.width, vf.width - 16),
+                                height: min(size.height, vf.height - 16))
+        panel.setContentSize(fittedSize)
+        var origin = NSPoint(x: mouse.x + 12, y: mouse.y - fittedSize.height - 12)
         // 防止超出屏幕边界
-        if origin.x + size.width > vf.maxX { origin.x = vf.maxX - size.width - 8 }
+        if origin.x + fittedSize.width > vf.maxX { origin.x = vf.maxX - fittedSize.width - 8 }
         if origin.x < vf.minX { origin.x = vf.minX + 8 }
         if origin.y < vf.minY { origin.y = mouse.y + 12 }
-        if origin.y + size.height > vf.maxY { origin.y = vf.maxY - size.height - 8 }
+        if origin.y + fittedSize.height > vf.maxY { origin.y = vf.maxY - fittedSize.height - 8 }
+        origin.y = max(origin.y, vf.minY + 8)
         panel.setFrameOrigin(origin)
     }
 
@@ -189,9 +200,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self = self else { return event }
+            guard let self, event.window === self.panel else { return event }
+            if let editor = self.panel?.firstResponder as? NSTextView, editor.hasMarkedText() {
+                return event
+            }
             if event.keyCode == 53 { // esc
-                if self.vm.isStreaming {
+                if self.vm.showRouteDetails {
+                    self.vm.showRouteDetails = false
+                } else if self.vm.isStreaming {
                     self.vm.cancel()
                 } else if self.vm.isPinned {
                     self.vm.isPinned = false

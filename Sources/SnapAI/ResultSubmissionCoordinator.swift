@@ -1,3 +1,4 @@
+import SnapAILogic
 import Foundation
 
 @MainActor

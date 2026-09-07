@@ -42,13 +42,12 @@ extension ResultPersistence {
               errorMessage == nil else {
             return alreadySaved
         }
-        settings.addHistory(action: action.name,
+        return settings.addHistory(action: action.name,
                             source: sourceText,
                             output: outputText,
                             provider: providerName.isEmpty ? fallbackProviderName : providerName,
                             model: modelName.isEmpty ? fallbackModelName : modelName,
                             tags: historyTags,
                             contentStorage: contentStorage)
-        return true
     }
 }

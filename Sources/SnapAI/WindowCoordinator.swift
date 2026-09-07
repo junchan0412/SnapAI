@@ -58,8 +58,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.delegate = self
-        window.setContentSize(NSSize(width: 840, height: 620))
-        window.minSize = NSSize(width: 760, height: 560)
+        window.setContentSize(NSSize(width: 1000, height: 720))
+        window.minSize = NSSize(width: 840, height: 620)
         applySettingsWindowPinnedState(to: window)
         window.center()
         settingsWindow = window
@@ -98,7 +98,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         let window = NSWindow(contentViewController: makeOnboardingContentController())
         window.title = "欢迎使用 SnapAI"
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(NSSize(width: 700, height: 620))
+        window.minSize = NSSize(width: 600, height: 560)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
@@ -119,6 +121,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self, weak closedWindow] in
             guard let self, let closedWindow else { return }
             guard closedWindow === self.settingsWindow || closedWindow === self.onboardingWindow else { return }
+            guard !closedWindow.isVisible else { return }
             closedWindow.contentViewController = nil
         }
     }

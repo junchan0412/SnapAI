@@ -1,11 +1,15 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import SnapAILogic
 
 struct ConfigMigrationSettingsSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var settings: AppSettings
     let commit: () -> Void
     @State private var pendingImportedConfig: AppSettings?
+    @State private var isConfirmingImport = false
+    @State private var importSaveFailed = false
     @StateObject private var configNotice = SnapAITransientState<ConfigNotice>()
 
     private func flashNotice(_ message: String, tone: ConfigNotice.Tone) {
@@ -35,30 +39,45 @@ struct ConfigMigrationSettingsSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(
             "导入配置将覆盖当前设置",
-            isPresented: Binding(get: { pendingImportedConfig != nil },
-                                 set: { if !$0 { pendingImportedConfig = nil } }),
+            isPresented: $isConfirmingImport,
             titleVisibility: .visible,
             presenting: pendingImportedConfig
         ) { _ in
             Button("覆盖导入", role: .destructive) { applyImportedConfig() }
-            Button("取消", role: .cancel) {}
+            Button("取消", role: .cancel) {
+                pendingImportedConfig = nil
+                importSaveFailed = false
+            }
         } message: { _ in
             Text("将用所选文件中的供应商、动作、快捷键、脱敏规则等覆盖当前配置，此操作不可撤销。建议先导出当前配置备份。")
         }
         .overlay(alignment: .bottom) {
-            if let notice = configNotice.value {
-                Label(notice.message, systemImage: notice.tone.icon)
+            VStack(spacing: 8) {
+                if importSaveFailed {
+                    HStack(spacing: 10) {
+                        Label("导入尚未保存，请检查存储空间或权限。", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(SnapAIUI.StatusColor.error)
+                        Button("重试保存") { applyImportedConfig() }
+                            .buttonStyle(.bordered)
+                    }
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(notice.tone.color)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
-                    .padding(.bottom, 12)
-                    .transition(.opacity)
-                    .accessibilityLabel(notice.message)
+                    .padding(10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+                if let notice = configNotice.value {
+                    Label(notice.message, systemImage: notice.tone.icon)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(notice.tone.color)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.regularMaterial, in: Capsule())
+                        .transition(.opacity)
+                        .accessibilityLabel(notice.message)
+                }
             }
+            .padding(.bottom, 12)
         }
-        .animation(.easeInOut(duration: 0.18), value: configNotice.value)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: configNotice.value)
     }
 
     private func exportConfig() {
@@ -93,10 +112,14 @@ struct ConfigMigrationSettingsSection: View {
         }
         // 解析成功后再让用户确认覆盖,避免无确认直接覆盖现有配置。
         pendingImportedConfig = imported
+        importSaveFailed = false
+        configNotice.clear()
+        isConfirmingImport = true
     }
 
     private func applyImportedConfig() {
         guard let imported = pendingImportedConfig else { return }
+        isConfirmingImport = false
         imported.normalizeImportedConfiguration()
         let providerConfig = AppSettings.importedProviderConfiguration(imported.providers,
                                                                        activeProviderID: imported.activeProviderID,
@@ -130,7 +153,13 @@ struct ConfigMigrationSettingsSection: View {
         settings.activeContextProfileID = imported.activeContextProfileID
         settings.historyLimit = imported.historyLimit
         settings.normalizeActive()
+        guard settings.save() else {
+            importSaveFailed = true
+            configNotice.clear()
+            return
+        }
         commit()
+        importSaveFailed = false
         pendingImportedConfig = nil
         flashNotice("配置已导入", tone: .success)
     }

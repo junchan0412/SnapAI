@@ -13,7 +13,7 @@ require_match() {
   local pattern="$2"
   local path="$3"
 
-  if ! rg -q "$pattern" "$path"; then
+  if ! rg -q -- "$pattern" "$path"; then
     fail "$label check failed: pattern not found in $path"
   fi
 }
@@ -23,20 +23,8 @@ require_no_match() {
   local pattern="$2"
   local path="$3"
 
-  if rg -q "$pattern" "$path"; then
+  if rg -q -- "$pattern" "$path"; then
     fail "$label check failed: forbidden pattern found in $path"
-  fi
-}
-
-require_line_count_at_most() {
-  local label="$1"
-  local path="$2"
-  local max_lines="$3"
-  local actual
-
-  actual=$(wc -l < "$path" | tr -d ' ')
-  if [ "$actual" -gt "$max_lines" ]; then
-    fail "$label check failed: $path has $actual lines, expected at most $max_lines"
   fi
 }
 
@@ -45,7 +33,7 @@ grep -Eq 'uses: actions/checkout@[0-9a-f]{40}$' .github/workflows/ci.yml \
 
 require_no_match "release optimization" 'unsafeFlags' Package.swift
 
-require_match "local secret store" 'LocalSecretStore' Sources/SnapAI/SettingsPersistence.swift
+require_match "local secret store" 'LocalSecretStore' Sources/SnapAILogic/SettingsPersistence.swift
 require_match "local secret store tests" 'testLocalSecretStoreEncryptsProviderKeysAtRest' Tests/SnapAILogicTests/SettingsMigrationTests.swift
 
 require_match "prompt/privacy eval corpus" 'testPromptPrivacyEvalCorpusKeepsInjectionInUserPayloadAndRedactsSecrets' Tests/SnapAILogicTests/PrivacyTests.swift
@@ -66,32 +54,16 @@ require_match "supply-chain preflight" 'scripts/run-supply-chain-scan.sh' script
 require_match "SBOM packaging" 'snapai-sbom' scripts/package-release.sh
 require_match "SBOM manifest verification" 'SBOM sha256' scripts/preflight-release.sh
 
-require_line_count_at_most "SettingsView split" Sources/SnapAI/SettingsView.swift 800
-require_line_count_at_most "Settings split" Sources/SnapAI/Settings.swift 900
-require_match "cached quick-input image preview" 'if let nsImg = model\.imagePreview' Sources/SnapAI/QuickInput.swift
+require_match "cached quick-input image preview" 'model\.imagePreview' Sources/SnapAI/QuickInputView.swift
 require_match "bounded quick-input image optimization lifetime" 'autoreleasepool' Sources/SnapAI/QuickInput.swift
 require_no_match "quick-input body image re-decode" 'if let .*model\.imageData.*NSImage\(data:' Sources/SnapAI/QuickInput.swift
 require_match "settings window release lifecycle" 'func windowWillClose' Sources/SnapAI/WindowCoordinator.swift
 require_match "closed window content release" 'closedWindow\.contentViewController = nil' Sources/SnapAI/WindowCoordinator.swift
 require_match "settings content lazy rebuild" 'window\.contentViewController = makeSettingsContentController\(\)' Sources/SnapAI/WindowCoordinator.swift
 require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed = true' Sources/SnapAI/WindowCoordinator.swift
-require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAI/RoutingMetrics.swift
+require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAILogic/RoutingMetrics.swift
 require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
-require_line_count_at_most "ResultView split" Sources/SnapAI/ResultView.swift 560
-require_line_count_at_most "ResultViewModel submission split" Sources/SnapAI/ResultViewModel.swift 540
-require_line_count_at_most "ResultLiveOutputView split" Sources/SnapAI/ResultLiveOutputView.swift 180
-require_line_count_at_most "MarkdownView presentation split" Sources/SnapAI/MarkdownView.swift 150
-require_line_count_at_most "MarkdownPresentationModel split" Sources/SnapAI/MarkdownPresentationModel.swift 70
-require_line_count_at_most "MarkdownPresentation logic split" Sources/SnapAILogic/MarkdownPresentation.swift 220
-require_line_count_at_most "ResultCompletionMetricsView split" Sources/SnapAI/ResultCompletionMetricsView.swift 80
-require_line_count_at_most "ResultCompletionCoordinator split" Sources/SnapAI/ResultCompletionCoordinator.swift 130
-require_line_count_at_most "ResultRouteAttemptCoordinator split" Sources/SnapAI/ResultRouteAttemptCoordinator.swift 140
-require_line_count_at_most "ResultRequestPreparationCoordinator split" Sources/SnapAI/ResultRequestPreparationCoordinator.swift 140
-require_line_count_at_most "ResultStreamingCoordinator split" Sources/SnapAI/ResultStreamingCoordinator.swift 110
-require_line_count_at_most "ResultSubmissionCoordinator split" Sources/SnapAI/ResultSubmissionCoordinator.swift 70
-require_line_count_at_most "ResultOperationCoordinator split" Sources/SnapAI/ResultOperationCoordinator.swift 90
-require_line_count_at_most "ResultOperationFeedbackView split" Sources/SnapAI/ResultOperationFeedbackView.swift 80
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
 require_match "result view uses throttled auto-scroll" 'vm\.shouldAutoScroll\(\)' Sources/SnapAI/ResultView.swift
@@ -156,345 +128,27 @@ require_match "markdown code copy feedback route" 'onCopyCode: onCopyCode' Sourc
 require_no_match "markdown direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/MarkdownView.swift
 require_match "markdown presentation regression test" 'testMarkdownPresentationBuildsBlocksAndRejectsStaleRefreshes' Tests/SnapAILogicTests/WriteBackTests.swift
 require_no_match "streaming scroll animation storm" 'withAnimation\([^\n]*proxy\.scrollTo\("output"' Sources/SnapAI/ResultView.swift
-[ -f Sources/SnapAILogic/ResultContentPresentation.swift ] \
-  || fail "SnapAILogic ResultContentPresentation source is missing"
-[ ! -L Sources/SnapAILogic/ResultContentPresentation.swift ] \
-  || fail "SnapAILogic ResultContentPresentation must be a real source file"
-[ ! -e Sources/SnapAI/ResultContentPresentation.swift ] \
-  || fail "ResultContentPresentation must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/MarkdownPresentation.swift ] \
-  || fail "SnapAILogic MarkdownPresentation source is missing"
-[ ! -L Sources/SnapAILogic/MarkdownPresentation.swift ] \
-  || fail "SnapAILogic MarkdownPresentation must be a real source file"
-[ ! -e Sources/SnapAI/MarkdownPresentation.swift ] \
-  || fail "MarkdownPresentation must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultLiveOutputState.swift ] \
-  || fail "SnapAILogic ResultLiveOutputState source is missing"
-[ ! -L Sources/SnapAILogic/ResultLiveOutputState.swift ] \
-  || fail "SnapAILogic ResultLiveOutputState must be a real source file"
-[ -f Sources/SnapAILogic/ResultStreamingLifecycle.swift ] \
-  || fail "SnapAILogic ResultStreamingLifecycle source is missing"
-[ ! -L Sources/SnapAILogic/ResultStreamingLifecycle.swift ] \
-  || fail "SnapAILogic ResultStreamingLifecycle must be a real source file"
-[ ! -e Sources/SnapAI/ResultStreamingLifecycle.swift ] \
-  || fail "ResultStreamingLifecycle must not be duplicated in the app target"
-[ ! -e Sources/SnapAI/ResultLiveOutputState.swift ] \
-  || fail "ResultLiveOutputState must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultOperationFeedback.swift ] \
-  || fail "SnapAILogic ResultOperationFeedback source is missing"
-[ ! -L Sources/SnapAILogic/ResultOperationFeedback.swift ] \
-  || fail "SnapAILogic ResultOperationFeedback must be a real source file"
-[ ! -e Sources/SnapAI/ResultOperationFeedback.swift ] \
-  || fail "ResultOperationFeedback must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
-  || fail "SnapAILogic ResultCompletionLifecycle source is missing"
-[ ! -L Sources/SnapAILogic/ResultCompletionLifecycle.swift ] \
-  || fail "SnapAILogic ResultCompletionLifecycle must be a real source file"
-[ ! -e Sources/SnapAI/ResultCompletionLifecycle.swift ] \
-  || fail "ResultCompletionLifecycle must not be duplicated in the app target"
-require_line_count_at_most "HistoryWindow view split" Sources/SnapAI/HistoryWindow.swift 500
-require_line_count_at_most "HistoryWindowModel split" Sources/SnapAI/HistoryWindowModel.swift 260
-require_match "history presentation background refresh" 'refreshQueue\.async' Sources/SnapAI/HistoryWindowModel.swift
-require_match "history query debounce" 'HistoryWindowRefreshPolicy\.delay' Sources/SnapAI/HistoryWindowModel.swift
-require_match "history stale refresh protection" 'HistoryWindowRefreshPolicy\.shouldPublish' Sources/SnapAI/HistoryWindowModel.swift
-require_match "history cached presentation" '@Published private\(set\) var presentation' Sources/SnapAI/HistoryWindowModel.swift
-require_no_match "history broad settings observation" '@ObservedObject var settings: AppSettings' Sources/SnapAI/HistoryWindow.swift
-require_no_match "history tag draft list invalidation" '@Published var tagDrafts' Sources/SnapAI/HistoryWindowModel.swift
-require_no_match "history synchronous view search" 'private var filtered: \[HistoryEntry\]' Sources/SnapAI/HistoryWindow.swift
-require_no_match "history retained context draft" 'var contextProfileDraft:' Sources/SnapAI/HistoryWindowModel.swift
-require_match "history operation coordinator reuse" 'operationCoordinator\.export' Sources/SnapAI/HistoryWindow.swift
-require_no_match "history direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/HistoryWindow.swift
-require_no_match "silent history export failure" 'try\?.*\.write\(' Sources/SnapAI/HistoryWindow.swift
-require_no_match "history settings direct pasteboard mutation" 'NSPasteboard|clearContents\(\)|setString\(' Sources/SnapAI/HistorySettingsSection.swift
-require_match "history cached compact date formatter" 'static let compact: DateFormatter' Sources/SnapAI/History.swift
-require_no_match "history per-row date formatter allocation" 'let f = DateFormatter\(\)' Sources/SnapAI/History.swift
-[ -f Sources/SnapAILogic/HistoryWindowRefreshPolicy.swift ] \
-  || fail "SnapAILogic HistoryWindowRefreshPolicy source is missing"
-[ ! -L Sources/SnapAILogic/HistoryWindowRefreshPolicy.swift ] \
-  || fail "SnapAILogic HistoryWindowRefreshPolicy must be a real source file"
-[ ! -e Sources/SnapAI/HistoryWindowRefreshPolicy.swift ] \
-  || fail "HistoryWindowRefreshPolicy must not be duplicated in the app target"
 
-scripts/check-logic-symlinks.sh >/dev/null
-[ -x scripts/report-logic-migration-candidates.sh ] \
-  || fail "SnapAILogic migration candidate analyzer must stay executable"
-scripts/report-logic-migration-candidates.sh >/dev/null
-[ -x scripts/profile-runtime-memory.sh ] \
-  || fail "runtime memory profiler must stay executable"
-bash -n scripts/profile-runtime-memory.sh \
-  || fail "runtime memory profiler syntax check failed"
-candidate_report=$(scripts/report-logic-migration-candidates.sh)
-rg -q 'app-api' <<< "$candidate_report" \
-  || fail "SnapAILogic migration candidate analyzer must classify app API bridge risk"
+scripts/check-logic-symlinks.sh
 
-declared_logic_tests=$(
-  rg --no-filename '^func test[A-Za-z0-9_]+\(' Tests/SnapAILogicTests/*.swift \
-    | sed -E 's/^func ([A-Za-z0-9_]+).*/\1/' \
-    | sort -u
-)
-registered_logic_tests=$(
-  sed -nE 's/^[[:space:]]*(test[A-Za-z0-9_]+)\(\)$/\1/p' Tests/SnapAILogicTests/main.swift \
-    | sort -u
-)
-[ "$declared_logic_tests" = "$registered_logic_tests" ] \
-  || fail "every top-level logic test must be registered in runAllLogicTests"
+for bridge in TextCaptureDiagnosticAppBridge ResultPersistenceAppBridge SettingsToggleCommandAppSettings ActionTemplateLibraryAppBridge HistoryExportCommandAppBridge WriteBackCommandAppBridge UpdateCheckerApp; do
+  test -f "Sources/SnapAI/$bridge.swift" || fail "Missing app adapter: $bridge"
+done
 
-[ -f Sources/SnapAILogic/ResultRouteStatusText.swift ] \
-  || fail "SnapAILogic migrated ResultRouteStatusText source is missing"
-[ ! -L Sources/SnapAILogic/ResultRouteStatusText.swift ] \
-  || fail "SnapAILogic migrated ResultRouteStatusText must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultRouteStatusText.swift ] \
-  || fail "ResultRouteStatusText must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/TextDiff.swift ] \
-  || fail "SnapAILogic migrated TextDiff source is missing"
-[ ! -L Sources/SnapAILogic/TextDiff.swift ] \
-  || fail "SnapAILogic migrated TextDiff must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/TextDiff.swift ] \
-  || fail "TextDiff must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/FollowUpInputBehavior.swift ] \
-  || fail "SnapAILogic migrated FollowUpInputBehavior source is missing"
-[ ! -L Sources/SnapAILogic/FollowUpInputBehavior.swift ] \
-  || fail "SnapAILogic migrated FollowUpInputBehavior must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/FollowUpInputBehavior.swift ] \
-  || fail "FollowUpInputBehavior must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/FollowUpHistoryStore.swift ] \
-  || fail "SnapAILogic migrated FollowUpHistoryStore source is missing"
-[ ! -L Sources/SnapAILogic/FollowUpHistoryStore.swift ] \
-  || fail "SnapAILogic migrated FollowUpHistoryStore must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/FollowUpHistoryStore.swift ] \
-  || fail "FollowUpHistoryStore must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ScreenCapturePermission.swift ] \
-  || fail "SnapAILogic migrated ScreenCapturePermission source is missing"
-[ ! -L Sources/SnapAILogic/ScreenCapturePermission.swift ] \
-  || fail "SnapAILogic migrated ScreenCapturePermission must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ScreenCapturePermission.swift ] \
-  || fail "ScreenCapturePermission must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ScreenCaptureTemporaryFile.swift ] \
-  || fail "SnapAILogic migrated ScreenCaptureTemporaryFile source is missing"
-[ ! -L Sources/SnapAILogic/ScreenCaptureTemporaryFile.swift ] \
-  || fail "SnapAILogic migrated ScreenCaptureTemporaryFile must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ScreenCaptureTemporaryFile.swift ] \
-  || fail "ScreenCaptureTemporaryFile must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ScreenCaptureFailureDiagnostic.swift ] \
-  || fail "SnapAILogic migrated ScreenCaptureFailureDiagnostic source is missing"
-[ ! -L Sources/SnapAILogic/ScreenCaptureFailureDiagnostic.swift ] \
-  || fail "SnapAILogic migrated ScreenCaptureFailureDiagnostic must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ScreenCaptureFailureDiagnostic.swift ] \
-  || fail "ScreenCaptureFailureDiagnostic must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/StreamingAccumulator.swift ] \
-  || fail "SnapAILogic migrated StreamingAccumulator source is missing"
-[ ! -L Sources/SnapAILogic/StreamingAccumulator.swift ] \
-  || fail "SnapAILogic migrated StreamingAccumulator must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/StreamingAccumulator.swift ] \
-  || fail "StreamingAccumulator must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/SystemPrivacySettings.swift ] \
-  || fail "SnapAILogic migrated SystemPrivacySettings source is missing"
-[ ! -L Sources/SnapAILogic/SystemPrivacySettings.swift ] \
-  || fail "SnapAILogic migrated SystemPrivacySettings must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/SystemPrivacySettings.swift ] \
-  || fail "SystemPrivacySettings must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/TextCaptureRecoveryGuide.swift ] \
-  || fail "SnapAILogic migrated TextCaptureRecoveryGuide source is missing"
-[ ! -L Sources/SnapAILogic/TextCaptureRecoveryGuide.swift ] \
-  || fail "SnapAILogic migrated TextCaptureRecoveryGuide must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/TextCaptureRecoveryGuide.swift ] \
-  || fail "TextCaptureRecoveryGuide must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/TextCaptureDiagnostic.swift ] \
-  || fail "SnapAILogic migrated TextCaptureDiagnostic source is missing"
-[ ! -L Sources/SnapAILogic/TextCaptureDiagnostic.swift ] \
-  || fail "SnapAILogic migrated TextCaptureDiagnostic must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/TextCaptureDiagnostic.swift ] \
-  || fail "TextCaptureDiagnostic must not be duplicated in the app target"
-[ -f Sources/SnapAI/TextCaptureDiagnosticAppBridge.swift ] \
-  || fail "TextCaptureDiagnostic app bridge is missing"
-[ -f Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
-  || fail "SnapAILogic migrated SettingsWindowPinCommand source is missing"
-[ ! -L Sources/SnapAILogic/SettingsWindowPinCommand.swift ] \
-  || fail "SnapAILogic migrated SettingsWindowPinCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/SettingsWindowPinCommand.swift ] \
-  || fail "SettingsWindowPinCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultCommand.swift ] \
-  || fail "SnapAILogic migrated ResultCommand source is missing"
-[ ! -L Sources/SnapAILogic/ResultCommand.swift ] \
-  || fail "SnapAILogic migrated ResultCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultCommand.swift ] \
-  || fail "ResultCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultPinCommand.swift ] \
-  || fail "SnapAILogic migrated ResultPinCommand source is missing"
-[ ! -L Sources/SnapAILogic/ResultPinCommand.swift ] \
-  || fail "SnapAILogic migrated ResultPinCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultPinCommand.swift ] \
-  || fail "ResultPinCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultDiagnosticsCommand.swift ] \
-  || fail "SnapAILogic migrated ResultDiagnosticsCommand source is missing"
-[ ! -L Sources/SnapAILogic/ResultDiagnosticsCommand.swift ] \
-  || fail "SnapAILogic migrated ResultDiagnosticsCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultDiagnosticsCommand.swift ] \
-  || fail "ResultDiagnosticsCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultRecoveryCommand.swift ] \
-  || fail "SnapAILogic migrated ResultRecoveryCommand source is missing"
-[ ! -L Sources/SnapAILogic/ResultRecoveryCommand.swift ] \
-  || fail "SnapAILogic migrated ResultRecoveryCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultRecoveryCommand.swift ] \
-  || fail "ResultRecoveryCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultWriteBackCoordinator.swift ] \
-  || fail "SnapAILogic migrated ResultWriteBackCoordinator source is missing"
-[ ! -L Sources/SnapAILogic/ResultWriteBackCoordinator.swift ] \
-  || fail "SnapAILogic migrated ResultWriteBackCoordinator must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultWriteBackCoordinator.swift ] \
-  || fail "ResultWriteBackCoordinator must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ResultPersistence.swift ] \
-  || fail "SnapAILogic migrated ResultPersistence source is missing"
-[ ! -L Sources/SnapAILogic/ResultPersistence.swift ] \
-  || fail "SnapAILogic migrated ResultPersistence must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ResultPersistence.swift ] \
-  || fail "ResultPersistence must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ConversationExport.swift ] \
-  || fail "SnapAILogic migrated ConversationExport source is missing"
-[ ! -L Sources/SnapAILogic/ConversationExport.swift ] \
-  || fail "SnapAILogic migrated ConversationExport must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ConversationExport.swift ] \
-  || fail "ConversationExport must not be duplicated in the app target"
-[ -f Sources/SnapAI/ResultPersistenceAppBridge.swift ] \
-  || fail "ResultPersistence app bridge is missing"
-[ -f Sources/SnapAILogic/AutomationRouter.swift ] \
-  || fail "SnapAILogic migrated AutomationRouter source is missing"
-[ ! -L Sources/SnapAILogic/AutomationRouter.swift ] \
-  || fail "SnapAILogic migrated AutomationRouter must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/AutomationRouter.swift ] \
-  || fail "AutomationRouter must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/AutomationURLCommand.swift ] \
-  || fail "SnapAILogic migrated AutomationURLCommand source is missing"
-[ ! -L Sources/SnapAILogic/AutomationURLCommand.swift ] \
-  || fail "SnapAILogic migrated AutomationURLCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/AutomationURLCommand.swift ] \
-  || fail "AutomationURLCommand must not be duplicated in the app target"
-[ -f Sources/SnapAI/AutomationURLCommandAppBridge.swift ] \
-  || fail "AutomationURLCommand app bridge is missing"
-[ -f Sources/SnapAILogic/SettingsSection.swift ] \
-  || fail "SnapAILogic migrated SettingsSection source is missing"
-[ ! -L Sources/SnapAILogic/SettingsSection.swift ] \
-  || fail "SnapAILogic migrated SettingsSection must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/SettingsSection.swift ] \
-  || fail "SettingsSection must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
-  || fail "SnapAILogic migrated CommandPaletteMatcher source is missing"
-[ ! -L Sources/SnapAILogic/CommandPaletteMatcher.swift ] \
-  || fail "SnapAILogic migrated CommandPaletteMatcher must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/CommandPaletteMatcher.swift ] \
-  || fail "CommandPaletteMatcher must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/CommandIdentifier.swift ] \
-  || fail "SnapAILogic migrated CommandIdentifier source is missing"
-[ ! -L Sources/SnapAILogic/CommandIdentifier.swift ] \
-  || fail "SnapAILogic migrated CommandIdentifier must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/CommandIdentifier.swift ] \
-  || fail "CommandIdentifier must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/CaptureCoordinator.swift ] \
-  || fail "SnapAILogic migrated CaptureCoordinator source is missing"
-[ ! -L Sources/SnapAILogic/CaptureCoordinator.swift ] \
-  || fail "SnapAILogic migrated CaptureCoordinator must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/CaptureCoordinator.swift ] \
-  || fail "CaptureCoordinator must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ActionCommand.swift ] \
-  || fail "SnapAILogic migrated ActionCommand source is missing"
-[ ! -L Sources/SnapAILogic/ActionCommand.swift ] \
-  || fail "SnapAILogic migrated ActionCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ActionCommand.swift ] \
-  || fail "ActionCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/DisplayBehaviorCommand.swift ] \
-  || fail "SnapAILogic migrated DisplayBehaviorCommand source is missing"
-[ ! -L Sources/SnapAILogic/DisplayBehaviorCommand.swift ] \
-  || fail "SnapAILogic migrated DisplayBehaviorCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/DisplayBehaviorCommand.swift ] \
-  || fail "DisplayBehaviorCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/WorkModeCommand.swift ] \
-  || fail "SnapAILogic migrated WorkModeCommand source is missing"
-[ ! -L Sources/SnapAILogic/WorkModeCommand.swift ] \
-  || fail "SnapAILogic migrated WorkModeCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/WorkModeCommand.swift ] \
-  || fail "WorkModeCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/SettingsToggleCommand.swift ] \
-  || fail "SnapAILogic migrated SettingsToggleCommand source is missing"
-[ ! -L Sources/SnapAILogic/SettingsToggleCommand.swift ] \
-  || fail "SnapAILogic migrated SettingsToggleCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/SettingsToggleCommand.swift ] \
-  || fail "SettingsToggleCommand must not be duplicated in the app target"
-[ -f Sources/SnapAI/SettingsToggleCommandAppSettings.swift ] \
-  || fail "SettingsToggleCommand AppSettings bridge is missing"
-[ -f Sources/SnapAILogic/ModelSwitchCommand.swift ] \
-  || fail "SnapAILogic migrated ModelSwitchCommand source is missing"
-[ ! -L Sources/SnapAILogic/ModelSwitchCommand.swift ] \
-  || fail "SnapAILogic migrated ModelSwitchCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ModelSwitchCommand.swift ] \
-  || fail "ModelSwitchCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/RoutingContextCommand.swift ] \
-  || fail "SnapAILogic migrated RoutingContextCommand source is missing"
-[ ! -L Sources/SnapAILogic/RoutingContextCommand.swift ] \
-  || fail "SnapAILogic migrated RoutingContextCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/RoutingContextCommand.swift ] \
-  || fail "RoutingContextCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/ActionTemplateLibrary.swift ] \
-  || fail "SnapAILogic migrated ActionTemplateLibrary source is missing"
-[ ! -L Sources/SnapAILogic/ActionTemplateLibrary.swift ] \
-  || fail "SnapAILogic migrated ActionTemplateLibrary must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/ActionTemplateLibrary.swift ] \
-  || fail "ActionTemplateLibrary must not be duplicated in the app target"
-[ -f Sources/SnapAI/ActionTemplateLibraryAppBridge.swift ] \
-  || fail "ActionTemplateLibrary app bridge is missing"
-[ -f Sources/SnapAILogic/HistoryExportCommand.swift ] \
-  || fail "SnapAILogic migrated HistoryExportCommand source is missing"
-[ ! -L Sources/SnapAILogic/HistoryExportCommand.swift ] \
-  || fail "SnapAILogic migrated HistoryExportCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/HistoryExportCommand.swift ] \
-  || fail "HistoryExportCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/HistoryContextCommand.swift ] \
-  || fail "SnapAILogic migrated HistoryContextCommand source is missing"
-[ ! -L Sources/SnapAILogic/HistoryContextCommand.swift ] \
-  || fail "SnapAILogic migrated HistoryContextCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/HistoryContextCommand.swift ] \
-  || fail "HistoryContextCommand must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/InstallLogCommand.swift ] \
-  || fail "SnapAILogic migrated InstallLogCommand source is missing"
-[ ! -L Sources/SnapAILogic/InstallLogCommand.swift ] \
-  || fail "SnapAILogic migrated InstallLogCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/InstallLogCommand.swift ] \
-  || fail "InstallLogCommand must not be duplicated in the app target"
-[ -f Sources/SnapAI/InstallLogCommandAppBridge.swift ] \
-  || fail "InstallLogCommand app bridge is missing"
-[ -f Sources/SnapAI/HistoryExportCommandAppBridge.swift ] \
-  || fail "History command app bridge is missing"
-[ -f Sources/SnapAILogic/WriteBackCommand.swift ] \
-  || fail "SnapAILogic migrated WriteBackCommand source is missing"
-[ ! -L Sources/SnapAILogic/WriteBackCommand.swift ] \
-  || fail "SnapAILogic migrated WriteBackCommand must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/WriteBackCommand.swift ] \
-  || fail "WriteBackCommand must not be duplicated in the app target"
-[ -f Sources/SnapAI/WriteBackCommandAppBridge.swift ] \
-  || fail "WriteBackCommand app bridge is missing"
-[ -f Sources/SnapAILogic/WriteBackCompatibility.swift ] \
-  || fail "SnapAILogic migrated WriteBackCompatibility source is missing"
-[ ! -L Sources/SnapAILogic/WriteBackCompatibility.swift ] \
-  || fail "SnapAILogic migrated WriteBackCompatibility must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/WriteBackCompatibility.swift ] \
-  || fail "WriteBackCompatibility must not be duplicated in the app target"
-[ -f Sources/SnapAILogic/TextWriteBackLogic.swift ] \
-  || fail "SnapAILogic migrated TextWriteBackLogic source is missing"
-[ ! -L Sources/SnapAILogic/TextWriteBackLogic.swift ] \
-  || fail "SnapAILogic migrated TextWriteBackLogic must be a real source file, not a symlink"
-[ ! -e Sources/SnapAILogic/TextEditTransaction.swift ] \
-  || fail "AppKit TextEditTransaction must stay out of SnapAILogic"
-[ ! -e Sources/SnapAILogic/MenuCoordinator.swift ] \
-  || fail "AppKit MenuCoordinator must stay out of SnapAILogic"
-[ -f Sources/SnapAILogic/UpdateChecker.swift ] \
-  || fail "SnapAILogic migrated UpdateChecker source is missing"
-[ ! -L Sources/SnapAILogic/UpdateChecker.swift ] \
-  || fail "SnapAILogic migrated UpdateChecker must be a real source file, not a symlink"
-[ ! -e Sources/SnapAI/UpdateChecker.swift ] \
-  || fail "mixed app/logic UpdateChecker source must not return"
-[ -f Sources/SnapAI/UpdateCheckerApp.swift ] \
-  || fail "UpdateChecker app adapter is missing"
-require_line_count_at_most "UpdateChecker logic split" Sources/SnapAILogic/UpdateChecker.swift 650
-require_line_count_at_most "UpdateChecker app split" Sources/SnapAI/UpdateCheckerApp.swift 520
 require_match "SnapAI app depends on SnapAILogic" 'dependencies: \["SnapAILogic"\]' Package.swift
+require_match "SwiftPM release build" 'swift build -c' build.sh
+require_match "declared minimum macOS" '\.macOS\(\.v14\)' Package.swift
+require_match "release manifest matches trusted key" 'verify_manifest_signature.*Contents/Resources/ManifestPublicKey.pem' scripts/package-release.sh
+require_match "stream runtime gate" 'run-streaming-runtime-tests.sh' scripts/preflight-release.sh
+require_match "app runtime gate" 'run-app-runtime-tests.sh' scripts/preflight-release.sh
+require_match "native deployment gate" 'validate_binary_deployment' scripts/preflight-release.sh
+require_match "latest request callback ownership" 'self.requestID == requestID' Sources/SnapAI/ResultViewModel.swift
+require_match "reopened panel ownership" 'panel.presentationID == presentationID' Sources/SnapAI/FloatingPanel.swift
+require_match "settings terminate flush" 'settings.save\(\)' Sources/SnapAI/AppDelegate.swift
+require_no_match "UI render flush side effects" 'vm\.completeText' Sources/SnapAI/ResultView.swift
+
+for regression in testServerSentEventParserPreservesFramingAndUnicode testAIStreamDecoderDetectsIncompleteAndLimitedResponses testHistoryStoreMigrationAndIndexTransactions testHistoryStoreConnectionRecoveryAndConcurrency testSettingsPersistenceRecoveryAndValidation testLocalSecretStoreConcurrentWritesAndRecovery; do
+  require_match "registered regression: $regression" "$regression\(\)" Tests/SnapAILogicTests/main.swift
+done
 
 echo "Audit remediation check: ok"

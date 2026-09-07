@@ -33,8 +33,8 @@ jobs:
       - name: SwiftPM Build
         run: swift build
 
-      - name: SwiftPM Tests
-        run: SNAPAI_LOGIC_TESTS=1 swift test
-
       - name: Logic Test Wrapper
         run: scripts/run-logic-tests.sh
+
+      - name: Offline Streaming Runtime Tests
+        run: scripts/run-streaming-runtime-tests.sh

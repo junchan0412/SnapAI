@@ -76,6 +76,7 @@ final class ResultViewModel: ObservableObject {
     var submissionPrivacy: PrivacySubmissionDiagnostic?
     var requestDiagnostics: AIRequestDiagnostics?
     var lastAutoScrollTime: TimeInterval = 0
+    private var requestID = UUID()
 
     // #5 追问历史(↑/↓ 浏览)
     var followUpHistory = FollowUpHistoryStore()
@@ -245,6 +246,7 @@ final class ResultViewModel: ObservableObject {
 
     func cancel() {
         guard isStreaming else { return }
+        requestID = UUID()
         client.cancel()
         streamingCoordinator.stopAndDiscardPendingPresentation()
         outputState.flush()
@@ -317,6 +319,9 @@ final class ResultViewModel: ObservableObject {
     // MARK: - 内部
 
     private func resetOutput() {
+        requestID = UUID()
+        client.cancel()
+        isStreaming = false
         outputState.flush()
         thinkingState.flush()
         streamingCoordinator.reset()
@@ -351,9 +356,12 @@ final class ResultViewModel: ObservableObject {
                      routes: request.routes,
                      diagnostics: request.diagnostics)
         case .unavailable(let message, let diagnostics, let privacy):
+            streamingCoordinator.stopAndDiscardPendingPresentation()
+            isStreaming = false
             submissionPrivacy = privacy
             errorMessage = message
             updateRequestDiagnostics(diagnostics)
+            finishMetrics(recordUsage: false, saveHistory: false)
         }
     }
 
@@ -370,8 +378,11 @@ final class ResultViewModel: ObservableObject {
             runRoute(at: nextIndex, routes: routes, diagnostics: diagnostics)
             return
         case .unavailable(let diagnostics, let message):
+            streamingCoordinator.stopAndDiscardPendingPresentation()
+            isStreaming = false
             updateRequestDiagnostics(diagnostics)
             errorMessage = message
+            finishMetrics(recordUsage: false, saveHistory: false)
             return
         case .ready(let attempt):
             updateRequestDiagnostics(attempt.diagnostics)
@@ -381,6 +392,9 @@ final class ResultViewModel: ObservableObject {
 
     private func executeRoute(_ attempt: ResultRunnableRouteAttempt,
                               routes: [AIRequestRoute]) {
+        client.cancel()
+        let requestID = UUID()
+        self.requestID = requestID
         let route = attempt.route
         client = AIClient(settings: attempt.scopedSettings)
         activeProviderName = route.providerName
@@ -395,10 +409,11 @@ final class ResultViewModel: ObservableObject {
         streamingCoordinator.begin(
             speed: settings.typewriterSpeed,
             onOutputChunk: { [weak self] chunk in
-                self?.outputState.append(chunk)
+                guard let self, self.requestID == requestID else { return }
+                self.outputState.append(chunk)
             },
             onDrained: { [weak self] in
-                guard let self else { return }
+                guard let self, self.requestID == requestID else { return }
                 self.outputState.flush()
                 self.thinkingState.flush()
                 self.isStreaming = false
@@ -408,7 +423,7 @@ final class ResultViewModel: ObservableObject {
         let typewriterOn = streamingCoordinator.usesTypewriter
 
         client.stream(messages: submissionCoordinator.messages, action: action) { [weak self] token in
-            guard let self = self else { return }
+            guard let self, self.requestID == requestID else { return }
             if firstTokenMilliseconds == nil {
                 firstTokenMilliseconds = AIRequestAttemptDiagnostic.elapsedMilliseconds(since: routeStartedAt)
             }
@@ -421,11 +436,11 @@ final class ResultViewModel: ObservableObject {
             }
         } onThinking: { [weak self] thinking in
             // Anthropic extended thinking 块
-            guard let self = self else { return }
+            guard let self, self.requestID == requestID else { return }
             let next = self.streamingCoordinator.appendExternalThinking(thinking)
             _ = self.thinkingState.replaceCoalesced(with: next)
         } onComplete: { [weak self] error in
-            guard let self = self else { return }
+            guard let self, self.requestID == requestID else { return }
             let immediateOutputDelta = self.streamingCoordinator.finish()
             // 结束态立即落定,不再合并延迟。
             self.thinkingState.replace(with: self.streamingCoordinator.thinkingText)
@@ -433,6 +448,8 @@ final class ResultViewModel: ObservableObject {
                 self.outputState.append(immediateOutputDelta)
             }
             self.outputState.flush()
+            let error = error ?? (self.completeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? AIStreamDecodingError.emptyResponse : nil)
             if let error = error {
                 let recordedFailure = self.routeAttemptCoordinator.recordFailure(
                     error: error,
@@ -514,6 +531,9 @@ final class ResultViewModel: ObservableObject {
         }
         if outcome.didAutoReplace {
             autoReplaceEnabled = false
+        }
+        if outcome.historySaveFailed {
+            operationCoordinator.showError("结果已生成，但历史保存失败。请先复制或导出结果。")
         }
     }
 

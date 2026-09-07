@@ -8,17 +8,19 @@ struct ResultThinkingSection: View {
     var body: some View {
         if !state.text.isEmpty {
             DisclosureGroup(isExpanded: $isExpanded) {
-                Text(state.text)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(SnapAIUI.compactPadding)
-                    .background(SnapAIUI.Surface.quiet)
-                    .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+                if isExpanded {
+                    Text(state.text)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(SnapAIUI.compactPadding)
+                        .background(SnapAIUI.Surface.quiet)
+                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+                }
             } label: {
                 Label("思考过程", systemImage: "brain")
-                    .font(.caption)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
         }
@@ -35,11 +37,17 @@ struct ResultOutputDisplay: View {
         switch ResultContentRenderMode.resolve(text: state.text,
                                                isStreaming: isStreaming) {
         case .waiting:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("等待响应…").foregroundStyle(.secondary)
-                TypingCursor()
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("正在准备回答")
+                        .font(SnapAIUI.Typography.sectionTitle)
+                }
+                Text("结果会实时显示在这里。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .id("output")
             .transition(.opacity)
@@ -48,8 +56,11 @@ struct ResultOutputDisplay: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(state.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentTransition(.opacity)
-                TypingCursor()
+                    .textSelection(.enabled)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.accentColor.opacity(0.6))
+                    .frame(width: 3, height: 15)
+                    .accessibilityHidden(true)
             }
             .id("output")
             .transition(.opacity)
@@ -88,19 +99,24 @@ struct ResultActionsToolbar: View {
     var body: some View {
         let state = commandState
         HStack(spacing: SnapAIUI.tightSpacing) {
-            Spacer(minLength: 0)
+            Button(action: vm.copyOutput) {
+                Label("复制结果", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(SnapAIPrimaryButtonStyle())
+            .controlSize(.small)
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .help(ResultCommandFactory.helpText(for: .copyOutput, in: state))
+            .disabled(!ResultCommandFactory.isEnabled(.copyOutput, in: state))
 
-            // 主操作:复制结果、替换原文(最常用,保留可见图标按钮)
-            commandButton(.copyOutput,
-                          action: vm.copyOutput,
-                          shortcut: KeyboardShortcut("c", modifiers: [.command, .shift]),
-                          state: state)
-            commandButton(.replaceOriginal,
-                          action: vm.replaceOriginal,
-                          shortcut: KeyboardShortcut(.return, modifiers: [.command]),
-                          state: state)
+            Button(action: vm.replaceOriginal) {
+                Label("替换原文", systemImage: "arrow.uturn.left.square")
+            }
+            .buttonStyle(SnapAISecondaryButtonStyle())
+            .controlSize(.small)
+            .keyboardShortcut(.return, modifiers: [.command])
+            .help(ResultCommandFactory.helpText(for: .replaceOriginal, in: state))
+            .disabled(!ResultCommandFactory.isEnabled(.replaceOriginal, in: state))
 
-            // 次要操作收纳为单一菜单,降低按钮密度;快捷键作为菜单快捷键仍生效。
             Menu {
                 menuButton(.copyMarkdown, action: vm.copyConversationMarkdown,
                            shortcut: "c", modifiers: [.command, .option], state: state)
@@ -109,9 +125,18 @@ struct ResultActionsToolbar: View {
                 Divider()
                 menuButton(.exportConversation, action: vm.exportConversation,
                            shortcut: "e", modifiers: [.command], state: state)
+                Divider()
+                menuButton(.copyBriefDiagnostics, action: vm.copyBriefRequestDiagnostics,
+                           shortcut: "d", modifiers: [.command, .shift], state: state)
+                menuButton(.copyDiagnostics, action: vm.copyRequestDiagnostics,
+                           shortcut: "d", modifiers: [.command, .option], state: state)
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: "ellipsis")
+                    .frame(width: 26, height: 30)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .controlSize(.small)
             .help("更多操作:复制完整结果、追加到文档、导出对话")
             .accessibilityLabel("更多结果操作")
@@ -166,8 +191,7 @@ struct ResultActionsToolbar: View {
     }
 
     private var commandState: ResultCommandState {
-        _ = outputState.text
-        return ResultCommandState(resultText: vm.completeText,
+        ResultCommandState(resultText: outputState.text,
                                   diagnosticsText: vm.requestDiagnosticText,
                                   isStreaming: vm.isStreaming,
                                   sourceText: vm.sourceText,

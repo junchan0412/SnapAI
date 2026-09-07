@@ -134,13 +134,14 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
             hostingView.rootView = view
         } else {
             let hosting = NSHostingView(rootView: view)
-            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420))
-            panel.minSize = NSSize(width: 480, height: 320)
+            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480))
+            panel.minSize = NSSize(width: 520, height: 360)
             panel.contentView = hosting
             panel.delegate = self
             self.panel = panel
             self.hostingView = hosting
         }
+        panel.title = "SnapAI 命令面板"
         panel.center()
         FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
@@ -168,7 +169,10 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
     private func installEscMonitor() {
         removeEscMonitor()
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self else { return event }
+            guard let self, event.window === self.panel else { return event }
+            if let editor = self.panel?.firstResponder as? NSTextView, editor.hasMarkedText() {
+                return event
+            }
             switch event.keyCode {
             case 53: // esc
                 self.hide()
@@ -207,6 +211,7 @@ private extension NSView {
 }
 
 struct CommandPaletteView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: CommandPaletteModel
     var onClose: () -> Void
     var openPaletteHint: String? = nil
@@ -225,7 +230,7 @@ struct CommandPaletteView: View {
                     .foregroundStyle(.secondary)
                 TextField("搜索动作、模型、历史记录或设置…", text: $model.query)
                     .textFieldStyle(.plain)
-                    .font(.title3)
+                    .font(.system(size: 18))
                     .onSubmit {
                         model.selectedItem()?.perform()
                     }
@@ -238,7 +243,7 @@ struct CommandPaletteView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("关闭命令面板")
             }
-            .padding(14)
+            .padding(20)
 
             Divider()
 
@@ -270,10 +275,10 @@ struct CommandPaletteView: View {
                                             .foregroundStyle(.tint)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(item.title)
-                                                .font(.callout.weight(.medium))
+                                                .font(SnapAIUI.Typography.bodyText.weight(.medium))
                                                 .lineLimit(1)
                                             Text(item.subtitle)
-                                                .font(.caption)
+                                                .font(SnapAIUI.Typography.metaText)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(1)
                                         }
@@ -303,6 +308,7 @@ struct CommandPaletteView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
                                 .id(item.id)
                             }
                         }
@@ -333,14 +339,14 @@ struct CommandPaletteView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .frame(width: 560, height: 420)
-        .background(.ultraThinMaterial)
+        .frame(minWidth: 520, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
+        .background(SnapAIUI.Surface.content)
     }
 
     private func scrollToSelection(with proxy: ScrollViewProxy) {
         guard filteredItems.indices.contains(selectedIndex) else { return }
         // 键盘导航保留短动画;搜索过滤时由 onChange(query) 触发,动画更短避免列表闪跳。
-        withAnimation(.easeOut(duration: 0.08)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.08)) {
             proxy.scrollTo(filteredItems[selectedIndex].id, anchor: .center)
         }
     }

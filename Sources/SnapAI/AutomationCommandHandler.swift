@@ -55,9 +55,9 @@ extension AppDelegate {
         case .clearHistory:
             clearHistoryFromAutomation()
         case let .copyHistoryMarkdown(criteria):
-            copyHistoryMarkdownFromAutomation(criteria: HistoryFilterCriteria(logic: criteria))
+            copyHistoryMarkdownFromAutomation(criteria: criteria)
         case let .createHistoryContext(criteria, options):
-            createHistoryContextProfileFromAutomation(criteria: HistoryFilterCriteria(logic: criteria),
+            createHistoryContextProfileFromAutomation(criteria: criteria,
                                                       options: options)
         case .openCommandPalette:
             openCommandPalette()
@@ -88,15 +88,15 @@ extension AppDelegate {
         case let .setToggle(commandQuery, enabled):
             setToggleFromAutomation(commandQuery: commandQuery, enabled: enabled)
         case let .setRoutingPreference(preference):
-            setRoutingPreferenceFromAutomation(preference.flatMap(AIRoutingPreference.init(logic:)))
+            setRoutingPreferenceFromAutomation(preference)
         case let .setWorkMode(mode):
-            setWorkModeFromAutomation(mode.flatMap(WorkModePreset.init(logic:)))
+            setWorkModeFromAutomation(mode)
         case let .setDockIcon(enabled):
             setDockIconFromAutomation(enabled)
         case let .setLoginItem(enabled):
             setLoginItemFromAutomation(enabled)
         case let .setTypewriterSpeed(speed):
-            setTypewriterSpeedFromAutomation(speed.flatMap(TypewriterSpeed.init(logic:)))
+            setTypewriterSpeedFromAutomation(speed)
         case .checkUpdates:
             checkForUpdates()
         }

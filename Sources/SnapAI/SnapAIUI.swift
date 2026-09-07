@@ -1,50 +1,58 @@
 import SwiftUI
+import AppKit
 import SnapAILogic
 
 enum SnapAIUI {
-    static let panelRadius: CGFloat = 14
-    static let cardRadius: CGFloat = 10
+    static let panelRadius: CGFloat = 16
+    static let cardRadius: CGFloat = 12
     static let controlRadius: CGFloat = 8
-    static let compactPadding: CGFloat = 10
-    static let sectionPadding: CGFloat = 12
+    static let compactPadding: CGFloat = 12
+    static let sectionPadding: CGFloat = 16
 
-    static let quietFillOpacity: Double = 0.028
-    static let regularFillOpacity: Double = 0.05
-    static let selectedFillOpacity: Double = 0.12
+    static let quietFillOpacity: Double = 0.025
+    static let regularFillOpacity: Double = 0.045
+    static let selectedFillOpacity: Double = 0.10
     static let strokeOpacity: Double = 0.08
     static let focusStrokeOpacity: Double = 0.42
-    static let minimumHitTarget: CGFloat = 30
+    static let minimumHitTarget: CGFloat = 32
 
     // MARK: - 间距阶(统一各界面留白,避免硬编码)
     static let tightSpacing: CGFloat = 8
     static let standardSpacing: CGFloat = 12
     static let looseSpacing: CGFloat = 20
-    static let edgePadding: CGFloat = 16
+    static let edgePadding: CGFloat = 20
 
     // MARK: - 字体阶(清晰层级,取代散落的 .headline/.caption 直写)
     enum Typography {
-        static let panelTitle = Font.system(.title3, design: .rounded).weight(.semibold)
-        static let sectionLabel = Font.caption.weight(.medium)
-        static let bodyText = Font.callout
-        static let metaText = Font.caption
-        static let toolbarLabel = Font.caption.weight(.medium)
+        static let windowTitle = Font.system(size: 26, weight: .semibold)
+        static let panelTitle = Font.system(size: 17, weight: .semibold)
+        static let sectionTitle = Font.system(size: 14, weight: .semibold)
+        static let sectionLabel = Font.system(size: 12, weight: .medium)
+        static let bodyText = Font.system(size: 14)
+        static let metaText = Font.system(size: 12)
+        static let toolbarLabel = Font.system(size: 12, weight: .medium)
+        static let keycap = Font.system(size: 11, weight: .medium, design: .monospaced)
     }
 
     // MARK: - 语义表面(统一浅色/深色模式下的层次)
     enum Surface {
-        static let field = Color.primary.opacity(0.055)
+        static let canvas = Color(nsColor: .windowBackgroundColor)
+        static let content = Color(nsColor: .textBackgroundColor)
+        static let chrome = Color(nsColor: .controlBackgroundColor)
+        static let field = Color(nsColor: .textBackgroundColor)
         static let control = Color.primary.opacity(regularFillOpacity)
         static let quiet = Color.primary.opacity(quietFillOpacity)
         static let selected = Color.accentColor.opacity(selectedFillOpacity)
-        static let divider = Color.primary.opacity(strokeOpacity)
+        static let divider = Color(nsColor: .separatorColor).opacity(0.55)
+        static let border = divider
         static let focus = Color.accentColor.opacity(focusStrokeOpacity)
     }
 
     // MARK: - 语义状态色(取代散落的 .green/.orange/.red 硬编码)
     enum StatusColor {
-        static let success = Color.green
-        static let warning = Color.orange
-        static let error = Color.red
+        static let success = Color(nsColor: .systemGreen)
+        static let warning = Color(nsColor: .systemOrange)
+        static let error = Color(nsColor: .systemRed)
         static let info = Color.accentColor
         static let neutral = Color.secondary
 
@@ -95,7 +103,7 @@ private struct SnapAISurfaceModifier: ViewModifier {
             .padding(padding)
             .background {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(isSelected ? SnapAIUI.Surface.selected : Color.primary.opacity(fillOpacity))
+                    .fill(SnapAIUI.Surface.content)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -125,18 +133,18 @@ struct SnapAIStatusPill: View {
     var filled: Bool = false
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption2.weight(.semibold))
+        Label {
+            Text(title).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(tint)
+        }
+            .font(SnapAIUI.Typography.sectionLabel)
             .lineLimit(1)
             .truncationMode(.middle)
-            .padding(.horizontal, 9)
+            .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .foregroundStyle(tint)
-            .background(filled ? tint.opacity(0.14) : Color.primary.opacity(0.045), in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(filled ? tint.opacity(0.24) : Color.primary.opacity(0.06), lineWidth: 1)
-            }
+            .background(filled ? tint.opacity(0.11) : SnapAIUI.Surface.control,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
@@ -155,6 +163,8 @@ struct SnapAIIconButtonStyle: ButtonStyle {
 }
 
 private struct SnapAIIconButtonBody: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isFocused) private var isFocused
     let label: ButtonStyleConfiguration.Label
     let isPressed: Bool
     let isEnabled: Bool
@@ -163,7 +173,7 @@ private struct SnapAIIconButtonBody: View {
     @State private var isHovered = false
 
     var body: some View {
-        let fill: Double = isPressed ? 0.14 : (isHovered ? 0.10 : 0.05)
+        let fill: Double = isPressed ? 0.12 : (isHovered ? 0.075 : 0)
         label
             .font(.system(size: 13, weight: .semibold))
             .frame(width: max(size, SnapAIUI.minimumHitTarget),
@@ -180,10 +190,14 @@ private struct SnapAIIconButtonBody: View {
                 }
             }
             .contentShape(Rectangle())
+            .overlay {
+                RoundedRectangle(cornerRadius: circular ? size / 2 : SnapAIUI.controlRadius,
+                                 style: .continuous)
+                    .stroke(isFocused ? SnapAIUI.Surface.focus : .clear, lineWidth: 2)
+            }
             .onHover { isHovered = $0 }
-            .scaleEffect(isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.12), value: isHovered)
-            .animation(.easeOut(duration: 0.1), value: isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: isPressed)
     }
 }
 
@@ -192,21 +206,46 @@ private struct SnapAIIconButtonBody: View {
 /// 用主色调填充的强调按钮,在多个并列操作中明确「主操作」。
 struct SnapAIPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
     var tint: Color = .accentColor
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.callout.weight(.semibold))
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .foregroundStyle(.white)
             .background {
                 RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
                     .fill(tint.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4))
             }
             .contentShape(Rectangle())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .overlay {
+                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius + 2, style: .continuous)
+                    .stroke(isFocused ? SnapAIUI.Surface.focus : .clear, lineWidth: 2)
+                    .padding(-3)
+            }
+    }
+}
+
+struct SnapAISecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.isFocused) private var isFocused
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .background(Color.primary.opacity(configuration.isPressed ? 0.12 : 0.055),
+                        in: RoundedRectangle(cornerRadius: SnapAIUI.controlRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius)
+                    .stroke(isFocused ? SnapAIUI.Surface.focus : SnapAIUI.Surface.border,
+                            lineWidth: isFocused ? 2 : 1)
+            }
+            .contentShape(Rectangle())
     }
 }
 
@@ -231,17 +270,26 @@ struct SnapAISemanticPill: View {
     let tone: Tone
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption2.weight(.semibold))
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .foregroundStyle(tone.color)
-            .background(tone.color.opacity(0.14), in: Capsule())
+        SnapAIStatusPill(title: title, systemImage: systemImage, tint: tone.color, filled: true)
+    }
+}
+
+struct SnapAIKeycap: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(SnapAIUI.Typography.keycap)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 20, minHeight: 20)
+            .background(SnapAIUI.Surface.control,
+                        in: RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay {
-                Capsule().stroke(tone.color.opacity(0.24), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .stroke(SnapAIUI.Surface.divider, lineWidth: 0.5)
             }
+            .accessibilityLabel("快捷键 \(text)")
     }
 }
 
@@ -288,45 +336,17 @@ struct SnapAIStreamingProgressBar: View {
     var body: some View {
         Group {
             if reduceMotion {
-                progressTrack(phase: 0.5)
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.5))
             } else {
-                // 30Hz 足以保持连续感,同时把持续刷新次数降到原来的一半。
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
-                    let cycle = 1.35
-                    let phase = context.date.timeIntervalSinceReferenceDate
-                        .truncatingRemainder(dividingBy: cycle) / cycle
-                    progressTrack(phase: phase)
-                }
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
             }
         }
-        .frame(height: 2.5)
+        .frame(height: 2)
+        .clipped()
         .accessibilityHidden(true)
-    }
-
-    private func progressTrack(phase: Double) -> some View {
-        GeometryReader { proxy in
-            let barWidth = max(36, proxy.size.width * 0.28)
-            let travel = max(0, proxy.size.width - barWidth)
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.14))
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.accentColor.opacity(0.35),
-                                Color.accentColor,
-                                Color.accentColor.opacity(0.35)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: barWidth)
-                    .offset(x: travel * phase)
-            }
-        }
-        .frame(height: 2.5)
     }
 }
 
@@ -340,6 +360,7 @@ struct SnapAIIncompleteResultBanner: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: systemImage)
+                .foregroundStyle(SnapAIUI.StatusColor.warning)
             Text(title)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -353,7 +374,7 @@ struct SnapAIIncompleteResultBanner: View {
             .accessibilityLabel("关闭提示")
         }
         .font(.caption)
-        .foregroundStyle(SnapAIUI.StatusColor.warning)
+        .foregroundStyle(.primary)
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .background(SnapAIUI.StatusColor.warning.opacity(0.1))
@@ -376,6 +397,7 @@ struct SnapAITransientNoticeBanner: View {
     var body: some View {
         HStack(spacing: 7) {
             Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(SnapAIUI.StatusColor.error)
             Text(title)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -389,7 +411,7 @@ struct SnapAITransientNoticeBanner: View {
             .accessibilityLabel("关闭提示")
         }
         .font(.caption)
-        .foregroundStyle(SnapAIUI.StatusColor.error)
+        .foregroundStyle(.primary)
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
         .background(SnapAIUI.StatusColor.error.opacity(0.1))

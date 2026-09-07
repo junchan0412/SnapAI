@@ -28,8 +28,8 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         window.title = "SnapAI 历史记录"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 760, height: 560))
-        window.minSize = NSSize(width: 620, height: 420)
+        window.setContentSize(NSSize(width: 980, height: 680))
+        window.minSize = NSSize(width: 800, height: 540)
         window.delegate = self
         window.center()
         self.window = window

@@ -1,107 +1,73 @@
 #!/bin/bash
 set -euo pipefail
-
 cd "$(dirname "$0")/.."
 
-MANIFEST="scripts/logic-symlink-manifest.txt"
-CURRENT=$(mktemp "${TMPDIR:-/tmp}/snapai-logic-symlinks.XXXXXX")
-trap 'rm -f "$CURRENT"' EXIT
+python3 - <<'PY'
+from collections import defaultdict
+from pathlib import Path
+import fnmatch
+import re
+import sys
 
-FORBIDDEN_FILE_PATTERNS=(
-  "AppDelegate*.swift"
-  "*View.swift"
-  "*Window.swift"
-  "*Panel.swift"
-  "ActionSettingsSection.swift"
-  "GeneralSettingsSection.swift"
-  "HistorySettingsSection.swift"
-  "ImportExportSettingsSection.swift"
-  "PermissionSettingsSection.swift"
-  "PrivacySettingsSection.swift"
-  "ProviderSettingsSection.swift"
-  "WorkModeSettingsSection.swift"
-  "CommandPalette.swift"
-  "DiffPreviewWindow.swift"
-  "FloatingPanel.swift"
-  "HotKeyRecorder.swift"
-  "MarkdownView.swift"
-  "MenuCoordinator.swift"
-  "OnboardingView.swift"
-  "QuickInput.swift"
-  "SettingsViewSupport.swift"
-  "SnapAIApp.swift"
-  "SnapAIUI.swift"
-  "WindowCoordinator.swift"
-  "main.swift"
+root = Path.cwd()
+logic = root / "Sources/SnapAILogic"
+app = root / "Sources/SnapAI"
+manifest = root / "scripts/logic-symlink-manifest.txt"
+errors = []
+expected = manifest.read_text().splitlines()
+sources = sorted(logic.glob("*.swift"))
+actual = [source.name for source in sources]
+if expected != actual:
+    errors.append("SnapAILogic source manifest does not match its real source files")
+    errors.extend(f"  missing: {name}" for name in sorted(set(expected) - set(actual)))
+    errors.extend(f"  unlisted: {name}" for name in sorted(set(actual) - set(expected)))
+
+for source in logic.rglob("*"):
+    if source.is_symlink():
+        errors.append(f"shared logic must be a real source, not a symlink: {source.relative_to(root)}")
+
+forbidden_files = (
+    "AppDelegate*.swift", "*View.swift", "*Window.swift", "*Panel.swift",
+    "?*SettingsSection.swift", "CommandPalette.swift", "HotKeyRecorder.swift",
+    "MenuCoordinator.swift", "QuickInput.swift", "SettingsViewSupport.swift",
+    "SnapAIApp.swift", "SnapAIUI.swift", "WindowCoordinator.swift", "main.swift"
 )
-
-FORBIDDEN_IMPORTS=(
-  "SnapAILogic"
-  "SwiftUI"
-  "UniformTypeIdentifiers"
-  "WebKit"
-  "PDFKit"
-  "Quartz"
+forbidden_imports = {"SnapAILogic", "SwiftUI", "UniformTypeIdentifiers", "WebKit", "PDFKit", "Quartz"}
+import_pattern = re.compile(
+    r"^\s*(?:@[\w.]+(?:\([^\n]*?\))?\s+)*(?:(?:public|package|internal|private|fileprivate)\s+)?"
+    r"import\s+(?:(?:struct|class|enum|protocol|func|var|let|typealias)\s+)?(\w+)", re.M
 )
+for source in sources:
+    if any(fnmatch.fnmatch(source.name, pattern) for pattern in forbidden_files):
+        errors.append(f"UI source belongs in the app target: {source.name}")
+    if (app / source.name).exists():
+        errors.append(f"core source is compiled by both targets: {source.name}")
+    for module in import_pattern.findall(source.read_text()):
+        if module in forbidden_imports:
+            errors.append(f"{source.name} imports forbidden module {module}")
 
-MAX_LOGIC_SYMLINKS=36
-MIN_LOGIC_REAL_SOURCES=47
+declaration_pattern = re.compile(
+    r"^(?:(?:public|package|internal|final|indirect|nonisolated)\s+)*"
+    r"(?:struct|class|enum|protocol|actor|typealias)\s+(\w+)", re.M
+)
+def declarations(directory):
+    result = defaultdict(list)
+    for source in directory.glob("*.swift"):
+        for name in declaration_pattern.findall(source.read_text()):
+            result[name].append(source.name)
+    return result
 
-find Sources/SnapAILogic -maxdepth 1 \( -type l -o -type f \) -name '*.swift' -exec basename {} \; | sort > "$CURRENT"
+logic_types = declarations(logic)
+app_types = declarations(app)
+for name in sorted(logic_types.keys() & app_types.keys()):
+    errors.append(f"duplicate app/core type {name}: {app_types[name]} and {logic_types[name]}")
+for source in app.glob("*.swift"):
+    if re.search(r"@testable\s+import\s+SnapAILogic\b", source.read_text()):
+        errors.append(f"production app must use package access, not @testable: {source.name}")
 
-if ! diff -u "$MANIFEST" "$CURRENT"; then
-  echo "error: Sources/SnapAILogic symlink manifest is out of date." >&2
-  echo "Add only logic-test-safe Swift files, then update $MANIFEST intentionally." >&2
-  exit 1
-fi
-
-while IFS= read -r file; do
-  path="Sources/SnapAILogic/$file"
-  for pattern in "${FORBIDDEN_FILE_PATTERNS[@]}"; do
-    if [[ "$file" == $pattern ]]; then
-      echo "error: $path looks UI-only and must not enter SnapAILogic." >&2
-      echo "Move shared logic into a non-UI file or keep this file in the app target only." >&2
-      exit 1
-    fi
-  done
-  if [ ! -L "$path" ]; then
-    if [ ! -f "$path" ]; then
-      echo "error: $path is neither a regular source file nor a symlink." >&2
-      exit 1
-    fi
-  else
-    target=$(readlink "$path")
-    if [[ "$target" != ../SnapAI/*.swift ]]; then
-      echo "error: $path points outside Sources/SnapAI: $target" >&2
-      exit 1
-    fi
-    if [ ! -f "$path" ]; then
-      echo "error: $path points to a missing source file: $target" >&2
-      exit 1
-    fi
-  fi
-  for module in "${FORBIDDEN_IMPORTS[@]}"; do
-    if grep -Eq "^[[:space:]]*import[[:space:]]+$module([[:space:]]|$)" "$path"; then
-      echo "error: $path imports $module, which is not allowed in SnapAILogic." >&2
-      echo "Keep UI/rendering/document-panel code in Sources/SnapAI." >&2
-      exit 1
-    fi
-  done
-done < "$MANIFEST"
-
-symlink_count=$(find Sources/SnapAILogic -maxdepth 1 -type l -name '*.swift' | wc -l | tr -d ' ')
-real_source_count=$(find Sources/SnapAILogic -maxdepth 1 -type f -name '*.swift' | wc -l | tr -d ' ')
-
-if [ "$symlink_count" -gt "$MAX_LOGIC_SYMLINKS" ]; then
-  echo "error: Sources/SnapAILogic has $symlink_count symlink sources; expected at most $MAX_LOGIC_SYMLINKS." >&2
-  echo "Migrate shared logic as real library sources instead of increasing app-source mirrors." >&2
-  exit 1
-fi
-
-if [ "$real_source_count" -lt "$MIN_LOGIC_REAL_SOURCES" ]; then
-  echo "error: Sources/SnapAILogic has $real_source_count real sources; expected at least $MIN_LOGIC_REAL_SOURCES." >&2
-  echo "Do not regress migrated library sources back to symlinks." >&2
-  exit 1
-fi
-
-echo "SnapAILogic source manifest verified ($symlink_count symlinks, $real_source_count real sources)."
+if errors:
+    for error in errors:
+        print(f"error: {error}", file=sys.stderr)
+    raise SystemExit(1)
+print(f"SnapAILogic boundaries verified: {len(sources)} real sources, zero symlinks, zero duplicate app/core types.")
+PY

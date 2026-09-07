@@ -51,7 +51,7 @@ public struct ActionTemplateAction: Codable, Identifiable, Equatable {
         min(max(value, thinkingBudgetRange.lowerBound), thinkingBudgetRange.upperBound)
     }
 
-    enum CodingKeys: String, CodingKey {
+    package enum CodingKeys: String, CodingKey {
         case id, name, icon, group, prompt, isTranslation, targetLanguage
         case replaceByDefault, isEnabled, thinkingMode, thinkingBudget, saveHistory
     }

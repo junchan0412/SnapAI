@@ -27,7 +27,7 @@ public enum UpdateChecker {
         public let htmlURL: URL
         public let assets: [Asset]
 
-        enum CodingKeys: String, CodingKey {
+        package enum CodingKeys: String, CodingKey {
             case tagName = "tag_name"
             case name
             case htmlURL = "html_url"
@@ -62,7 +62,7 @@ public enum UpdateChecker {
             UpdateChecker.versionedReleaseTag(tagName)
         }
 
-        func assets(named name: String) -> [Asset] {
+        package func assets(named name: String) -> [Asset] {
             assets.filter { $0.name == name }
         }
 
@@ -77,7 +77,7 @@ public enum UpdateChecker {
         public let browserDownloadURL: URL
         public let digest: String?
 
-        enum CodingKeys: String, CodingKey {
+        package enum CodingKeys: String, CodingKey {
             case name
             case browserDownloadURL = "browser_download_url"
             case digest
