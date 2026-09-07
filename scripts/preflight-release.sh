@@ -25,7 +25,7 @@ Runs the release readiness gate:
 Options:
   --skip-package   Skip release zip/manifest packaging.
   --require-clean   Fail if tracked or untracked changes are present.
-  --require-synced  Fetch tags and fail unless HEAD matches its upstream.
+  --require-synced  Verify upstream and the release tag without changing historical tags.
 USAGE
 }
 
@@ -107,12 +107,18 @@ fi
 
 if [ "$REQUIRE_SYNCED" -eq 1 ]; then
   step "检查当前分支与远端同步"
-  git fetch --tags --prune
   UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
   if [ -z "$UPSTREAM" ]; then
     echo "error: 当前分支没有 upstream,无法确认 release 是否与远端一致。" >&2
     exit 1
   fi
+  RELEASE_BRANCH=$(git symbolic-ref --quiet --short HEAD)
+  RELEASE_REMOTE=$(git config --get "branch.$RELEASE_BRANCH.remote")
+  if [ "$RELEASE_REMOTE" = "." ]; then
+    echo "error: 正式发布需要远端 upstream。" >&2
+    exit 1
+  fi
+  git fetch --no-tags --prune "$RELEASE_REMOTE"
   read -r AHEAD_COUNT BEHIND_COUNT < <(git rev-list --left-right --count "HEAD...$UPSTREAM")
   if [ "$AHEAD_COUNT" != "0" ] || [ "$BEHIND_COUNT" != "0" ]; then
     echo "error: 当前分支与 $UPSTREAM 不同步,禁止正式发版。" >&2
@@ -189,6 +195,19 @@ if [ "$REQUIRE_SYNCED" -eq 1 ] && git rev-parse -q --verify "refs/tags/$TAG" >/d
     echo "error: 本地 tag $TAG 不指向当前 HEAD,禁止覆盖式发版。" >&2
     echo "tag:  $TAG_COMMIT" >&2
     echo "HEAD: $HEAD_COMMIT" >&2
+    exit 1
+  fi
+fi
+
+if [ "$REQUIRE_SYNCED" -eq 1 ]; then
+  REMOTE_TAG_REFS=$(git ls-remote --tags "$RELEASE_REMOTE" "refs/tags/$TAG" "refs/tags/$TAG^{}")
+  REMOTE_TAG_COMMIT=$(awk -v tag="refs/tags/$TAG" '
+    $2 == tag { direct = $1 }
+    $2 == tag "^{}" { peeled = $1 }
+    END { print peeled ? peeled : direct }
+  ' <<< "$REMOTE_TAG_REFS")
+  if [ -n "$REMOTE_TAG_COMMIT" ] && [ "$REMOTE_TAG_COMMIT" != "$(git rev-parse HEAD)" ]; then
+    echo "error: 远端 tag $TAG 不指向当前 HEAD，禁止覆盖式发布。" >&2
     exit 1
   fi
 fi
