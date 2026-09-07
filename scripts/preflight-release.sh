@@ -261,6 +261,46 @@ if [ "$RUN_PACKAGE" -eq 1 ]; then
     exit 1
   fi
 
+  step "验证 SBOM 标识、引用与来源"
+  python3 - "$SBOM_PATH" "$ZIP_PATH" "$TAG" "$(git rev-parse HEAD)" <<'PY'
+import hashlib
+import json
+import sys
+import uuid
+from pathlib import Path
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit("error: SBOM " + message)
+
+bom_path, zip_path, tag, commit = sys.argv[1:]
+bom = json.loads(Path(bom_path).read_text())
+require(bom.get("bomFormat") == "CycloneDX" and bom.get("specVersion") == "1.5", "格式或版本无效")
+serial = bom.get("serialNumber", "")
+try:
+    identifier = uuid.UUID(serial.removeprefix("urn:uuid:"))
+except ValueError:
+    raise SystemExit("error: SBOM serialNumber 不是有效 UUID")
+require(identifier.urn == serial and identifier.variant == uuid.RFC_4122, "serialNumber 不符合 RFC-4122")
+root = bom["metadata"]["component"]
+components = [root] + bom.get("components", [])
+refs = [component["bom-ref"] for component in components]
+require(len(refs) == len(set(refs)), "存在重复 bom-ref")
+require(root["name"] == "SnapAI" and root["version"] == tag, "应用版本不匹配")
+properties = {entry["name"]: entry["value"] for entry in root.get("properties", [])}
+require(properties.get("git.commit") == commit, "git commit 不匹配")
+require(properties.get("release.asset") == Path(zip_path).name, "安装包名称不匹配")
+root_hashes = {entry["alg"]: entry["content"] for entry in root.get("hashes", [])}
+require(root_hashes.get("SHA-256") == hashlib.sha256(Path(zip_path).read_bytes()).hexdigest(), "安装包摘要不匹配")
+files = {component["name"]: component for component in components if component["type"] == "file"}
+for source in ("Package.swift", "Resources/Info.plist"):
+    hashes = {entry["alg"]: entry["content"] for entry in files[source]["hashes"]}
+    require(hashes.get("SHA-256") == hashlib.sha256(Path(source).read_bytes()).hexdigest(), source + " 摘要不匹配")
+for dependency in bom.get("dependencies", []):
+    require(dependency["ref"] in refs and all(ref in refs for ref in dependency.get("dependsOn", [])), "依赖引用缺失")
+print("SBOM identifiers, references and source hashes: ok")
+PY
+
   step "验证 release zip 可安装性"
   RELEASE_CHECK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/snapai-release-check.XXXXXX")
   trap 'rm -rf "$RELEASE_CHECK_DIR"' EXIT

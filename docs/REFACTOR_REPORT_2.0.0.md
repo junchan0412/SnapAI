@@ -66,7 +66,7 @@ scripts/run-macos-smoke-tests.sh --skip-logic
 scripts/preflight-release.sh --require-clean --require-synced
 ```
 
-发布门禁验证 SwiftPM 构建、模块边界、供应链、回归、App 启动、稳定代码签名、ZIP 结构、SHA256、已签名 bundle 内的公钥与 manifest 签名、SBOM，以及主程序和 updater 的 `LC_BUILD_VERSION.minos = 14.0`。Debug 构建和源/包内公钥不一致的负例均验证为拒绝打包。启动 smoke 使用独立数据，等待真实 AppDelegate 的就绪标记再检查存活和正常退出，不注册生产快捷键或触发同步。
+发布门禁验证 SwiftPM 构建、模块边界、供应链、回归、App 启动、稳定代码签名、ZIP 结构、SHA256、已签名 bundle 内的公钥与 manifest 签名、SBOM 的 RFC-4122 标识/唯一引用/来源哈希，以及主程序和 updater 的 `LC_BUILD_VERSION.minos = 14.0`。Debug 构建和源/包内公钥不一致的负例均验证为拒绝打包。启动 smoke 使用独立数据，等待真实 AppDelegate 的就绪标记再检查存活和正常退出，不注册生产快捷键或触发同步。
 
 1.6.75 的公开发布包实测 `minos = 27.0`。2.0.0 使用 `Package.swift` 的 macOS 14 平台声明生成实际发布二进制，避免构建机器的系统版本意外成为最低要求。兼容性验证包含 deployment target 和 macOS CI；没有把它等同于在每个历史 macOS 小版本上完成手工测试。
 

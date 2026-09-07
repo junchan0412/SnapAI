@@ -37,6 +37,7 @@ export SNAPAI_SBOM_OUTPUT="$OUTPUT_PATH"
 python3 - <<'PY'
 import json
 import os
+import uuid
 from pathlib import Path
 
 deps = json.loads(os.environ["SNAPAI_SBOM_DEPS_JSON"])
@@ -93,7 +94,7 @@ for dep in deps.get("dependencies", []):
 bom = {
     "bomFormat": "CycloneDX",
     "specVersion": "1.5",
-    "serialNumber": "urn:uuid:" + os.environ["SNAPAI_SBOM_GIT_COMMIT"][:32].ljust(32, "0"),
+    "serialNumber": uuid.uuid4().urn,
     "version": 1,
     "metadata": {
         "timestamp": os.environ["SNAPAI_SBOM_GENERATED_AT"],
@@ -103,7 +104,7 @@ bom = {
             {"name": "swiftpm.identity", "value": deps.get("identity", "snapai")},
         ],
     },
-    "components": components,
+    "components": components[1:],
     "dependencies": [
         {
             "ref": components[0]["bom-ref"],
