@@ -115,6 +115,10 @@ package struct AIStreamDecoder {
     private var hasContent = false
     private var stopReason: String?
 
+    package init(apiProtocol: APIProtocol) {
+        self.apiProtocol = apiProtocol
+    }
+
     package mutating func decode(_ event: ServerSentEvent) throws -> AIStreamDelta {
         guard !isFinished else { return AIStreamDelta() }
         let payload = event.data.trimmingCharacters(in: .whitespacesAndNewlines)
