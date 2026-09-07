@@ -1,5 +1,6 @@
 AIClient.swift
 AIRequestRouter.swift
+AIStreamDecoder.swift
 Action.swift
 ActionCommand.swift
 ActionPipeline.swift

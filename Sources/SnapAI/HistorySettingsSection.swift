@@ -1,3 +1,4 @@
+import SnapAILogic
 import SwiftUI
 
 struct HistorySettingsSection: View {
@@ -7,13 +8,33 @@ struct HistorySettingsSection: View {
     @State private var showClearHistoryConfirm = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            usageStatsSection
-            historyControls
-            historyStorageModeRow
-            historyList
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
+                    historyControls
+                    Divider()
+                    historyStorageModeRow
+                }
+                .snapAISurface(padding: 16)
+                usageStatsSection
+                HStack(spacing: 8) {
+                    Text("历史记录")
+                        .font(SnapAIUI.Typography.sectionTitle)
+                    Text("\(settings.history.count) 条")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("清空全部", role: .destructive) {
+                        showClearHistoryConfirm = true
+                    }
+                    .controlSize(.small)
+                    .disabled(settings.history.isEmpty)
+                    .help("清空全部历史记录（需确认）")
+                }
+                historyList
+            }
+            .padding(SnapAIUI.edgePadding)
         }
-        .padding(SnapAIUI.edgePadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .bottom) {
             ResultOperationFeedbackHost(coordinator: operationCoordinator)
@@ -39,8 +60,7 @@ struct HistorySettingsSection: View {
     @ViewBuilder
     private var usageStatsSection: some View {
         if !settings.actionUsageCounts.isEmpty {
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                Text("使用统计").font(.subheadline.weight(.semibold))
+            DisclosureGroup {
                 let sorted = settings.actionUsageCounts.sorted { $0.value > $1.value }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: SnapAIUI.tightSpacing) {
                     ForEach(sorted, id: \.key) { name, count in
@@ -49,129 +69,145 @@ struct HistorySettingsSection: View {
                             Spacer()
                             Text("\(count) 次").foregroundStyle(.secondary).monospacedDigit()
                         }
-                        .font(.caption)
-                        .padding(.horizontal, SnapAIUI.tightSpacing).padding(.vertical, 4)
-                        .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+                        .font(SnapAIUI.Typography.metaText)
+                        .padding(10)
+                        .background(SnapAIUI.Surface.quiet)
                         .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
                     }
                 }
+                .padding(.top, 12)
                 HStack {
-                    Text("共 \(settings.history.count) 条记录").font(.caption2).foregroundStyle(.secondary)
+                    Text("按动作累计的使用次数")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("清空统计") {
                         settings.actionUsageCounts = [:]
                         commit()
                     }
-                    .font(.caption2)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .controlSize(.small)
                     .help("仅清空使用次数统计,不影响历史记录")
                 }
+                .padding(.top, 12)
+            } label: {
+                HStack {
+                    Text("使用统计")
+                        .font(SnapAIUI.Typography.sectionTitle)
+                    Spacer()
+                    Text("共 \(settings.actionUsageCounts.values.reduce(0, +)) 次")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
-            Divider()
+            .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
         }
     }
 
     private var historyControls: some View {
-        HStack {
-            Text("历史记录").font(.headline)
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("记录保留")
+                    .font(SnapAIUI.Typography.sectionTitle)
+                Text("超过上限的旧记录会移除，设为 0 可关闭历史记录。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Spacer()
             Stepper("保留 \(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
+                .font(SnapAIUI.Typography.metaText)
+                .fixedSize()
                 .onChange(of: settings.historyLimit) { commit() }
-            Button("清空全部", role: .destructive) {
-                showClearHistoryConfirm = true
-            }
-            .disabled(settings.history.isEmpty)
-            .help("清空全部历史记录(需确认)")
         }
     }
 
     private var historyStorageModeRow: some View {
-        HStack(spacing: 10) {
-            Text("保存内容")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Picker("", selection: $settings.historyContentStorage) {
-                ForEach(HistoryContentStorage.allCases) { mode in
-                    Text(mode.rawValue).tag(mode)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 16) {
+                Text("保存内容")
+                    .font(SnapAIUI.Typography.sectionTitle)
+                Spacer()
+                Picker("保存内容", selection: $settings.historyContentStorage) {
+                    ForEach(HistoryContentStorage.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.regular)
+                .frame(width: 240)
+                .onChange(of: settings.historyContentStorage) { commit() }
             }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .frame(width: 190)
-            .onChange(of: settings.historyContentStorage) { commit() }
             Text(settings.historyContentStorage.description)
-                .font(.caption2)
+                .font(SnapAIUI.Typography.metaText)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     @ViewBuilder
     private var historyList: some View {
         if settings.history.isEmpty {
-            Spacer()
-            VStack(spacing: 6) {
+            VStack(spacing: 10) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.title)
-                    .foregroundStyle(.tertiary)
-                Text("暂无历史记录").foregroundStyle(.secondary)
-                Text("选中文字或截图后调用动作,结果会自动记录在这里。")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: 280)
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(.secondary)
+                Text(settings.historyLimit == 0 ? "历史记录已关闭" : "完成一次提问，留下有用的结果")
+                    .font(SnapAIUI.Typography.sectionTitle)
+                Text(settings.historyLimit == 0 ? "将保留条数设为大于 0，即可记录之后的提问。" : "原文和结果会按上方的保存偏好记录在这里。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 340)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            Spacer()
+            .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)
         } else {
-            ScrollView {
-                LazyVStack(spacing: SnapAIUI.tightSpacing) {
-                    ForEach(settings.history) { entry in
-                        historyRow(entry)
-                    }
+            LazyVStack(spacing: 12) {
+                ForEach(settings.history) { entry in
+                    historyRow(entry)
                 }
             }
         }
     }
 
     private func historyRow(_ entry: HistoryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(entry.displayActionName).font(.caption.weight(.semibold))
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(Color.accentColor.opacity(0.15)).clipShape(Capsule())
-                Text(entry.modelDisplayText).font(.caption2).foregroundStyle(.secondary)
+                Text(entry.displayActionName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(entry.modelDisplayText).font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
                 Spacer()
-                Text(entry.dateString).font(.caption2).foregroundStyle(.secondary)
+                Text(entry.dateString).font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
+                    .fixedSize()
                 Button {
                     copyHistoryOutput(entry)
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SnapAIIconButtonStyle(circular: false))
                 .disabled(entry.copyableOutputText == nil)
                 .help(entry.copyableOutputText == nil ? "该记录未保存结果" : "复制结果")
+                .accessibilityLabel("复制\(entry.displayActionName)的结果")
             }
             if let source = entry.sourceDisplayText {
-                Text(source).font(.caption).foregroundStyle(.secondary)
+                Text(String(source.prefix(180))).font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             if let output = entry.outputDisplayText {
-                Text(output).font(.callout)
+                Text(String(output.prefix(320))).font(SnapAIUI.Typography.bodyText)
                     .lineLimit(3)
             } else if entry.sourceDisplayText == nil {
                 Text(entry.emptyContentPlaceholder)
-                    .font(.callout)
+                    .font(SnapAIUI.Typography.bodyText)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private func copyHistoryOutput(_ entry: HistoryEntry) {

@@ -9,16 +9,21 @@ public struct ResultStreamingLifecycle {
     private var accumulator = StreamingAccumulator()
     private var typewriterBuffer = TypewriterBuffer()
     private var streamFinished = false
+    private var completionDelivered = false
 
     public init() {}
 
     public var completeText: String { accumulator.outputText }
     public var thinkingText: String { accumulator.thinkingText }
+    public var needsPresentationTick: Bool {
+        !typewriterBuffer.isEmpty || (streamFinished && !completionDelivered)
+    }
 
     public mutating func reset() {
         accumulator.resetForFallback()
         typewriterBuffer.removeAll()
         streamFinished = false
+        completionDelivered = false
     }
 
     /// 返回无需打字机时应立即展示的可见增量；启用打字机时只入队并返回 nil。
@@ -56,7 +61,8 @@ public struct ResultStreamingLifecycle {
         if !chunk.isEmpty {
             return .chunk(chunk)
         }
-        if streamFinished && typewriterBuffer.isEmpty {
+        if streamFinished && !completionDelivered && typewriterBuffer.isEmpty {
+            completionDelivered = true
             return .finished
         }
         return .waiting
@@ -66,5 +72,6 @@ public struct ResultStreamingLifecycle {
     public mutating func discardPendingPresentation() {
         typewriterBuffer.removeAll()
         streamFinished = false
+        completionDelivered = false
     }
 }

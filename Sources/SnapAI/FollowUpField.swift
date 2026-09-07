@@ -11,33 +11,40 @@ struct FollowUpField: View {
     var onHistoryDown: () -> Void
     var historyAvailable: Bool = false
     var shouldHandleHistoryNavigation: (String, FollowUpHistoryNavigationDirection) -> Bool
+    @State private var editorHeight: CGFloat = 42
+    @State private var isFocused = false
 
     private var placeholderText: String {
-        historyAvailable ? "追问…  (↑ 浏览历史)" : FollowUpInputBehavior.placeholder
+        historyAvailable ? "继续追问…  ↑ 浏览历史" : "继续追问，或补充一个要求…"
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             FollowUpTextView(text: $text,
+                             height: $editorHeight,
+                             isFocused: $isFocused,
                              onSubmit: onSubmit,
                              onHistoryUp: onHistoryUp,
                              onHistoryDown: onHistoryDown,
                              shouldHandleHistoryNavigation: shouldHandleHistoryNavigation)
-                .frame(minHeight: CGFloat(FollowUpInputBehavior.minHeight),
-                       maxHeight: CGFloat(FollowUpInputBehavior.maxHeight))
+                .frame(height: editorHeight)
 
             if text.isEmpty {
                 Text(placeholderText)
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .font(SnapAIUI.Typography.bodyText)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 11)
                     .allowsHitTesting(false)
             }
         }
-        .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
+        .background(SnapAIUI.Surface.field)
         .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous).stroke(Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1))
+        .overlay {
+            RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
+                .stroke(isFocused ? SnapAIUI.Surface.focus : SnapAIUI.Surface.divider,
+                        lineWidth: isFocused ? 2 : 1)
+        }
         .help(FollowUpInputBehavior.helpText)
         .accessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
         .accessibilityHint(FollowUpInputBehavior.helpText)
@@ -46,6 +53,8 @@ struct FollowUpField: View {
 
 private struct FollowUpTextView: NSViewRepresentable {
     @Binding var text: String
+    @Binding var height: CGFloat
+    @Binding var isFocused: Bool
     var onSubmit: () -> Void
     var onHistoryUp: () -> Void
     var onHistoryDown: () -> Void
@@ -69,14 +78,15 @@ private struct FollowUpTextView: NSViewRepresentable {
         textView.isRichText = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
+        textView.allowsUndo = true
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
-        textView.textContainerInset = NSSize(width: 7, height: 6)
+        textView.textContainerInset = NSSize(width: 9, height: 10)
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0,
                                                        height: CGFloat.greatestFiniteMagnitude)
-        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.font = NSFont.systemFont(ofSize: 14)
         textView.string = text
         textView.toolTip = FollowUpInputBehavior.helpText
         textView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
@@ -100,6 +110,11 @@ private struct FollowUpTextView: NSViewRepresentable {
         nsView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
         nsView.setAccessibilityHelp(FollowUpInputBehavior.helpText)
         context.coordinator.parent = self
+        let coordinator = context.coordinator
+        DispatchQueue.main.async { [weak textView, weak coordinator] in
+            guard let textView, let coordinator else { return }
+            coordinator.updateHeight(for: textView)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -111,9 +126,30 @@ private struct FollowUpTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
+            updateHeight(for: textView)
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            parent.isFocused = true
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            parent.isFocused = false
+        }
+
+        func updateHeight(for textView: NSTextView) {
+            guard let container = textView.textContainer,
+                  let layout = textView.layoutManager else { return }
+            layout.ensureLayout(for: container)
+            let measured = ceil(layout.usedRect(for: container).height + textView.textContainerInset.height * 2)
+            let nextHeight = min(CGFloat(FollowUpInputBehavior.maxHeight), max(42, measured))
+            if abs(parent.height - nextHeight) > 0.5 {
+                parent.height = nextHeight
+            }
         }
 
         func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            guard !textView.hasMarkedText() else { return false }
             if selector == #selector(NSResponder.insertNewline(_:)) {
                 let flags = NSApp.currentEvent?.modifierFlags ?? []
                 let behavior = FollowUpInputBehavior.returnKeyBehavior(

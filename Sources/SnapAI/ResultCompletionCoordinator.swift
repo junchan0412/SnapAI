@@ -19,6 +19,7 @@ struct ResultCompletionContext {
 struct ResultCompletionOutcome: Equatable {
     var metrics: ResultCompletionMetrics
     var didAutoReplace: Bool
+    var historySaveFailed: Bool
 }
 
 @MainActor
@@ -59,7 +60,8 @@ final class ResultCompletionCoordinator {
             settings.recordActionUsage(actionName: context.action.name)
         }
 
-        if context.saveHistory && context.action.saveHistory {
+        var historySaveFailed = false
+        if context.saveHistory && context.action.saveHistory && settings.historyLimit > 0 {
             let saved = ResultPersistence.saveHistoryIfNeeded(
                 settings: settings,
                 alreadySaved: lifecycle.isHistorySaved,
@@ -75,6 +77,7 @@ final class ResultCompletionCoordinator {
                 contentStorage: context.contentStorage
             )
             lifecycle.updateHistorySaved(saved)
+            historySaveFailed = !saved && !context.outputText.isEmpty && context.errorMessage == nil
         } else if context.recordUsage {
             settings.save()
         }
@@ -93,6 +96,7 @@ final class ResultCompletionCoordinator {
         }
 
         return ResultCompletionOutcome(metrics: metrics,
-                                       didAutoReplace: shouldAutoReplace)
+                                       didAutoReplace: shouldAutoReplace,
+                                       historySaveFailed: historySaveFailed)
     }
 }

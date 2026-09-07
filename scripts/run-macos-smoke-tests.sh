@@ -45,34 +45,11 @@ import ApplicationServices
 import Carbon.HIToolbox
 import Foundation
 
-struct PasteboardItemSnapshot {
-    var values: [(NSPasteboard.PasteboardType, Data)]
-}
+let application = NSApplication.shared
+application.setActivationPolicy(.prohibited)
 
-let pasteboard = NSPasteboard.general
-let originalItems = pasteboard.pasteboardItems ?? []
-let snapshot = originalItems.map { item in
-    PasteboardItemSnapshot(values: item.types.compactMap { type in
-        item.data(forType: type).map { (type, $0) }
-    })
-}
-
-func restorePasteboard() {
-    pasteboard.clearContents()
-    let items = snapshot.compactMap { snapshot -> NSPasteboardItem? in
-        guard !snapshot.values.isEmpty else { return nil }
-        let item = NSPasteboardItem()
-        for (type, data) in snapshot.values {
-            item.setData(data, forType: type)
-        }
-        return item
-    }
-    if !items.isEmpty {
-        pasteboard.writeObjects(items)
-    }
-}
-
-defer { restorePasteboard() }
+let pasteboard = NSPasteboard.withUniqueName()
+defer { pasteboard.releaseGlobally() }
 
 let marker = "SnapAI macOS smoke \(UUID().uuidString)"
 pasteboard.clearContents()
@@ -129,6 +106,7 @@ if handlerStatus == noErr, hotKeyStatus == noErr {
                                        0,
                                        &hotKeyEvent)
     if hotKeyDispatchStatus == noErr, let hotKeyEvent {
+        defer { ReleaseEvent(hotKeyEvent) }
         hotKeyDispatchStatus = SetEventParameter(hotKeyEvent,
                                                  EventParamName(kEventParamDirectObject),
                                                  EventParamType(typeEventHotKeyID),
@@ -167,7 +145,7 @@ guard windowLifecycleDelegate.didHandleClose,
 }
 
 print("Pasteboard roundtrip: ok")
-print("Pasteboard restore snapshot items: \(snapshot.count)")
+print("Pasteboard isolation: unique test pasteboard")
 print("Accessibility trusted: \(accessibilityTrusted ? "yes" : "no")")
 print("Screen recording granted: \(screenRecordingGranted ? "yes" : "no")")
 print("Hotkey register probe: \(hotKeyStatus == noErr ? "ok" : "failed(\(hotKeyStatus))")")

@@ -2,15 +2,20 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+if [ "${SNAPAI_MANUAL_TEST_RUNNER:-0}" != "1" ]; then
+  source scripts/configure-swift-toolchain.sh
+fi
 
-if swift -e 'import XCTest' >/dev/null 2>&1; then
+if [ "${SNAPAI_MANUAL_TEST_RUNNER:-0}" != "1" ] && xcrun --find xctest >/dev/null 2>&1; then
   SNAPAI_LOGIC_TESTS=1 swift test --filter SnapAILogicTests
   exit 0
 fi
 
-echo "warning: XCTest module is unavailable in this toolchain; using swiftc compatibility runner." >&2
+echo "==> Running standalone logic test runner"
 
-OUT="/tmp/SnapAILogicTests"
+SNAPAI_LOGIC_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/snapai-logic-tests.XXXXXX")
+trap 'rm -rf "$SNAPAI_LOGIC_TEST_DIR"' EXIT
+OUT="$SNAPAI_LOGIC_TEST_DIR/SnapAILogicTests"
 LOGIC_SOURCES=()
 while IFS= read -r file; do
   LOGIC_SOURCES+=("$file")
@@ -20,7 +25,7 @@ while IFS= read -r file; do
   TEST_SOURCES+=("$file")
 done < <(find Tests/SnapAILogicTests -name '*.swift' -type f | sort)
 
-swiftc -parse-as-library -D SNAPAI_MANUAL_TEST_MAIN \
+swiftc -parse-as-library -package-name snapai -D SNAPAI_MANUAL_TEST_MAIN \
   "${LOGIC_SOURCES[@]}" \
   "${TEST_SOURCES[@]}" \
   -o "$OUT" \

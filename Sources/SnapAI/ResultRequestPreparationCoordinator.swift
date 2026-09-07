@@ -1,3 +1,4 @@
+import SnapAILogic
 struct ResultRequestPreparationInput {
     var action: AIAction
     var sourceText: String

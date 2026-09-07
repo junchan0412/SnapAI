@@ -78,8 +78,8 @@ final class PermissionHealthController: NSObject, NSWindowDelegate {
         window.title = "权限健康中心"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 680, height: 560))
-        window.minSize = NSSize(width: 620, height: 500)
+        window.setContentSize(NSSize(width: 720, height: 640))
+        window.minSize = NSSize(width: 620, height: 520)
         window.delegate = self
         window.center()
         self.window = window
@@ -96,7 +96,8 @@ struct PermissionHealthView: View {
     @ObservedObject var model: PermissionHealthModel
     private var snapshot: PermissionHealthSnapshot { model.snapshot }
     private let healthColumns = [
-        GridItem(.adaptive(minimum: 190), spacing: 10)
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
     ]
     @StateObject private var copyNotice = SnapAITransientState<String>()
 
@@ -105,12 +106,13 @@ struct PermissionHealthView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             header
+            Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    LazyVGrid(columns: healthColumns, alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 20) {
+                    LazyVGrid(columns: healthColumns, alignment: .leading, spacing: 12) {
                         healthCard("辅助功能", snapshot.accessibilityGranted,
                                    "读取选中文字、模拟复制/粘贴",
                                    actionTitle: snapshot.accessibilityGranted ? "查看" : "去授权") {
@@ -118,11 +120,13 @@ struct PermissionHealthView: View {
                         }
                         healthCard("屏幕录制", snapshot.screenCaptureGranted,
                                    "快捷提问中的截图能力",
+                                   optional: true,
                                    actionTitle: snapshot.screenCaptureGranted ? "查看" : "去授权") {
                             openPrivacyPane(.screenCapture)
                         }
                         healthCard("开机启动", snapshot.launchAtLogin,
                                    "登录后自动常驻菜单栏",
+                                   optional: true,
                                    actionTitle: snapshot.launchAtLogin ? "关闭" : "开启") {
                             LoginItem.setEnabled(!snapshot.launchAtLogin)
                             model.refresh()
@@ -132,7 +136,7 @@ struct PermissionHealthView: View {
                                    actionTitle: "重新检测") {
                             model.refresh()
                         }
-                        healthCard("API Key", snapshot.enabledProviderMissingAPIKeyCount == 0,
+                        healthCard("API Key", snapshot.enabledProviderCount > 0 && snapshot.enabledProviderMissingAPIKeyCount == 0,
                                    apiKeyHealthText,
                                    actionTitle: "打开 AI 设置") {
                             openSettingsSection("ai")
@@ -148,7 +152,8 @@ struct PermissionHealthView: View {
                         recoverySuggestionPanel
                     }
 
-                    // 详情按主题分组,避免一长串平铺难以扫读。
+                    Text("详细诊断")
+                        .font(SnapAIUI.Typography.sectionTitle)
                     detailSection("应用与版本") {
                         detailLine("版本", snapshot.appVersion)
                         detailLine("macOS", snapshot.macOSVersion)
@@ -185,19 +190,20 @@ struct PermissionHealthView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
             }
         }
-        .padding(16)
+        .background(SnapAIUI.Surface.canvas)
         .frame(minWidth: 620,
-               idealWidth: 680,
+               idealWidth: 720,
                maxWidth: .infinity,
-               minHeight: 500,
-               idealHeight: 560,
+               minHeight: 520,
+               idealHeight: 640,
                maxHeight: .infinity)
         .overlay(alignment: .bottom) {
             if let notice = copyNotice.value {
                 Label(notice, systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.medium))
+                    .font(SnapAIUI.Typography.sectionLabel)
                     .foregroundStyle(SnapAIUI.StatusColor.success)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -210,25 +216,29 @@ struct PermissionHealthView: View {
         .animation(.easeInOut(duration: 0.18), value: copyNotice.value)
     }
 
-    /// 详情分组:带小标题的卡片,让长列表更易扫读。
     private func detailSection<Content: View>(_ title: String,
-                                              @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+                                              @ViewBuilder content: @escaping () -> Content) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 12) { content() }
+                .font(SnapAIUI.Typography.metaText)
+                .padding(.top, 12)
+        } label: {
             Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: 6) { content() }
-                .font(.caption)
+                .font(SnapAIUI.Typography.sectionTitle)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 10, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     private var header: some View {
-        HStack {
-            Text("权限健康中心")
-                .font(.title3.weight(.semibold))
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("权限健康中心")
+                    .font(SnapAIUI.Typography.windowTitle)
+                Text("检查权限、模型与本地运行状态。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
             Button {
                 model.refresh()
@@ -236,19 +246,22 @@ struct PermissionHealthView: View {
                 Label("重新检测", systemImage: "arrow.clockwise")
             }
             .controlSize(.small)
-            Button {
-                copyDiagnostics(full: false)
+            Menu {
+                Button("复制精简诊断", systemImage: "doc.on.clipboard") {
+                    copyDiagnostics(full: false)
+                }
+                Button("复制完整诊断", systemImage: "doc.on.doc") {
+                    copyDiagnostics(full: true)
+                }
             } label: {
-                Label("复制精简", systemImage: "doc.on.clipboard")
+                Label("复制诊断", systemImage: "doc.on.clipboard")
             }
-            .controlSize(.small)
-            Button {
-                copyDiagnostics(full: true)
-            } label: {
-                Label("复制完整", systemImage: "doc.on.doc")
-            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             .controlSize(.small)
         }
+        .padding(24)
+        .background(SnapAIUI.Surface.chrome)
     }
 
     private var redactionStatusText: String {
@@ -289,7 +302,7 @@ struct PermissionHealthView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(snapshot.recoverySuggestionStatusLine, systemImage: "lightbulb")
-                    .font(.caption.weight(.semibold))
+                    .font(SnapAIUI.Typography.sectionTitle)
                     .foregroundStyle(.primary)
                 Spacer()
                 Button {
@@ -302,14 +315,14 @@ struct PermissionHealthView: View {
             ForEach(snapshot.recoverySuggestions, id: \.self) { suggestion in
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "arrow.turn.down.right")
-                        .font(.caption)
+                        .font(SnapAIUI.Typography.metaText)
                         .foregroundStyle(.secondary)
                         .frame(width: 14)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(suggestion.title)
-                            .font(.caption.weight(.medium))
+                            .font(.system(size: 13, weight: .medium))
                         Text(suggestion.detail)
-                            .font(.caption)
+                            .font(SnapAIUI.Typography.metaText)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
@@ -317,7 +330,7 @@ struct PermissionHealthView: View {
                 }
             }
         }
-        .snapAISurface(padding: 10,
+        .snapAISurface(padding: 16,
                        fillOpacity: 0.055,
                        strokeOpacity: 0.08,
                        radius: SnapAIUI.cardRadius)
@@ -360,28 +373,30 @@ struct PermissionHealthView: View {
     private func healthCard(_ title: String,
                             _ ok: Bool,
                             _ note: String,
+                            optional: Bool = false,
                             actionTitle: String,
                             action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                Image(systemName: ok ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(ok ? SnapAIUI.StatusColor.success : SnapAIUI.StatusColor.error)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: ok ? "checkmark.circle.fill" : optional ? "minus.circle" : "exclamationmark.circle")
+                    .foregroundStyle(ok ? SnapAIUI.StatusColor.success : optional ? .secondary : SnapAIUI.StatusColor.warning)
                     .font(.system(size: 14, weight: .semibold))
                 Text(title)
-                    .font(.callout.weight(.medium))
+                    .font(SnapAIUI.Typography.sectionTitle)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Button(actionTitle) { action() }
-                    .controlSize(.mini)
             }
             Text(note)
-                .font(.caption)
+                .font(SnapAIUI.Typography.metaText)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(minHeight: 30, alignment: .topLeading)
+            Button(actionTitle, action: action)
+                .controlSize(.small)
         }
-        .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
-        .snapAISurface(padding: 9,
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .snapAISurface(padding: 16,
                        fillOpacity: ok ? SnapAIUI.quietFillOpacity : 0.06,
                        strokeOpacity: ok ? SnapAIUI.strokeOpacity : 0.10)
     }
@@ -390,7 +405,7 @@ struct PermissionHealthView: View {
         HStack(alignment: .top, spacing: 8) {
             Text(title)
                 .foregroundStyle(.secondary)
-                .frame(width: 72, alignment: .trailing)
+                .frame(width: 88, alignment: .leading)
             Text(value)
                 .textSelection(.enabled)
                 .lineLimit(lineLimit)
@@ -403,7 +418,7 @@ struct PermissionHealthView: View {
         HStack(alignment: .top, spacing: 8) {
             Text("安装日志")
                 .foregroundStyle(.secondary)
-                .frame(width: 72, alignment: .trailing)
+                .frame(width: 88, alignment: .leading)
             Text(snapshot.latestInstallLogPath)
                 .textSelection(.enabled)
                 .lineLimit(2)

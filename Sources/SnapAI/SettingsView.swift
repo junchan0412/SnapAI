@@ -12,7 +12,8 @@ struct SettingsView: View {
     @StateObject private var modelLoader = ModelLoader()
     @StateObject private var ui = AISettingsUI()
     @StateObject private var tester = ConnectionTester()
-    let aiLabelWidth: CGFloat = 76
+    @State private var saveFailed = false
+    @State private var pendingFullReload = false
     private var isPinned: Bool { pinState.isPinned }
     private var iCloudSyncStatusText: String {
         guard settings.iCloudSyncEnabled else { return "" }
@@ -24,7 +25,15 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            settingsSidebar
+            SettingsWorkspaceSidebar(
+                selection: Binding(
+                    get: { navigation.selectedSection },
+                    set: { navigation.select($0) }
+                ),
+                providerName: settings.activeProvider?.name,
+                modelName: settings.model,
+                shortcut: settings.quickPanelHotKey.displayString
+            )
         } detail: {
             VStack(spacing: 0) {
                 settingsHeader
@@ -32,43 +41,45 @@ struct SettingsView: View {
                 settingsContentSurface
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(SnapAIUI.Surface.canvas)
         }
-        .frame(minWidth: 780, idealWidth: 860, minHeight: 580, idealHeight: 640)
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 840, idealWidth: 960, minHeight: 620, idealHeight: 720)
         .onDisappear {
             flushDeferredSave()
         }
-    }
-
-    private var settingsSidebar: some View {
-        List(selection: Binding<SettingsSection?>(
-            get: { navigation.selectedSection },
-            set: { selected in
-                guard let selected else { return }
-                withAnimation(.easeInOut(duration: 0.16)) {
-                    navigation.select(selected)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            flushDeferredSave()
+        }
+        .overlay(alignment: .bottom) {
+            if saveFailed {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(SnapAIUI.StatusColor.error)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("设置尚未保存")
+                            .font(.callout.weight(.semibold))
+                        Text("修改仍在当前应用中。请检查磁盘空间或文件权限后重试。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button("重试保存") { persistSettings(reload: pendingFullReload) }
+                        .buttonStyle(.bordered)
                 }
-            }
-        )) {
-            Section("设置") {
-                ForEach(SettingsSection.allCases) { section in
-                    SettingsSidebarRow(section: section)
-                        .tag(section)
-                }
+                .padding(14)
+                .frame(maxWidth: 620)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .padding(20)
             }
         }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 164, ideal: 188, max: 230)
     }
 
     private var settingsHeader: some View {
         HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
-            Image(systemName: navigation.selectedSection.icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.tint)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(navigation.selectedSection.title)
-                    .font(SnapAIUI.Typography.panelTitle)
+                    .font(SnapAIUI.Typography.windowTitle)
                 Text(navigation.selectedSection.subtitle)
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
@@ -76,35 +87,30 @@ struct SettingsView: View {
             Spacer()
             pinButton
         }
-        .padding(.horizontal, SnapAIUI.edgePadding)
-        .padding(.vertical, SnapAIUI.sectionPadding)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
+        .background(SnapAIUI.Surface.chrome)
     }
 
     private var pinButton: some View {
         Button {
             let newValue = !pinState.isPinned
-            withAnimation(.easeInOut(duration: 0.16)) {
-                pinState.isPinned = newValue
-            }
+            pinState.isPinned = newValue
             onPinChange(newValue)
         } label: {
             Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isPinned ? Color.accentColor : .secondary)
                 .symbolRenderingMode(.hierarchical)
-                .scaleEffect(isPinned ? 1.04 : 0.96)
-                .frame(width: 30, height: 30)
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SnapAIIconButtonStyle(circular: false))
         .foregroundStyle(isPinned ? Color.accentColor : .secondary)
         .background {
             RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                .fill(isPinned ? Color.accentColor.opacity(0.18) : Color.primary.opacity(SnapAIUI.regularFillOpacity))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                .stroke(isPinned ? Color.accentColor.opacity(0.38) : Color.primary.opacity(SnapAIUI.strokeOpacity), lineWidth: 1)
+                .fill(isPinned ? SnapAIUI.Surface.selected : .clear)
         }
         .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
         .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
@@ -112,13 +118,9 @@ struct SettingsView: View {
     }
 
     private var settingsContentSurface: some View {
-        ZStack {
-            selectedSectionContent
-                .id(navigation.selectedSection.id)
-                .transition(.opacity)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .animation(.easeInOut(duration: 0.14), value: navigation.selectedSection)
+        selectedSectionContent
+            .frame(maxWidth: 920, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder
@@ -179,9 +181,22 @@ struct SettingsView: View {
     }
 
     private func commit() {
-        settings.save()
+        persistSettings(reload: true)
+    }
+
+    private func persistSettings(reload: Bool) {
+        ui.deferredSaveTask?.cancel()
+        ui.deferredSaveTask = nil
+        pendingFullReload = pendingFullReload || reload
+        guard settings.save() else {
+            saveFailed = true
+            return
+        }
+        let shouldReload = pendingFullReload
+        pendingFullReload = false
+        saveFailed = false
         iCloudSync.shared.scheduleUpload(settings)
-        onChange()
+        if shouldReload { onChange() }
     }
 
     private func applyCommit(_ policy: SettingsCommitPolicy) {
@@ -189,8 +204,7 @@ struct SettingsView: View {
         case .fullReload:
             commit()
         case .saveOnly:
-            settings.save()
-            iCloudSync.shared.scheduleUpload(settings)
+            persistSettings(reload: false)
         case .deferredSave:
             scheduleDeferredSave()
         }
@@ -202,17 +216,14 @@ struct SettingsView: View {
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                settings.save()
-                iCloudSync.shared.scheduleUpload(settings)
-                ui.deferredSaveTask = nil
+                guard !Task.isCancelled else { return }
+                persistSettings(reload: false)
             }
         }
     }
 
     private func flushDeferredSave() {
-        ui.deferredSaveTask?.cancel()
-        ui.deferredSaveTask = nil
-        settings.save()
-        iCloudSync.shared.scheduleUpload(settings)
+        guard ui.deferredSaveTask != nil || saveFailed else { return }
+        persistSettings(reload: false)
     }
 }

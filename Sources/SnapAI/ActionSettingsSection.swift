@@ -13,28 +13,31 @@ struct ActionSettingsSection: View {
     private let labelWidth: CGFloat = 76
     @State private var pendingRestoreHotKeys = false
     @State private var pendingDeleteAction: AIAction?
-    @StateObject private var actionLibraryNotice = SnapAITransientState<String>()
+    @StateObject private var actionLibraryNotice = SnapAITransientState<ResultOperationFeedback>()
 
-    private func flashNotice(_ message: String) {
-        actionLibraryNotice.show(message, autoDismiss: 1.8)
+    private func flashNotice(_ message: String, isError: Bool = false) {
+        actionLibraryNotice.show(isError ? .error(message) : .success(message), autoDismiss: isError ? 4 : 1.8)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
-                Text("System Prompt(对所有动作生效)").font(.subheadline.weight(.semibold))
-                promptEditor(text: systemPromptBinding, height: 56)
-                actionToolbar
-                Text("{{text}} = 选中文字;{{lang}} = 目标语言指令(翻译类)。带快捷键的动作可全局触发。")
-                    .font(.caption2).foregroundStyle(.secondary)
-                hotKeyNotice
-                quickPanelHotKeyCard
-                ForEach(settings.actions) { action in
-                    actionCard(action)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    actionToolbar
+                    hotKeyNotice
+                    quickPanelHotKeyCard
+                    systemPromptSection
+                    ForEach(settings.actions) { action in
+                        actionCard(action)
+                            .id(action.id)
+                    }
                 }
+                .padding(SnapAIUI.edgePadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(SnapAIUI.edgePadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .onChange(of: ui.expandedActionID) { _, id in
+                if let id { proxy.scrollTo(id, anchor: .top) }
+            }
         }
         .snapAIConfirmDestructive(
             isPresented: $pendingRestoreHotKeys,
@@ -60,41 +63,57 @@ struct ActionSettingsSection: View {
         }
         .overlay(alignment: .bottom) {
             if let notice = actionLibraryNotice.value {
-                Label(notice, systemImage: "checkmark.circle.fill")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(SnapAIUI.StatusColor.success)
+                Label(notice.message, systemImage: notice.systemImage)
+                    .font(SnapAIUI.Typography.sectionLabel)
+                    .foregroundStyle(SnapAIUI.StatusColor.tint(for: notice.kind))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(.regularMaterial, in: Capsule())
                     .padding(.bottom, 12)
                     .transition(.opacity)
-                    .accessibilityLabel(notice)
+                    .accessibilityLabel(notice.message)
             }
         }
         .animation(.easeInOut(duration: 0.18), value: actionLibraryNotice.value)
     }
 
     private var actionToolbar: some View {
-        HStack {
-            Text("动作").font(.headline)
+        HStack(spacing: 12) {
+            Text("\(settings.enabledActions.count) 个已启用，共 \(settings.actions.count) 个动作")
+                .font(SnapAIUI.Typography.metaText)
+                .foregroundStyle(.secondary)
             Spacer()
-            Button {
-                importActionLibrary()
+            Menu {
+                Button("导入动作库…", systemImage: "square.and.arrow.down", action: importActionLibrary)
+                Button("导出动作库…", systemImage: "square.and.arrow.up", action: exportActionLibrary)
+                Divider()
+                Button("恢复默认快捷键…", systemImage: "keyboard.badge.ellipsis", action: restoreDefaultHotKeys)
             } label: {
-                Label("导入动作库", systemImage: "square.and.arrow.down")
+                Label("管理", systemImage: "ellipsis.circle")
             }
-            Button {
-                exportActionLibrary()
-            } label: {
-                Label("导出动作库", systemImage: "square.and.arrow.up")
-            }
-            Button {
-                restoreDefaultHotKeys()
-            } label: {
-                Label("恢复默认快捷键", systemImage: "keyboard.badge.ellipsis")
-            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             addActionMenu
+                .fixedSize()
         }
+        .controlSize(.regular)
+    }
+
+    private var systemPromptSection: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("System Prompt 对所有动作生效，用于设定共同的语气与回答方式。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                promptEditor(text: systemPromptBinding, height: 120)
+                    .accessibilityLabel("全局 System Prompt")
+            }
+            .padding(.top, 12)
+        } label: {
+            Text("全局提示词")
+                .font(SnapAIUI.Typography.sectionTitle)
+        }
+        .snapAISurface(padding: 16)
     }
 
     private var addActionMenu: some View {
@@ -110,7 +129,7 @@ struct ActionSettingsSection: View {
                 }
             }
         } label: {
-            Label("添加", systemImage: "plus")
+            Label("添加动作", systemImage: "plus")
         }
     }
 
@@ -119,26 +138,29 @@ struct ActionSettingsSection: View {
         if let hotKeyError = ui.hotKeyError {
             HStack(spacing: 8) {
                 Label(hotKeyError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(SnapAIUI.StatusColor.warning)
                 if let destination = ui.hotKeyConflictDestination {
                     Button("查看冲突项") {
                         showHotKeyConflictTarget(destination)
                     }
                     .buttonStyle(.link)
-                    .font(.caption2)
+                    .font(SnapAIUI.Typography.metaText)
                 }
             }
         }
     }
 
     private var quickPanelHotKeyCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("快捷提问面板")
-                .font(.subheadline.weight(.semibold))
-            HStack(spacing: 12) {
-                Text("全局快捷键")
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("快捷提问")
+                    .font(SnapAIUI.Typography.sectionTitle)
+                Text("直接打开输入面板，无需先选中文字。")
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
                 HotKeyRecorder(combo: Binding(
                     get: { settings.quickPanelHotKey },
                     set: { newVal in
@@ -156,81 +178,83 @@ struct ActionSettingsSection: View {
                     }
                 ))
                     .frame(width: 138, height: 34)
-                Spacer()
-            }
-            Text("这个快捷键会直接弹出输入面板,不依赖你先选中文字。")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(HotKeyRecorderText.instructions)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                    .help(HotKeyRecorderText.instructions)
+                    .accessibilityLabel("快捷提问的全局快捷键")
         }
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
     }
 
     @ViewBuilder
     private func actionCard(_ action: AIAction) -> some View {
         let isExpanded = ui.expandedActionID == action.id
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Toggle("", isOn: bindingForAction(action.id, \.isEnabled))
-                    .labelsHidden().toggleStyle(.switch).controlSize(.mini)
-                Image(systemName: action.icon.isEmpty ? "wand.and.stars" : action.icon)
-                    .foregroundStyle(.tint).frame(width: 18)
-                Text(action.name).fontWeight(.medium)
-                    .foregroundStyle(action.isEnabled ? .primary : .secondary)
-                if let hk = action.hotKey {
-                    Text(hk.displayString).font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.primary.opacity(0.08)).clipShape(Capsule())
-                }
-                Spacer()
-                // 标题行只保留展开/收起,上移/下移等次要操作收纳进展开区,降低视觉密度。
+            HStack(spacing: 16) {
                 Button {
                     ui.expandedActionID = isExpanded ? nil : action.id
-                } label: { Image(systemName: isExpanded ? "chevron.up" : "chevron.down") }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(isExpanded ? "收起动作 \(action.name)" : "展开动作 \(action.name)")
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: action.icon.isEmpty ? "wand.and.stars" : action.icon)
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(action.isEnabled ? Color.accentColor : .secondary)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(action.name)
+                                .font(SnapAIUI.Typography.sectionTitle)
+                                .foregroundStyle(action.isEnabled ? .primary : .secondary)
+                                .lineLimit(1)
+                            if !isExpanded {
+                                Text(String(action.prompt.prefix(100)).replacingOccurrences(of: "\n", with: " "))
+                                    .font(SnapAIUI.Typography.metaText)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer(minLength: 4)
+                        if let hotKey = action.hotKey {
+                            SnapAIKeycap(text: hotKey.displayString)
+                        }
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isExpanded ? "收起动作 \(action.name)" : "编辑动作 \(action.name)")
+                Toggle("启用\(action.name)", isOn: bindingForAction(action.id, \.isEnabled))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .onTapGesture { ui.expandedActionID = isExpanded ? nil : action.id }
 
             if isExpanded {
-                Divider().padding(.vertical, 6)
+                Divider().padding(.vertical, 16)
                 actionEditor(action)
             }
         }
-        .snapAISurface(padding: 9, fillOpacity: SnapAIUI.quietFillOpacity)
+        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
     private func actionEditor(_ action: AIAction) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
             editorRow("名称") {
                 TextField("动作名称", text: bindingForAction(action.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
             }
-            editorRow("图标") {
-                TextField("SF Symbol 名,如 wand.and.stars", text: bindingForAction(action.id, \.icon, policy: .deferredSave), onCommit: commit)
-                    .textFieldStyle(.roundedBorder)
-            }
-            editorRow("分组") {
-                TextField("分组名(留空=不分组)", text: bindingForAction(action.id, \.group, policy: .deferredSave), onCommit: commit)
-                    .textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("动作提示词")
+                    .font(SnapAIUI.Typography.sectionTitle)
+                promptEditor(text: bindingForAction(action.id, \.prompt, policy: .deferredSave), height: 120)
+                    .accessibilityLabel("\(action.name)的 Prompt")
+                Text("使用 {{text}} 引用选中文字，{{lang}} 引用目标语言。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
             }
             actionHotKeyEditor(action)
-            actionProviderEditor(action)
-            Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
-            if action.thinkingMode {
-                thinkingBudgetEditor(action)
-            }
-            editorRow("Prompt") {
-                promptEditor(text: bindingForAction(action.id, \.prompt, policy: .deferredSave), height: 70)
-            }
+            Divider()
             Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
             if action.isTranslation {
                 editorRow("目标语言") {
@@ -240,16 +264,41 @@ struct ActionSettingsSection: View {
                     .labelsHidden().frame(width: 200, alignment: .leading)
                 }
             }
-            Toggle("完成后进入替换确认", isOn: bindingForAction(action.id, \.replaceByDefault))
-            Text("启用后会先展示差异预览,确认后才写回原应用。")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
-            Text("关闭后该动作的结果不会进入历史记录,适合处理隐私敏感内容。")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("完成后进入替换确认", isOn: bindingForAction(action.id, \.replaceByDefault))
+                Text("先展示差异预览，确认后才写回原应用。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
+                Text("关闭后，此动作的结果不会进入历史记录。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+            }
+            DisclosureGroup {
+                VStack(alignment: .leading, spacing: 14) {
+                    editorRow("图标") {
+                        TextField("SF Symbol 名，如 wand.and.stars", text: bindingForAction(action.id, \.icon, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    editorRow("分组") {
+                        TextField("分组名，留空则不分组", text: bindingForAction(action.id, \.group, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    actionProviderEditor(action)
+                    Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
+                    if action.thinkingMode { thinkingBudgetEditor(action) }
+                }
+                .padding(.top, 12)
+            } label: {
+                Text("更多选项 · 图标、分组、模型与推理")
+                    .font(SnapAIUI.Typography.metaText)
+            }
+            Divider()
             deleteActionRow(action)
         }
+        .font(SnapAIUI.Typography.bodyText)
     }
 
     private func actionHotKeyEditor(_ action: AIAction) -> some View {
@@ -284,19 +333,19 @@ struct ActionSettingsSection: View {
                     }
                 }
                 Text(HotKeyRecorderText.instructions)
-                    .font(.caption2)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let conflict = hotkeyConflictDetail(for: action) {
                     HStack(spacing: 8) {
                         Label("与「\(conflict.title)」冲突", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(SnapAIUI.StatusColor.warning)
                         Button("查看冲突项") {
                             showHotKeyConflictTarget(conflict.target)
                         }
                         .buttonStyle(.link)
-                        .font(.caption2)
+                        .font(SnapAIUI.Typography.metaText)
                     }
                 }
             }
@@ -354,7 +403,7 @@ struct ActionSettingsSection: View {
                 ), formatter: NumberFormatter())
                     .textFieldStyle(.roundedBorder).frame(width: 80)
                 Text("tokens(Anthropic 专用,建议 4000–16000)")
-                    .font(.caption2).foregroundStyle(.secondary)
+                    .font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
             }
         }
     }
@@ -438,11 +487,11 @@ struct ActionSettingsSection: View {
         guard panel.runModal() == .OK,
               let url = panel.url else { return }
         guard let data = try? Data(contentsOf: url) else {
-            flashNotice("读取文件失败")
+            flashNotice("读取文件失败", isError: true)
             return
         }
         guard let imported = try? ActionTemplateLibrary.importedActions(from: data) else {
-            flashNotice("文件格式无法识别")
+            flashNotice("文件格式无法识别", isError: true)
             return
         }
         let installed = ActionTemplateLibrary.installedActions(from: imported,
@@ -460,7 +509,7 @@ struct ActionSettingsSection: View {
 
     private func exportActionLibrary() {
         guard let data = try? ActionTemplateLibrary.exportBundleData(actions: settings.actions.actionTemplateActions) else {
-            flashNotice("导出失败,没有可导出的动作")
+            flashNotice("导出失败，没有可导出的动作", isError: true)
             return
         }
         let panel = NSSavePanel()
@@ -473,7 +522,7 @@ struct ActionSettingsSection: View {
             try data.write(to: url, options: .atomic)
             flashNotice("已导出到 \(url.lastPathComponent)")
         } catch {
-            flashNotice("写入文件失败")
+            flashNotice("写入文件失败", isError: true)
         }
     }
 
@@ -515,6 +564,7 @@ struct ActionSettingsSection: View {
     private func editorRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(title)
+                .font(SnapAIUI.Typography.metaText)
                 .frame(width: labelWidth, alignment: .trailing)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
@@ -524,17 +574,17 @@ struct ActionSettingsSection: View {
 
     private func promptEditor(text: Binding<String>, height: CGFloat) -> some View {
         TextEditor(text: text)
-            .font(.system(size: 14))
+            .font(SnapAIUI.Typography.bodyText)
             .lineSpacing(3)
             .scrollContentBackground(.hidden)
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
             .frame(height: height)
-            .background(Color.primary.opacity(0.045))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(SnapAIUI.Surface.field)
+            .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius)
+                    .stroke(SnapAIUI.Surface.divider, lineWidth: 1)
             )
     }
 }

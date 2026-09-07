@@ -1,0 +1,72 @@
+{
+  "baseline_commit": "7631ef4a6e83071cb1d6df3932c10dcf38873660",
+  "fixture": "500 HistoryEntry rows, 2 KB source and output, 5 alternating runs, swiftc -O",
+  "median_ms": {
+    "before": {
+      "30_full_reads_ms": 400.870417,
+      "50_favorite_updates_ms": 895.470667,
+      "populate_ms": 144.990375
+    },
+    "after": {
+      "30_full_reads_ms": 131.494834,
+      "50_favorite_updates_ms": 6.013166,
+      "populate_ms": 36.849167
+    }
+  },
+  "runs_ms": {
+    "before": [
+      {
+        "30_full_reads_ms": 464.358708,
+        "50_favorite_updates_ms": 895.470667,
+        "populate_ms": 168.757
+      },
+      {
+        "30_full_reads_ms": 400.870417,
+        "50_favorite_updates_ms": 990.131,
+        "populate_ms": 104.97225
+      },
+      {
+        "30_full_reads_ms": 326.582375,
+        "50_favorite_updates_ms": 952.812958,
+        "populate_ms": 148.437417
+      },
+      {
+        "30_full_reads_ms": 435.252041,
+        "50_favorite_updates_ms": 844.207334,
+        "populate_ms": 107.098208
+      },
+      {
+        "30_full_reads_ms": 383.34925,
+        "50_favorite_updates_ms": 818.752917,
+        "populate_ms": 144.990375
+      }
+    ],
+    "after": [
+      {
+        "30_full_reads_ms": 98.862458,
+        "50_favorite_updates_ms": 8.887834,
+        "populate_ms": 54.090791
+      },
+      {
+        "30_full_reads_ms": 148.179291,
+        "50_favorite_updates_ms": 6.013166,
+        "populate_ms": 29.613291
+      },
+      {
+        "30_full_reads_ms": 65.251208,
+        "50_favorite_updates_ms": 4.666,
+        "populate_ms": 36.849167
+      },
+      {
+        "30_full_reads_ms": 186.5485,
+        "50_favorite_updates_ms": 4.685625,
+        "populate_ms": 29.960042
+      },
+      {
+        "30_full_reads_ms": 131.494834,
+        "50_favorite_updates_ms": 19.712292,
+        "populate_ms": 45.401667
+      }
+    ]
+  }
+}

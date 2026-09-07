@@ -1,0 +1,8 @@
+Baseline 7631ef4a6e83071cb1d6df3932c10dcf38873660
+markdown_plain_400_paragraphs: median_ms=3.768 checksum=6000 iterations=15
+markdown_mixed_200_sections: median_ms=6.646 checksum=9000 iterations=15
+thinking_6000_spans_single_chunk: median_ms=25.792 checksum=378000 iterations=7
+Current working tree
+markdown_plain_400_paragraphs: median_ms=1.129 checksum=6000 iterations=15
+markdown_mixed_200_sections: median_ms=4.592 checksum=9000 iterations=15
+thinking_6000_spans_single_chunk: median_ms=5.145 checksum=378000 iterations=7

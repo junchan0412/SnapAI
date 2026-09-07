@@ -552,7 +552,7 @@ func testSettingsExportConfigurationOmitsSecretsAndHistory() {
     expect(exported.providers.first?.apiKey == "", "exported config decodes with empty api key")
     expect(exported.history.isEmpty, "exported config clears history")
     expect(exported.actionUsageCounts.isEmpty, "exported config clears action usage statistics")
-    expect(exported.panelWidth == 420 && exported.panelHeight == 360,
+    expect(exported.panelWidth == 600 && exported.panelHeight == 640,
            "exported config resets window dimensions")
     expect(!exported.iCloudSyncEnabled, "exported config does not enable iCloud sync on import")
     expect(exported.historyContentStorage == .metadataOnly, "exported config preserves history content storage preference")

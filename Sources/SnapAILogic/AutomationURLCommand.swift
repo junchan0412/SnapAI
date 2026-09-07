@@ -46,11 +46,11 @@ public struct AutomationHistoryContextOptions: Equatable {
     }
 }
 
-struct AutomationModelSelection: Equatable {
-    var providerID: String
-    var modelName: String
+package struct AutomationModelSelection: Equatable {
+    package var providerID: String
+    package var modelName: String
 
-    static func resolve(providerQuery: String?,
+    package static func resolve(providerQuery: String?,
                         modelQuery: String?,
                         settings: AppSettings) -> AutomationModelSelection? {
         let enabledProviders = settings.providers.filter { $0.isEnabled }
@@ -85,10 +85,10 @@ private struct AutomationModelPathSelection {
     var modelQuery: String?
 }
 
-struct AutomationContextSelection: Equatable {
-    var profileID: String
+package struct AutomationContextSelection: Equatable {
+    package var profileID: String
 
-    static func resolve(profileQuery: String?, settings: AppSettings) -> AutomationContextSelection? {
+    package static func resolve(profileQuery: String?, settings: AppSettings) -> AutomationContextSelection? {
         guard let profileQuery = profileQuery?.trimmedNonEmpty else { return nil }
         guard let profile = settings.contextProfiles.first(where: {
             $0.isEnabled &&
@@ -102,8 +102,8 @@ struct AutomationContextSelection: Equatable {
     }
 }
 
-enum AutomationActionSelection {
-    static func resolve(query: String?, actions: [AIAction]) -> AIAction? {
+package enum AutomationActionSelection {
+    package static func resolve(query: String?, actions: [AIAction]) -> AIAction? {
         guard let query = query?.trimmedNonEmpty else { return nil }
         return actions.first {
             $0.isEnabled &&
@@ -113,8 +113,8 @@ enum AutomationActionSelection {
     }
 }
 
-enum AutomationSettingsSectionSelection {
-    static func resolve(_ query: String?, fallback: SettingsSection) -> SettingsSection {
+package enum AutomationSettingsSectionSelection {
+    package static func resolve(_ query: String?, fallback: SettingsSection) -> SettingsSection {
         guard let key = query?.trimmedNonEmpty?.automationLookupKey else { return fallback }
         switch key {
         case "ai", "model", "models", "provider", "providers", "llm", "api", "apikey", "keychain", "ai模型", "供应商", "模型":
@@ -135,8 +135,8 @@ enum AutomationSettingsSectionSelection {
     }
 }
 
-enum AutomationRoutingPreferenceSelection {
-    static func resolve(_ query: String?) -> AIRoutingPreference? {
+package enum AutomationRoutingPreferenceSelection {
+    package static func resolve(_ query: String?) -> AIRoutingPreference? {
         guard let key = query?.trimmedNonEmpty?.automationLookupKey else { return nil }
         switch key {
         case "fast", "fastest", "speed", "speedfirst", "cheap", "cost", "最快", "速度":
@@ -153,8 +153,8 @@ enum AutomationRoutingPreferenceSelection {
     }
 }
 
-enum AutomationWorkModeSelection {
-    static func resolve(_ query: String?) -> WorkModePreset? {
+package enum AutomationWorkModeSelection {
+    package static func resolve(_ query: String?) -> WorkModePreset? {
         guard let key = query?.trimmedNonEmpty?.automationLookupKey else { return nil }
         switch key {
         case "standard", "default", "normal", "balanced", "daily", "常规", "标准", "默认", "日常":
@@ -175,8 +175,8 @@ enum AutomationWorkModeSelection {
     }
 }
 
-enum AutomationTypewriterSpeedSelection {
-    static func resolve(_ query: String?) -> TypewriterSpeed? {
+package enum AutomationTypewriterSpeedSelection {
+    package static func resolve(_ query: String?) -> TypewriterSpeed? {
         guard let key = query?.trimmedNonEmpty?.automationLookupKey else { return nil }
         switch key {
         case "off", "none", "disable", "disabled", "0", "关闭", "关":
@@ -195,11 +195,11 @@ enum AutomationTypewriterSpeedSelection {
     }
 }
 
-enum AutomationWriteBackPolicy: Equatable {
+package enum AutomationWriteBackPolicy: Equatable {
     case disabled(reason: String)
     case capturedSelection
 
-    var autoReplaceEnabled: Bool {
+    package var autoReplaceEnabled: Bool {
         switch self {
         case .disabled:
             return false
@@ -208,14 +208,14 @@ enum AutomationWriteBackPolicy: Equatable {
         }
     }
 
-    static func urlRun(options: AutomationRunOptions) -> AutomationWriteBackPolicy {
+    package static func urlRun(options: AutomationRunOptions) -> AutomationWriteBackPolicy {
         if options.replaceByDefault == true {
             return .disabled(reason: "URL 调用没有可信原选区,不会自动写回。")
         }
         return .disabled(reason: "URL 调用仅打开结果窗。")
     }
 
-    static func capturedSelection(action: AIAction) -> AutomationWriteBackPolicy {
+    package static func capturedSelection(action: AIAction) -> AutomationWriteBackPolicy {
         action.replaceByDefault ? .capturedSelection : .disabled(reason: "动作未开启完成后替换确认。")
     }
 }
@@ -675,7 +675,7 @@ public enum AutomationURLCommand: Equatable {
 }
 
 extension AIAction {
-    func applyingAutomationOptions(_ options: AutomationRunOptions, settings: AppSettings) -> AIAction {
+    package func applyingAutomationOptions(_ options: AutomationRunOptions, settings: AppSettings) -> AIAction {
         guard options.hasOverrides else { return self }
         var action = self
         let enabledProviders = settings.providers.filter { $0.isEnabled }

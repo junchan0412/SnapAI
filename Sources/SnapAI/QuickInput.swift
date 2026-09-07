@@ -17,7 +17,7 @@ final class QuickInputModel: ObservableObject {
     /// 通用瞬时状态(如「诊断已复制」),到期自动清除。
     @Published private(set) var transientStatus: String? = nil
     let settings: AppSettings
-    var onSubmit: ((String, AIAction, Data?, String) -> Void)?
+    var onSubmit: ((String, AIAction, Data?, String) -> Bool)?
 
     private var sendFeedbackWork: DispatchWorkItem?
     private var transientWork: DispatchWorkItem?
@@ -25,6 +25,7 @@ final class QuickInputModel: ObservableObject {
     init(settings: AppSettings) { self.settings = settings }
 
     func submit() {
+        guard !didJustSend else { return }
         guard !isCapturing else {
             showTransientStatus("截图完成后才能发送", autoDismiss: 1.6)
             return
@@ -34,7 +35,10 @@ final class QuickInputModel: ObservableObject {
         let act = settings.enabledActions.first(where: { $0.id == actionID })
             ?? settings.enabledActions.first
         guard let act = act else { return }
-        onSubmit?(t, act, imageData, imageMimeType)
+        guard onSubmit?(t, act, imageData, imageMimeType) == true else {
+            showTransientStatus("已保留草稿")
+            return
+        }
         text = ""
         clearImage()
         flashSendConfirmation()
@@ -99,181 +103,6 @@ final class QuickInputModel: ObservableObject {
     }
 }
 
-struct QuickInputView: View {
-    @ObservedObject var model: QuickInputModel
-    var onClose: () -> Void
-    var onCapture: () -> Void   // 触发截图
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            HStack(spacing: SnapAIUI.standardSpacing) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.16))
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.tint)
-                }
-                .frame(width: 34, height: 34)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("SnapAI").font(SnapAIUI.Typography.panelTitle)
-                    Text("快捷提问").font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Menu {
-                    ForEach(model.settings.enabledActions) { act in
-                        Button {
-                            model.actionID = act.id
-                        } label: {
-                            if act.id == model.actionID { Label(act.name, systemImage: "checkmark") }
-                            else { Text(act.name) }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: SnapAIUI.tightSpacing) {
-                        Image(systemName: currentActionIcon)
-                        Text(currentAction?.name ?? "动作")
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(SnapAIUI.Typography.sectionLabel)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(SnapAIUI.regularFillOpacity))
-                    .clipShape(Capsule())
-                }
-                .menuStyle(.borderlessButton).fixedSize()
-                .accessibilityLabel("选择动作")
-                .help("选择用于本次提问的动作")
-            }
-
-            // 图片预览
-            if let nsImg = model.imagePreview {
-                ZStack(alignment: .topTrailing) {
-                    Image(nsImage: nsImg).resizable().scaledToFit().frame(maxHeight: 80)
-                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
-                    Button { model.clearImage() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white, Color.black.opacity(0.55))
-                            .shadow(color: .black.opacity(0.3), radius: 1)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(4)
-                    .help("移除图片附件")
-                    .accessibilityLabel("移除图片附件")
-                }
-            }
-            if let notice = model.imageNotice {
-                Label(notice.message, systemImage: notice.systemImage)
-                    .font(.caption)
-                    .foregroundStyle(notice.isWarning ? SnapAIUI.StatusColor.warning : SnapAIUI.StatusColor.neutral)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("图片状态: \(notice.message)")
-            }
-
-            QuickPromptEditor(
-                text: $model.text,
-                placeholder: "输入你的问题…  (↩ 发送 · ⇧↩ 换行)",
-                onSubmit: { model.submit() }
-            )
-            .frame(height: 76)
-
-            HStack(spacing: SnapAIUI.tightSpacing) {
-                // #3 截图 / 粘贴图片:用胶囊背景让次要操作可被发现
-                secondaryActionButton(
-                    label: model.isCapturing ? "截图中" : "截图",
-                    icon: "camera",
-                    help: model.isCapturing ? "正在截取当前屏幕" : "截取当前屏幕作为附件",
-                    isDisabled: model.isCapturing,
-                    showSpinner: model.isCapturing
-                ) { onCapture() }
-                secondaryActionButton(
-                    label: "粘贴图片",
-                    icon: "photo",
-                    help: "粘贴剪贴板中的图片作为附件",
-                    isDisabled: model.isCapturing,
-                    showSpinner: false
-                ) { model.pasteImageFromClipboard() }
-
-                Spacer()
-                if let status = model.transientStatus {
-                    Label(status, systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(SnapAIUI.StatusColor.success)
-                        .transition(.opacity)
-                        .accessibilityLabel(status)
-                }
-                Button { model.submit() } label: {
-                    Label(model.didJustSend ? "已发送" : "发送",
-                          systemImage: model.didJustSend ? "checkmark.circle.fill" : "paperplane.fill")
-                        .font(.callout.weight(.semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(!canSubmit || model.didJustSend || model.isCapturing)
-                .help("发送 (↩ 发送,⇧↩ 换行)")
-                .accessibilityLabel(model.didJustSend ? "已发送" : "发送提问")
-            }
-            .font(.caption)
-            .animation(.easeInOut(duration: 0.18), value: model.didJustSend)
-            .animation(.easeInOut(duration: 0.18), value: model.transientStatus)
-        }
-        .padding(SnapAIUI.edgePadding)
-        .frame(minWidth: 420, idealWidth: 500, maxWidth: 620)
-        .background(.ultraThinMaterial)
-    }
-
-    /// 次要操作(截图 / 粘贴图片)统一为带胶囊背景的可发现按钮。
-    @ViewBuilder
-    private func secondaryActionButton(label: String,
-                                       icon: String,
-                                       help: String,
-                                       isDisabled: Bool,
-                                       showSpinner: Bool,
-                                       action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: SnapAIUI.tightSpacing) {
-                if showSpinner {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    Image(systemName: icon)
-                }
-                Text(label)
-            }
-            .font(SnapAIUI.Typography.sectionLabel)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.primary.opacity(isDisabled ? 0.03 : SnapAIUI.regularFillOpacity), in: Capsule())
-            .foregroundStyle(isDisabled ? Color.secondary : Color.primary)
-            .opacity(isDisabled ? 0.6 : 1)
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .help(help)
-        .accessibilityLabel(label)
-    }
-
-    private var currentAction: AIAction? {
-        model.settings.enabledActions.first(where: { $0.id == model.actionID })
-            ?? model.settings.enabledActions.first
-    }
-
-    private var currentActionIcon: String {
-        guard let icon = currentAction?.icon, !icon.isEmpty else {
-            return "wand.and.stars"
-        }
-        return icon
-    }
-
-    private var canSubmit: Bool {
-        !model.isCapturing && (!model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil)
-    }
-}
 
 /// 管理快捷输入面板
 @MainActor
@@ -302,17 +131,17 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             hosting.rootView = view
         } else {
             hosting = NSHostingView(rootView: view)
-            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 210))
+            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 340))
             panel.contentView = hosting
-            panel.minSize = NSSize(width: 420, height: 180)
+            panel.minSize = NSSize(width: 480, height: 300)
             panel.delegate = self
             self.panel = panel
             self.hostingView = hosting
         }
         hosting.layoutSubtreeIfNeeded()
         let fittingSize = hosting.fittingSize
-        panel.setContentSize(NSSize(width: max(500, fittingSize.width),
-                                    height: max(210, fittingSize.height)))
+        panel.setContentSize(NSSize(width: max(560, fittingSize.width),
+                                    height: max(340, fittingSize.height)))
         if let origin = lastOrigin {
             panel.setFrameOrigin(origin)
         } else if let screen = NSScreen.main {
@@ -320,8 +149,12 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             let origin = NSPoint(x: vf.midX - panel.frame.width / 2, y: vf.midY + 80)
             panel.setFrameOrigin(origin)
         }
+        panel.title = "SnapAI 快捷提问"
         FloatingPanelPresentation.present(panel)
         NSApp.activate(ignoringOtherApps: true)
+        if let editor = panel.initialFirstResponder {
+            panel.makeFirstResponder(editor)
+        }
         installEscMonitor()
     }
 
@@ -461,7 +294,11 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     private func installEscMonitor() {
         removeEscMonitor()
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            if event.keyCode == 53 { self?.hide(); return nil }
+            guard let self, event.window === self.panel else { return event }
+            if let editor = self.panel?.firstResponder as? NSTextView, editor.hasMarkedText() {
+                return event
+            }
+            if event.keyCode == 53 { self.hide(); return nil }
             return event
         }
     }
@@ -470,173 +307,6 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
 }
 
-// MARK: - 多行快捷提问输入框
-
-struct QuickPromptEditor: NSViewRepresentable {
-    @Binding var text: String
-    var placeholder: String
-    var onSubmit: () -> Void
-
-    func makeNSView(context: Context) -> PromptEditorContainer {
-        let container = PromptEditorContainer()
-        let scrollView = container.scrollView
-        let textView = container.textView
-
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
-
-        textView.placeholderString = placeholder
-        textView.delegate = context.coordinator
-        textView.isRichText = false
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
-        textView.allowsUndo = true
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
-        textView.textColor = .labelColor
-        textView.backgroundColor = .clear
-        textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 8, height: 7)
-        textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.lineBreakMode = .byWordWrapping
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.heightTracksTextView = false
-
-        scrollView.documentView = textView
-        container.install(scrollView)
-        return container
-    }
-
-    func updateNSView(_ container: PromptEditorContainer, context: Context) {
-        let scrollView = container.scrollView
-        let textView = container.textView
-        context.coordinator.parent = self
-        textView.placeholderString = placeholder
-        if textView.string != text {
-            textView.string = text
-            textView.needsDisplay = true
-        }
-        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width,
-                                                       height: CGFloat.greatestFiniteMagnitude)
-
-        guard !context.coordinator.didAttemptFocus else { return }
-        context.coordinator.didAttemptFocus = true
-        DispatchQueue.main.async {
-            container.window?.makeFirstResponder(textView)
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: QuickPromptEditor
-        var didAttemptFocus = false
-
-        init(_ parent: QuickPromptEditor) {
-            self.parent = parent
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            parent.text = textView.string
-            textView.needsDisplay = true
-        }
-
-        func textDidBeginEditing(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            (textView.enclosingScrollView?.superview as? PromptEditorContainer)?.isFocused = true
-        }
-
-        func textDidEndEditing(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            (textView.enclosingScrollView?.superview as? PromptEditorContainer)?.isFocused = false
-        }
-
-        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
-                return false
-            }
-            let flags = NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
-            if flags.contains(.shift) || flags.contains(.option) {
-                return false
-            }
-            parent.onSubmit()
-            return true
-        }
-    }
-}
-
-final class PromptEditorContainer: NSView {
-    let scrollView = NSScrollView()
-    let textView = PlaceholderTextView()
-    var isFocused = false {
-        didSet { needsDisplay = true }
-    }
-
-    override var isFlipped: Bool { true }
-
-    func install(_ scrollView: NSScrollView) {
-        guard scrollView.superview == nil else { return }
-        addSubview(scrollView)
-        needsDisplay = true
-    }
-
-    override func layout() {
-        super.layout()
-        scrollView.frame = bounds.insetBy(dx: 3, dy: 3)
-        let contentSize = scrollView.contentSize
-        textView.frame = NSRect(x: 0,
-                                y: 0,
-                                width: contentSize.width,
-                                height: max(contentSize.height, textView.frame.height))
-        textView.textContainer?.containerSize = NSSize(width: contentSize.width,
-                                                       height: CGFloat.greatestFiniteMagnitude)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        let borderWidth: CGFloat = isFocused ? 3 : 1
-        let rect = bounds.insetBy(dx: borderWidth / 2, dy: borderWidth / 2)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8)
-        NSColor.textBackgroundColor.withAlphaComponent(0.72).setFill()
-        path.fill()
-        (isFocused ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
-        path.lineWidth = borderWidth
-        path.stroke()
-    }
-}
-
-final class PlaceholderTextView: NSTextView {
-    var placeholderString: String = "" {
-        didSet { needsDisplay = true }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard string.isEmpty, !placeholderString.isEmpty else { return }
-
-        let rect = NSRect(
-            x: textContainerInset.width + 4,
-            y: textContainerInset.height,
-            width: bounds.width - textContainerInset.width * 2 - 8,
-            height: bounds.height - textContainerInset.height * 2
-        )
-        // 占位符按词换行,确保「↩ 发送 · ⇧↩ 换行」提示完整可见。
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize),
-            .foregroundColor: NSColor.placeholderTextColor,
-            .paragraphStyle: paragraph
-        ]
-        (placeholderString as NSString).draw(in: rect, withAttributes: attributes)
-    }
-}
 
 // MARK: - NSImage 扩展
 

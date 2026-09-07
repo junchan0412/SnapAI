@@ -19,15 +19,23 @@ public struct StreamingAccumulator: Equatable {
             return token
         }
 
-        var remaining = bufferedTagFragment + token
+        let input = bufferedTagFragment.isEmpty ? token : bufferedTagFragment + token
+        var remaining = input[...]
         bufferedTagFragment = ""
         var visibleText = ""
 
         while !remaining.isEmpty {
-            if inThinkTag {
-                consumeThinkingText(from: &remaining)
+            let marker = inThinkTag ? "</think>" : "<think>"
+            if let range = remaining.range(of: marker) {
+                append(remaining[..<range.lowerBound], visibleText: &visibleText)
+                remaining = remaining[range.upperBound...]
+                inThinkTag.toggle()
             } else {
-                consumeOutputText(from: &remaining, visibleText: &visibleText)
+                let fragmentLength = remaining.partialSuffixLength(matchingPrefixOf: marker)
+                let split = remaining.index(remaining.endIndex, offsetBy: -fragmentLength)
+                append(remaining[..<split], visibleText: &visibleText)
+                bufferedTagFragment = String(remaining[split...])
+                break
             }
         }
         return visibleText
@@ -59,66 +67,24 @@ public struct StreamingAccumulator: Equatable {
         bufferedTagFragment = ""
     }
 
-    private mutating func consumeOutputText(from remaining: inout String,
-                                            visibleText: inout String) {
-        let startTag = "<think>"
-        if let start = remaining.range(of: startTag) {
-            let text = String(remaining[remaining.startIndex..<start.lowerBound])
-            outputText += text
-            visibleText += text
-            remaining = String(remaining[start.upperBound...])
-            inThinkTag = true
-            return
+    private mutating func append(_ text: Substring, visibleText: inout String) {
+        if inThinkTag {
+            thinkingText.append(contentsOf: text)
+        } else {
+            outputText.append(contentsOf: text)
+            visibleText.append(contentsOf: text)
         }
-
-        if let length = remaining.partialSuffixLength(matchingPrefixOf: startTag) {
-            let split = remaining.index(remaining.endIndex, offsetBy: -length)
-            let text = String(remaining[..<split])
-            outputText += text
-            visibleText += text
-            bufferedTagFragment = String(remaining[split...])
-            remaining = ""
-            return
-        }
-
-        outputText += remaining
-        visibleText += remaining
-        remaining = ""
-    }
-
-    private mutating func consumeThinkingText(from remaining: inout String) {
-        let endTag = "</think>"
-        if let end = remaining.range(of: endTag) {
-            thinkingText += String(remaining[remaining.startIndex..<end.lowerBound])
-            remaining = String(remaining[end.upperBound...])
-            inThinkTag = false
-            return
-        }
-
-        if let length = remaining.partialSuffixLength(matchingPrefixOf: endTag) {
-            let split = remaining.index(remaining.endIndex, offsetBy: -length)
-            thinkingText += String(remaining[..<split])
-            bufferedTagFragment = String(remaining[split...])
-            remaining = ""
-            return
-        }
-
-        thinkingText += remaining
-        remaining = ""
     }
 }
 
-private extension String {
-    func partialSuffixLength(matchingPrefixOf marker: String) -> Int? {
-        let maxLength = min(count, marker.count - 1)
-        guard maxLength > 0 else { return nil }
+private extension Substring {
+    func partialSuffixLength(matchingPrefixOf marker: String) -> Int {
+        let maxLength = marker.count - 1
         for length in stride(from: maxLength, through: 1, by: -1) {
-            let markerPrefixEnd = marker.index(marker.startIndex, offsetBy: length)
-            let markerPrefix = String(marker[..<markerPrefixEnd])
-            if hasSuffix(markerPrefix) {
+            if hasSuffix(marker.prefix(length)) {
                 return length
             }
         }
-        return nil
+        return 0
     }
 }

@@ -5,7 +5,10 @@ import SnapAILogic
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
-    let settings = AppSettings.shared
+    let settings: AppSettings
+    private let launchSmokeDirectory: URL?
+    private let launchSmokeToken: String?
+    private var launchSmokeTimer: Timer?
     var statusItem: NSStatusItem!
     var resultVM: ResultViewModel!
     var panelController: FloatingPanelController!
@@ -30,8 +33,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 文本捕获代际令牌(#bug2):每次新触发自增,旧捕获回调据此自我作废,避免过期结果弹「未检测到选中文字」。
     private var captureGeneration: Int = 0
 
-    /// nonisolated 以便在 main.swift 顶层(非 main-actor 上下文)构造
-    nonisolated override init() {
+    override init() {
+        settings = AppSettings.shared
+        launchSmokeDirectory = nil
+        launchSmokeToken = nil
+        super.init()
+    }
+
+    init(settings: AppSettings, launchSmokeDirectory: URL, launchSmokeToken: String) {
+        self.settings = settings
+        self.launchSmokeDirectory = launchSmokeDirectory
+        self.launchSmokeToken = launchSmokeToken
         super.init()
     }
 
@@ -40,8 +52,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         applyAppIcon()
         installAppearanceObserver()
         installFrontmostAppObserver()
-        installAutomationURLHandler()
-        iCloudSync.shared.pullIfNeeded(into: settings)
+        if launchSmokeDirectory == nil {
+            installAutomationURLHandler()
+            iCloudSync.shared.pullIfNeeded(into: settings)
+        }
         windowCoordinator = WindowCoordinator(
             settings: settings,
             onSettingsChange: { [weak self] in
@@ -83,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         quickInputModel = QuickInputModel(settings: settings)
         quickInputModel.actionID = settings.enabledActions.first?.id ?? ""
         quickInputModel.onSubmit = { [weak self] text, action, imageData, imageMimeType in   // #3 imageData
-            self?.runQuickInput(text: text, action: action, imageData: imageData, imageMimeType: imageMimeType)
+            self?.runQuickInput(text: text, action: action, imageData: imageData, imageMimeType: imageMimeType) ?? false
         }
         quickInput = QuickInputController(model: quickInputModel)
         commandPalette = CommandPaletteController { [weak self] in
@@ -107,11 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 self?.resultVM.requestHealthStatusText ?? "none"
             }
         )
-        installServicesProvider()
-
-        registerHotKeys()
+        if launchSmokeDirectory == nil {
+            installServicesProvider()
+            registerHotKeys()
+        }
         buildMenu()
         installMainMenu()
+
+        if completeLaunchSmokeIfNeeded() { return }
 
         // iCloud 同步监听(#9)。远端配置变化后刷新菜单与快捷键。
         iCloudSync.shared.startListening(into: settings) { [weak self] in
@@ -128,6 +145,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 _ = TextCapture.hasAccessibilityPermission(prompt: true)
             }
         }
+    }
+
+    private func completeLaunchSmokeIfNeeded() -> Bool {
+        guard let directory = launchSmokeDirectory, let token = launchSmokeToken else { return false }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        do {
+            try Data("ready \(pid) \(token)\n".utf8)
+                .write(to: directory.appendingPathComponent("ready"), options: .atomic)
+        } catch {
+            NSLog("SnapAI: launch smoke readiness marker failed")
+            NSApp.terminate(nil)
+            return true
+        }
+        launchSmokeTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self else {
+                    timer.invalidate()
+                    return
+                }
+                if FileManager.default.fileExists(atPath: directory.appendingPathComponent("stop").path) {
+                    self.launchSmokeTimer?.invalidate()
+                    self.launchSmokeTimer = nil
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+        return true
     }
 
     // MARK: - 菜单
@@ -558,6 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard launchSmokeDirectory == nil else { return false }
         if !flag {
             openSettings()
         }
@@ -565,7 +610,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        launchSmokeTimer?.invalidate()
+        settings.save()
         RoutingMetricsStore.shared.flushPersistence()
+        if let token = launchSmokeToken {
+            settings.persistenceDefaults.removePersistentDomain(forName: "com.snapai.release-smoke.\(token)")
+            let supportDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+                .appendingPathComponent("SnapAI-LogicTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
+            try? FileManager.default.removeItem(at: supportDirectory)
+        }
     }
 
     // MARK: - 自动化 URL
@@ -667,6 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         quickInput.toggle()
     }
 
+    @discardableResult
     func runQuickInput(text: String,
                                action: AIAction,
                                originalText: String? = nil,
@@ -674,11 +728,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                imageMimeType: String = "image/png",
                                autoReplaceEnabled: Bool = false,
                                captureMethod: TextCaptureMethod? = nil,
-                               sourceContext: SelectionSourceContext? = nil) {
-        quickInput.hide()
+                               sourceContext: SelectionSourceContext? = nil) -> Bool {
         guard let prepared = prepareTextForSubmission(text,
                                                       action: action,
-                                                      imageData: imageData) else { return }
+                                                      imageData: imageData) else { return false }
+        quickInput.hide()
         resultVM.start(text: prepared.text,
                        originalText: originalText,
                        action: action,
@@ -689,6 +743,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                        captureMethod: captureMethod,
                        sourceContext: sourceContext)
         panelController.show()
+        return true
     }
 
     func prepareTextForSubmission(_ text: String,

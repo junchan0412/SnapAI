@@ -20,7 +20,7 @@ public struct ResultRouteStatusText: Equatable {
         )
     }
 
-    static func primaryText(providerName: String,
+    package static func primaryText(providerName: String,
                             modelName: String,
                             fallbackModelName: String) -> String {
         let parts = [
@@ -30,7 +30,7 @@ public struct ResultRouteStatusText: Equatable {
         return parts.isEmpty ? "正在准备请求" : parts.joined(separator: " / ")
     }
 
-    static func detailLines(contextSummary: String?,
+    package static func detailLines(contextSummary: String?,
                             routeExplanation: String?,
                             routeNote: String?) -> [String] {
         var lines: [String] = []

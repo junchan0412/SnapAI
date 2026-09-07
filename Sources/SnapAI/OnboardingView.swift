@@ -1,178 +1,142 @@
 import SwiftUI
 import SnapAILogic
 
-/// 首次启动引导页:介绍 → 权限 → 配置 → 完成
 struct OnboardingView: View {
     @ObservedObject var settings: AppSettings
     var onFinish: () -> Void
     var openSettings: () -> Void
-    /// 点击「试试快捷提问」时触发,直接体验快捷提问面板。
     var onTryQuickInput: (() -> Void)? = nil
 
-    @StateObject private var perm = PermissionState()
+    @StateObject private var permission = PermissionState()
+
+    private var isAIConfigurationReady: Bool {
+        guard let provider = settings.activeProvider else { return false }
+        return AIRequestRouter.isProviderRequestReady(provider)
+            && provider.enabledModelNames.contains(settings.model)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // 顶部品牌
-            VStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.tint)
-                Text("欢迎使用 SnapAI")
-                    .font(.title.weight(.bold))
-                Text("在任意应用选中文字,一键 AI 提问、翻译、润色")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 28)
-            .padding(.bottom, 20)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 16) {
-                stepRow(
-                    number: 1,
-                    title: "授予辅助功能权限",
-                    desc: "用于读取选中文字与模拟复制/粘贴。",
-                    done: perm.axGranted
-                ) {
-                    Button(perm.axGranted ? "已授权" : "去授权") {
-                        if !perm.axGranted {
-                            NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
-                            _ = TextCapture.hasAccessibilityPermission(prompt: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    introduction
+                    VStack(spacing: 0) {
+                        setupRow(number: "1", title: "连接你的 AI", detail: "选择云端服务或本地模型，按你的习惯工作。", ready: isAIConfigurationReady) {
+                            Button(isAIConfigurationReady ? "管理模型" : "配置模型", action: openSettings)
                         }
-                        perm.refresh(prompt: true)
-                    }
-                    .disabled(perm.axGranted)
-                }
-
-                stepRow(
-                    number: 2,
-                    title: "配置 AI 供应商",
-                    desc: "填入 API Key,获取并启用至少一个模型(支持 OpenAI / DeepSeek / Claude / Ollama 等)。",
-                    done: isAIConfigurationReady
-                ) {
-                    HStack(spacing: 8) {
-                        Button("打开设置") { openSettings() }
-                        if isAIConfigurationReady {
-                            SnapAISemanticPill(title: "已就绪", systemImage: "checkmark.circle.fill", tone: .success)
-                        } else {
-                            Button {
-                                // 设置是 @ObservedObject,改动会自动反映;这里显式触发一次对象刷新提示。
-                                settings.objectWillChange.send()
-                            } label: {
-                                Label("重新检测", systemImage: "arrow.clockwise")
+                        Divider().padding(.leading, 60)
+                        setupRow(number: "2", title: "让选中的文字直接可用", detail: "授予辅助功能权限，便可读取选区、复制和写回。快捷提问无需此权限。", ready: permission.axGranted) {
+                            Button(permission.axGranted ? "已授权" : "打开系统设置") {
+                                NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
+                                permission.refresh(prompt: true)
                             }
-                            .buttonStyle(.borderless)
-                            .help("在设置中保存后点此重新检测配置状态")
+                            .disabled(permission.axGranted)
                         }
                     }
+                    .background(SnapAIUI.Surface.content, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(SnapAIUI.Surface.border, lineWidth: 1))
+                    shortcuts
                 }
-
-                stepRow(
-                    number: 3,
-                    title: "开始使用",
-                    desc: "选中文字后用以下快捷键触发,或直接试试快捷提问面板。",
-                    done: false,
-                    showCheck: false
-                ) {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        shortcutKeycaps
-                        if let onTryQuickInput {
-                            Button {
-                                onTryQuickInput()
-                            } label: {
-                                Label("试试快捷提问", systemImage: "sparkles")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                            .disabled(!isAIConfigurationReady)
-                            .help(isAIConfigurationReady ? "打开快捷提问面板体验一次" : "请先完成上一步的 AI 配置")
-                        }
-                    }
-                }
+                .padding(32)
             }
-            .padding(20)
-
-            Spacer(minLength: 0)
             Divider()
-
-            HStack {
-                Button("跳过") { onFinish() }
-                    .buttonStyle(.plain)
+            HStack(spacing: 12) {
+                Text(isAIConfigurationReady ? "模型已就绪，随时开始。" : "也可以稍后在菜单栏中完成配置。")
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("开始使用 SnapAI") { onFinish() }
+                Button(isAIConfigurationReady ? "开始使用" : "稍后配置", action: onFinish)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding(24)
         }
-        .frame(minWidth: 480, minHeight: 460)
-        .onAppear { perm.refresh() }
-    }
-
-    /// 快捷键键帽视觉:把 ⌥A / ⌥T / 快捷提问键渲染成可识别的键帽,提升可发现性。
-    private var shortcutKeycaps: some View {
-        HStack(spacing: 12) {
-            keycapGroup(label: "提问", keys: "⌥A")
-            keycapGroup(label: "翻译", keys: "⌥T")
-            keycapGroup(label: "快捷提问", keys: settings.quickPanelHotKey.displayString)
+        .frame(minWidth: 600, minHeight: 560)
+        .background(SnapAIUI.Surface.canvas)
+        .onAppear { permission.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permission.refresh()
         }
     }
 
-    private func keycapGroup(label: String, keys: String) -> some View {
-        VStack(spacing: 3) {
-            keycap(keys)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }
-    }
-
-    private func keycap(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+    private var introduction: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "text.viewfinder")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(.tint)
+                Text("SnapAI").font(.system(size: 18, weight: .semibold))
             }
+            Text("想法，就在手边。")
+                .font(.system(size: 32, weight: .semibold))
+            Text("选中文字，翻译、润色或提问。\n无需离开正在使用的应用。")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .lineSpacing(5)
+        }
     }
 
-    private var isAIConfigurationReady: Bool {
-        guard let provider = settings.activeProvider, !provider.apiKey.isEmpty else { return false }
-        return !settings.model.isEmpty && provider.enabledModelNames.contains(settings.model)
-    }
-
-    @ViewBuilder
-    private func stepRow<Trailing: View>(
-        number: Int,
-        title: String,
-        desc: String,
-        done: Bool,
-        showCheck: Bool = true,
-        @ViewBuilder trailing: () -> Trailing
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(done ? SnapAIUI.StatusColor.success : Color.accentColor.opacity(0.18))
-                    .frame(width: 28, height: 28)
-                if showCheck && done {
-                    Image(systemName: "checkmark").foregroundStyle(.white).font(.system(size: 13, weight: .bold))
-                } else {
-                    Text("\(number)").font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(done ? .white : Color.accentColor)
+    private var shortcuts: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("从一个快捷键开始").font(SnapAIUI.Typography.sectionTitle)
+                Spacer()
+                if let onTryQuickInput {
+                    Button("试试快捷提问", action: onTryQuickInput)
+                        .buttonStyle(.link)
+                        .disabled(!isAIConfigurationReady)
+                        .help(isAIConfigurationReady ? "打开快捷提问" : "配置模型后即可体验")
                 }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(desc).font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                shortcut("快捷提问", keys: settings.quickPanelHotKey.displayString, icon: "square.and.pencil")
+                if let ask = settings.enabledActions.first(where: { $0.name == AIAction.askName }) {
+                    shortcut("选区提问", keys: ask.hotKey?.displayString ?? "未设置", icon: "text.bubble")
+                }
+                if let translate = settings.enabledActions.first(where: { $0.name == AIAction.translateName }) {
+                    shortcut("翻译选区", keys: translate.hotKey?.displayString ?? "未设置", icon: "character.bubble")
+                }
             }
-            Spacer()
-            trailing()
         }
+    }
+
+    private func shortcut(_ title: String, keys: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            SnapAIKeycap(text: keys)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(SnapAIUI.Surface.content, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func setupRow<Controls: View>(number: String, title: String, detail: String, ready: Bool,
+                                          @ViewBuilder controls: () -> Controls) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(ready ? SnapAIUI.StatusColor.success.opacity(0.12) : SnapAIUI.Surface.quiet)
+                    .frame(width: 32, height: 32)
+                if ready {
+                    Image(systemName: "checkmark").foregroundStyle(SnapAIUI.StatusColor.success)
+                } else {
+                    Text(number).foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                controls().controlSize(.small)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
     }
 }

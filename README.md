@@ -2,26 +2,26 @@
 
 SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
-![SnapAI 1.6.75 UI 总览](docs/snapai-ui-overview.svg)
+![SnapAI 2.0 结果工作区](docs/screenshots/snapai-result-light.png)
 
-![SnapAI 设置界面](docs/snapai-settings.png)
+## 2.0.0 版本重点
 
-## 1.6.75 版本重点
+- 全面重做设置、快捷提问、结果阅读、历史双栏、命令面板与首次引导，支持浅深色和键盘操作。
+- 核心逻辑统一为单一 `SnapAILogic` 模块，消除重复编译；未新增第三方依赖。
+- SQLite 复用连接和索引，历史批量写入与读取在本机两轮合成对照中降低约 67–75% 耗时，收藏更新降低约 98–99%。
+- 严格处理 SSE 断流、取消和过期回调；Markdown 合并过期任务，打字机等待期间停止空转。
+- 修复设置迁移、密钥并发写入和同步失败恢复；保存失败给出可重试反馈。
+- 发布二进制和 updater 的最低系统版本统一为 macOS 14，修正旧版实际要求 macOS 27 的问题。
 
-- Reduced Motion 下停用浮动面板、流式进度条和打字光标动画,保留清晰的静态状态反馈。
-- 流式进度条从 60Hz 降为 30Hz,在保持连续感的同时减少持续刷新。
-- 设置页导入、动作库和权限诊断提示支持取消旧计时器,连续操作不会提前清掉新提示。
-- 面板呈现 API 统一在 MainActor 执行,降低 AppKit 动画 completion 的并发风险。
-- 构建脚本自动探测可用的完整 Xcode,避免 Command Line Tools 缺少 SwiftUIMacros 时误报代码编译失败。
-- 快捷提问截图期间锁定发送与粘贴操作,避免并发截图造成结果覆盖或窗口状态错乱。
-- 历史删除、收藏、标签和清空失败时显示可恢复的操作反馈,不再静默伪装成功。
-- 结果操作按钮统一 30pt 命中区域与语义 surface,提高鼠标、键盘和 VoiceOver 使用的一致性。
+详细变化见 [Release Notes](docs/RELEASE_NOTES_2.0.0.md)，测量方法和验证范围见 [重构报告](docs/REFACTOR_REPORT_2.0.0.md)。
 
-详细发布说明见 [SnapAI 1.6.75 Release Notes](docs/RELEASE_NOTES_1.6.75.md),阶段性复盘见 [SnapAI 1.6.75 Iteration Report](docs/ITERATION_REPORT_1.6.75.md),测量方法见 [运行时内存基线](docs/RUNTIME_MEMORY_BASELINE.md)。剩余迁移路径见 [SnapAILogic 迁移计划](docs/LOGIC_TARGET_MIGRATION_PLAN.md)。
+![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
+
+截图使用演示数据。
 
 ## 系统要求
 
-- macOS 14 Sonoma 或更高版本
+- macOS 14 Sonoma 或更高版本；当前预编译发布包面向 Apple Silicon
 - 一个可用的 AI 服务,例如 OpenAI、DeepSeek、Claude、Ollama 或 LM Studio
 - 辅助功能权限,用于读取选中文字、触发复制兜底和写回结果
 
@@ -279,7 +279,22 @@ toolchain 配置;也可以直接设置 `DEVELOPER_DIR` 指向
 scripts/run-macos-smoke-tests.sh
 ```
 
-这组检查会运行逻辑测试、校验 `SnapAILogic` target 边界,并临时写入后恢复系统剪贴板,同时探测辅助功能和屏幕录制权限状态。release preflight 还会在构建后运行 app bundle 启动 smoke,确认 `SnapAI.app` 可通过 LaunchServices 打开并产生新进程。它用于本机发版前验证,不建议放进无 GUI session 的默认 CI。
+这组检查会运行逻辑测试、校验 `SnapAILogic` target 边界,并使用独立测试剪贴板,同时探测辅助功能和屏幕录制权限状态。release preflight 还会在构建后运行 app bundle 启动 smoke,使用独立设置与临时数据，确认 `SnapAI.app` 可通过 LaunchServices 打开、完成真实初始化并正常退出。它用于本机发版前验证,不建议放进无 GUI session 的默认 CI。
+
+离线流式与 App 生命周期回归：
+
+```bash
+scripts/run-streaming-runtime-tests.sh
+scripts/run-app-runtime-tests.sh
+```
+
+使用独立演示数据查看界面（仅 Debug 构建包含预览入口）：
+
+```bash
+scripts/run-ui-preview.sh settings light
+scripts/run-ui-preview.sh result dark
+scripts/run-ui-preview.sh history light
+```
 
 本地构建 `.app`:
 
@@ -303,7 +318,7 @@ scripts/preflight-release.sh --require-clean
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 1.6.75
+SNAPAI_RELEASE=1 scripts/package-release.sh 2.0.0
 ```
 
 正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:

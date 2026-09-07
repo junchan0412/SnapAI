@@ -104,10 +104,12 @@ struct MarkdownView: View, Equatable {
 
 /// 代码块:等宽字体 + 背景 + 复制按钮(复制后内联显示「已复制」)
 private struct CodeBlockView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let code: String
     let language: String?
     let onCopy: (String) -> Void
-    @State private var copied = false
+    @StateObject private var copyFeedback = SnapAITransientState<Bool>()
+    private var copied: Bool { copyFeedback.value == true }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -120,11 +122,7 @@ private struct CodeBlockView: View {
                 Spacer()
                 Button {
                     onCopy(code)
-                    withAnimation(.easeOut(duration: 0.15)) { copied = true }
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.4))
-                        withAnimation(.easeIn(duration: 0.2)) { copied = false }
-                    }
+                    copyFeedback.show(true, autoDismiss: 1.4)
                 } label: {
                     Label(copied ? "已复制" : "复制", systemImage: copied ? "checkmark" : "doc.on.doc")
                         .font(.caption2)
@@ -145,5 +143,7 @@ private struct CodeBlockView: View {
         }
         .background(Color.primary.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: copied)
+        .onDisappear { copyFeedback.clear() }
     }
 }

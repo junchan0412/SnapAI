@@ -9,8 +9,12 @@ APP_BUNDLE="$ROOT_DIR/SnapAI.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
 cd "$ROOT_DIR"
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
-./build.sh
+pkill -f "$APP_BINARY" >/dev/null 2>&1 || true
+if [[ "$MODE" == "--debug" || "$MODE" == "debug" ]]; then
+  ./build.sh --debug
+else
+  ./build.sh
+fi
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
