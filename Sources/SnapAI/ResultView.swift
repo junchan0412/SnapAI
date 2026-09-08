@@ -42,7 +42,7 @@ struct ResultView: View {
             footer
         }
         .frame(minWidth: 440, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
-        .background(SnapAIUI.Surface.content)
+        .background(SnapAIUI.Surface.canvas)
         .overlay(alignment: .top) {
             if vm.isStreaming {
                 SnapAIStreamingProgressBar()

@@ -83,7 +83,7 @@ struct MarkdownView: View, Equatable {
             }
             .padding(.vertical, 2)
             .padding(.horizontal, 8)
-            .background(Color.primary.opacity(0.035))
+            .background(SnapAIUI.Surface.quiet)
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -141,7 +141,7 @@ private struct CodeBlockView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
         }
-        .background(Color.primary.opacity(0.06))
+        .background(SnapAIUI.Surface.control)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: copied)
         .onDisappear { copyFeedback.clear() }

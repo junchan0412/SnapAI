@@ -532,7 +532,7 @@ struct ProviderSettingsSection: View {
         } else {
             modelRows(provider)
                 .frame(maxHeight: provider.models.count > 6 ? 168 : nil)
-                .background(Color.primary.opacity(0.025))
+                .background(SnapAIUI.Surface.quiet)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }

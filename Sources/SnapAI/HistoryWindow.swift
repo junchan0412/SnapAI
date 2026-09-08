@@ -334,7 +334,7 @@ struct HistoryWindowView: View {
             .padding(20)
             .background(SnapAIUI.Surface.chrome)
         }
-        .background(SnapAIUI.Surface.content)
+        .background(SnapAIUI.Surface.canvas)
     }
 
     private func emptyState(presentation: HistoryWindowPresentation) -> some View {

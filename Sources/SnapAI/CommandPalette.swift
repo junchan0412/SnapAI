@@ -340,7 +340,7 @@ struct CommandPaletteView: View {
             .padding(.vertical, 8)
         }
         .frame(minWidth: 520, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
-        .background(SnapAIUI.Surface.content)
+        .background(SnapAIUI.Surface.canvas)
     }
 
     private func scrollToSelection(with proxy: ScrollViewProxy) {

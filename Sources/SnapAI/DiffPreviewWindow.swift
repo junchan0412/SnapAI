@@ -87,7 +87,7 @@ private struct DiffPreviewView: View {
             footer
         }
         .frame(minWidth: 700, minHeight: 500)
-        .background(SnapAIUI.Surface.content)
+        .background(SnapAIUI.Surface.canvas)
     }
 
     private var header: some View {

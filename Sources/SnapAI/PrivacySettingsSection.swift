@@ -91,7 +91,7 @@ struct PrivacySettingsSection: View {
         }
         .font(.caption)
         .padding(SnapAIUI.compactPadding)
-        .background(Color.primary.opacity(SnapAIUI.quietFillOpacity))
+        .background(SnapAIUI.Surface.quiet)
         .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
     }
 
@@ -125,7 +125,7 @@ struct PrivacySettingsSection: View {
                 .foregroundStyle(report?.isValid == false ? SnapAIUI.StatusColor.error : Color.secondary)
         }
         .padding(6)
-        .background(Color.primary.opacity(0.025))
+        .background(SnapAIUI.Surface.quiet)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
@@ -166,7 +166,7 @@ struct PrivacySettingsSection: View {
                 .frame(height: PrivacyFilter.defaultSampleEditorHeight)
                 .scrollContentBackground(.hidden)
                 .padding(5)
-                .background(Color.primary.opacity(0.045))
+                .background(SnapAIUI.Surface.control)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             Text(preview.output)
                 .font(.system(size: 12, design: .monospaced))
@@ -175,7 +175,7 @@ struct PrivacySettingsSection: View {
                        minHeight: max(58, PrivacyFilter.defaultSampleEditorHeight - 14),
                        alignment: .leading)
                 .padding(7)
-                .background(Color.green.opacity(0.08))
+                .background(SnapAIUI.StatusColor.success.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
@@ -274,10 +274,10 @@ struct ContextProfileSettingsSection: View {
                 if settings.activeContextProfileID == profile.id {
                     Text("使用中")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SnapAIUI.StatusColor.info)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.12), in: Capsule())
+                        .background(SnapAIUI.StatusColor.info.opacity(0.12), in: Capsule())
                 }
                 Button {
                     if settings.activeContextProfileID == profile.id {
@@ -296,7 +296,7 @@ struct ContextProfileSettingsSection: View {
                 .frame(height: 58)
                 .scrollContentBackground(.hidden)
                 .padding(6)
-                .background(Color.primary.opacity(0.045))
+                .background(SnapAIUI.Surface.control)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay {
                     RoundedRectangle(cornerRadius: 6)
@@ -304,7 +304,7 @@ struct ContextProfileSettingsSection: View {
                 }
         }
         .padding(7)
-        .background(Color.primary.opacity(0.028))
+        .background(SnapAIUI.Surface.quiet)
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 

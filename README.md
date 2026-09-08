@@ -15,6 +15,8 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 
 详细变化见 [Release Notes](docs/RELEASE_NOTES_2.0.0.md)，测量方法和验证范围见 [重构报告](docs/REFACTOR_REPORT_2.0.0.md)。
 
+> 2.0.1：统一各窗口区域的表面配色，消除标题栏、工具栏、正文与侧栏之间的色差与接缝，并将散落的硬编码颜色收敛为语义设计令牌。详见 [2.0.1 Release Notes](docs/RELEASE_NOTES_2.0.1.md)。
+
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 
 截图使用演示数据。

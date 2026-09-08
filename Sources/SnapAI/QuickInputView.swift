@@ -61,7 +61,7 @@ struct QuickInputView: View {
             footer
         }
         .frame(minWidth: 480, idealWidth: 560, minHeight: 300)
-        .background(SnapAIUI.Surface.content)
+        .background(SnapAIUI.Surface.canvas)
     }
 
     private var header: some View {
