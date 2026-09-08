@@ -43,6 +43,29 @@ func testReleaseTagParsing() {
            "ignores latest URL without tag component")
 }
 
+func testReleaseDecodesNotesBody() {
+    let json = """
+    {
+      "tag_name": "v2.0.2",
+      "name": "SnapAI 2.0.2",
+      "html_url": "https://github.com/junchan0412/SnapAI/releases/tag/v2.0.2",
+      "body": "视觉: 更新窗口重构\\n- 删除区域分割线",
+      "assets": []
+    }
+    """.data(using: .utf8)!
+    let release = try? JSONDecoder().decode(UpdateChecker.Release.self, from: json)
+    expect(release?.tagName == "v2.0.2", "decodes tag name")
+    expect(release?.name == "SnapAI 2.0.2", "decodes release name")
+    expect(release?.body?.contains("更新窗口重构") == true, "decodes release notes body")
+
+    // body 缺省时应为 nil,且不破坏解码。
+    let noBody = """
+    {"tag_name":"v2.0.2","name":null,"html_url":"https://example.test/r","assets":[]}
+    """.data(using: .utf8)!
+    let bare = try? JSONDecoder().decode(UpdateChecker.Release.self, from: noBody)
+    expect(bare?.body == nil, "missing body decodes to nil")
+}
+
 func testReleaseAssetSelectionUsesExactVersionedNames() {
     func asset(_ name: String) -> UpdateChecker.Asset {
         UpdateChecker.Asset(name: name,

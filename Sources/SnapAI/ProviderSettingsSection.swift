@@ -17,7 +17,6 @@ struct ProviderSettingsSection: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 aiOverviewCard
-                Divider()
                 HStack {
                     Text("供应商").font(.headline)
                     Spacer()
@@ -156,7 +155,6 @@ struct ProviderSettingsSection: View {
 
     private var routingPolicyRow: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Divider()
             HStack {
                 Text("自动路由").font(SnapAIUI.Typography.sectionTitle)
                 Spacer()
@@ -299,6 +297,7 @@ struct ProviderSettingsSection: View {
                         .disabled(settings.providers.last?.id == provider.id)
                 } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .frame(width: 24)
                 .accessibilityLabel("供应商排序")
             }

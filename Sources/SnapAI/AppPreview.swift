@@ -55,6 +55,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
             health?.show()
         case "diff":
             _ = DiffPreviewWindowController.present(original: "我们想让这个功能用起来更简单一点。", revised: "我们希望让这个功能更易于使用。", actionName: "润色")
+        case "update", "update-progress":
+            showUpdate(progress: surface == "update-progress")
         default: windows?.openSettings()
         }
         if arguments.contains("--compact"), let window = NSApp.keyWindow {
@@ -124,6 +126,34 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         }
         quickInput = QuickInputController(model: model)
         quickInput?.show()
+    }
+
+    private func showUpdate(progress: Bool) {
+        let model = UpdateFlowModel(
+            currentDisplay: "v2.0.1",
+            latestDisplay: "v2.0.2",
+            releaseTitle: "SnapAI 2.0.2",
+            releaseNotes: """
+            ## SnapAI 2.0.2
+
+            - **视觉**：重构更新窗口为原生对话框样式，图标、发布说明卡片与操作按钮层次清晰。
+            - **视觉**：删除主界面各区域之间的分割线，区域衔接更自然，无多余线条。
+            - **修复**：供应商行的排序菜单不再显示重复的下拉箭头图标。
+            - **验证**：Debug / Release 构建、代码签名与更新 manifest 签名均已核对。
+            """,
+            hasNotes: true,
+            autoInstall: false
+        )
+        model.onInstall = { UpdateWindowController.shared.enterDownloading() }
+        model.onSkip = { UpdateWindowController.shared.close() }
+        model.onRemindLater = { UpdateWindowController.shared.close() }
+        model.onCancel = { UpdateWindowController.shared.close() }
+        UpdateWindowController.shared.present(model: model)
+        if progress {
+            model.totalBytes = 10_100_000
+            model.receivedBytes = 4_100_000
+            UpdateWindowController.shared.enterDownloading()
+        }
     }
 
     private func showCommands() {

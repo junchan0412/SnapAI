@@ -84,6 +84,7 @@ enum UpdateCheckerApp {
         return UpdateChecker.webFallbackRelease(tagName: tagName)
     }
 
+    @MainActor
     private static func presentResult(_ release: Release) {
         let current = currentVersion
         let latest = UpdateChecker.normalizedVersion(release.tagName)
@@ -97,63 +98,75 @@ enum UpdateCheckerApp {
             return
         }
 
-        let alert = NSAlert()
-        alert.messageText = hasUpdate ? "发现新版本 \(latestDisplay)" : "SnapAI 已是最新版本"
-        alert.informativeText = hasUpdate
-            ? "当前版本: \(currentDisplay)\n最新版本: \(latestDisplay)\n\n建议直接安装更新并重启 SnapAI,避免手动下载后覆盖安装。若发布包持续使用同一个稳定签名身份,辅助功能权限通常可保留。"
-            : "当前版本: \(currentDisplay)\n最新版本: \(latestDisplay)"
-        alert.alertStyle = hasUpdate ? .informational : .informational
-        if hasUpdate {
-            alert.addButton(withTitle: "安装并重启")
-            alert.addButton(withTitle: "打开下载页")
-            alert.addButton(withTitle: "取消")
-        } else {
-            alert.addButton(withTitle: "好")
+        guard hasUpdate else {
+            presentUpToDate(currentDisplay: currentDisplay, latestDisplay: latestDisplay)
+            return
         }
 
-        let response = run(alert)
-        if hasUpdate && response == .alertFirstButtonReturn {
-            install(release)
-        } else if hasUpdate && response == .alertSecondButtonReturn {
-            NSWorkspace.shared.open(release.htmlURL)
+        let trimmedNotes = release.body?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = (trimmedNotes?.isEmpty == false) ? trimmedNotes : nil
+        let trimmedName = release.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = (trimmedName?.isEmpty == false) ? trimmedName! : "SnapAI \(latestDisplay)"
+
+        let model = UpdateFlowModel(
+            currentDisplay: currentDisplay,
+            latestDisplay: latestDisplay,
+            releaseTitle: title,
+            releaseNotes: notes ?? "本次更新暂无详细说明,点「安装更新」即可获取最新版本。",
+            hasNotes: notes != nil,
+            autoInstall: autoInstallPreference
+        )
+        model.onInstall = { [weak model] in
+            guard let model else { return }
+            install(release, model: model)
         }
+        model.onSkip = {
+            setSkippedVersion(latest)
+            UpdateWindowController.shared.close()
+        }
+        model.onRemindLater = { UpdateWindowController.shared.close() }
+        model.onCancel = { UpdateWindowController.shared.cancelInstall() }
+        model.onAutoInstallChanged = { setAutoInstallPreference($0) }
+        UpdateWindowController.shared.present(model: model)
     }
 
-    private static func install(_ release: Release) {
-        Task {
-            do {
-                let asset = try installAsset(from: release)
-                let zipURL = try await download(asset)
-                try await verifyDownload(zipURL: zipURL, asset: asset, release: release)
-                let newAppURL = try unpackApp(from: zipURL)
-                try await MainActor.run {
-                    try launchInstaller(newAppURL: newAppURL, releaseTag: release.tagName)
-                }
-            } catch {
-                await MainActor.run {
-                    presentInstallError(error, release: release)
-                }
-            }
-        }
+    @MainActor
+    private static func presentUpToDate(currentDisplay: String, latestDisplay: String) {
+        let alert = NSAlert()
+        alert.messageText = "SnapAI 已是最新版本"
+        alert.informativeText = "当前版本: \(currentDisplay)\n最新版本: \(latestDisplay)"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "好")
+        _ = run(alert)
+    }
+
+    @MainActor
+    private static func install(_ release: Release, model: UpdateFlowModel) {
+        UpdateWindowController.shared.enterDownloading()
+        let task = Task { await runInstall(release, model: model) }
+        UpdateWindowController.shared.setInstallTask(task)
     }
 
     private static func installAsset(from release: Release) throws -> Asset {
         try UpdateChecker.requiredAppZipAsset(for: release)
     }
 
-    private static func download(_ asset: Asset) async throws -> URL {
+    private static func downloadWithProgress(_ asset: Asset, model: UpdateFlowModel) async throws -> URL {
         var request = updateRequest(url: asset.browserDownloadURL, accept: "application/octet-stream")
         request.timeoutInterval = 90
-        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw UpdateError.downloadFailed(http.statusCode)
-        }
 
         let updateDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("SnapAIUpdate-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: updateDir, withIntermediateDirectories: true)
         let zipURL = updateDir.appendingPathComponent(asset.name)
-        try FileManager.default.moveItem(at: temporaryURL, to: zipURL)
+
+        let downloader = UpdateProgressDownloader(destination: zipURL) { received, total in
+            Task { @MainActor in
+                model.receivedBytes = received
+                model.totalBytes = total
+            }
+        }
+        try await downloader.run(request: request)
         return zipURL
     }
 
@@ -390,7 +403,6 @@ enum UpdateCheckerApp {
             proc.standardError = null
         }
         try proc.run()
-        presentInstallStarted(releaseTag)
     }
 
     @MainActor
@@ -421,19 +433,58 @@ enum UpdateCheckerApp {
             proc.standardError = null
         }
         try proc.run()
-        presentInstallStarted(releaseTag)
         return true
     }
 
+    /// 后台执行下载、校验、解包与安装;进度回调驱动进度窗,失败回退到错误提示。
+    private static func runInstall(_ release: Release, model: UpdateFlowModel) async {
+        do {
+            let asset = try installAsset(from: release)
+            let zipURL = try await downloadWithProgress(asset, model: model)
+            await MainActor.run { model.phase = .installing }
+            try await verifyDownload(zipURL: zipURL, asset: asset, release: release)
+            let newAppURL = try unpackApp(from: zipURL)
+            try await MainActor.run {
+                try launchInstaller(newAppURL: newAppURL, releaseTag: release.tagName)
+                scheduleTerminateAfterInstall()
+            }
+        } catch is CancellationError {
+            await MainActor.run { UpdateWindowController.shared.close() }
+        } catch {
+            if (error as? URLError)?.code == .cancelled {
+                await MainActor.run { UpdateWindowController.shared.close() }
+            } else {
+                await MainActor.run {
+                    UpdateWindowController.shared.close()
+                    presentInstallError(error, release: release)
+                }
+            }
+        }
+    }
+
+    /// 安装器已启动,短暂展示「正在安装」后退出,让 helper 在原位置替换并自动重开。
     @MainActor
-    private static func presentInstallStarted(_ releaseTag: String) {
-        let alert = NSAlert()
-        alert.messageText = "正在安装 \(releaseTag)"
-        alert.informativeText = "SnapAI 将退出,完成原位置替换后自动重新打开。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "好")
-        _ = run(alert)
-        NSApp.terminate(nil)
+    private static func scheduleTerminateAfterInstall() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            NSApp.terminate(nil)
+        }
+    }
+
+    // MARK: - 更新偏好持久化
+
+    private static let autoInstallDefaultsKey = "SnapAI.Update.autoInstall"
+    private static let skippedVersionDefaultsKey = "SnapAI.Update.skippedVersion"
+
+    private static var autoInstallPreference: Bool {
+        UserDefaults.standard.bool(forKey: autoInstallDefaultsKey)
+    }
+
+    private static func setAutoInstallPreference(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: autoInstallDefaultsKey)
+    }
+
+    private static func setSkippedVersion(_ version: String) {
+        UserDefaults.standard.set(version, forKey: skippedVersionDefaultsKey)
     }
 
     private static func presentInstallError(_ error: Error, release: Release) {
@@ -475,5 +526,73 @@ enum UpdateCheckerApp {
 
     private struct GitHubAPIError: Decodable {
         let message: String
+    }
+}
+
+/// 基于 URLSessionDownloadDelegate 的下载器,按字节回报进度并支持取消。
+private final class UpdateProgressDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let destination: URL
+    private let onProgress: @Sendable (Int64, Int64) -> Void
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var session: URLSession?
+
+    init(destination: URL, onProgress: @escaping @Sendable (Int64, Int64) -> Void) {
+        self.destination = destination
+        self.onProgress = onProgress
+        super.init()
+    }
+
+    func run(request: URLRequest) async throws {
+        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        self.session = session
+        let task = session.downloadTask(with: request)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                self.continuation = continuation
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession,
+                    downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64,
+                    totalBytesExpectedToWrite: Int64) {
+        onProgress(totalBytesWritten, totalBytesExpectedToWrite)
+    }
+
+    func urlSession(_ session: URLSession,
+                    downloadTask: URLSessionDownloadTask,
+                    didFinishDownloadingTo location: URL) {
+        let continuation = self.continuation
+        self.continuation = nil
+        do {
+            if let http = downloadTask.response as? HTTPURLResponse,
+               !(200..<300).contains(http.statusCode) {
+                throw UpdateChecker.UpdateError.downloadFailed(http.statusCode)
+            }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.moveItem(at: location, to: destination)
+            continuation?.resume()
+        } catch {
+            continuation?.resume(throwing: error)
+        }
+        session.finishTasksAndInvalidate()
+    }
+
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didCompleteWithError error: Error?) {
+        // 成功路径已在 didFinishDownloadingTo 处理;此处只处理失败/取消。
+        guard let error else { return }
+        let continuation = self.continuation
+        self.continuation = nil
+        continuation?.resume(throwing: error)
+        session.finishTasksAndInvalidate()
     }
 }

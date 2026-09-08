@@ -25,12 +25,14 @@ public enum UpdateChecker {
         public let tagName: String
         public let name: String?
         public let htmlURL: URL
+        public var body: String? = nil
         public let assets: [Asset]
 
         package enum CodingKeys: String, CodingKey {
             case tagName = "tag_name"
             case name
             case htmlURL = "html_url"
+            case body
             case assets
         }
 

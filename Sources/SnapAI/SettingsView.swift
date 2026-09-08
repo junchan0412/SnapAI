@@ -37,7 +37,6 @@ struct SettingsView: View {
         } detail: {
             VStack(spacing: 0) {
                 settingsHeader
-                Divider()
                 settingsContentSurface
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
