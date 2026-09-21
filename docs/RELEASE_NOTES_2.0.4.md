@@ -37,4 +37,5 @@ SnapAI 2.0.4 是 Liquid Glass 视觉重构版本：全界面统一为 macOS 26 L
 
 ## 已知事项
 
-- App runtime smoke 中“结果详情按钮无障碍树”两项失败在基线（v2.0.3 未改动树）同样复现，为预存环境问题，非本次回归；其余门禁全绿。
+- 无。preflight 全绿：逻辑测试、离线流式与 App 生命周期回归、macOS smoke、release 打包与签名验证全部通过。
+- 附带修复：App runtime smoke 的“结果详情按钮无障碍树”两项在 v2.0.3 基线同样失败，根因为测试用 NSAccessibility `accessibilityChildren` 查询——在非激活浮动面板 + SwiftUI 宿主下该路径只暴露结构骨架（已用最小探针验证）。测试已改用同进程 AXUIElement API 遍历与 press（无需 AX 信任），回归通过。
