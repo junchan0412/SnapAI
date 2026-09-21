@@ -38,7 +38,8 @@ struct WorkModeSettingsSection: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

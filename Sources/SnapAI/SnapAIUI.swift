@@ -145,8 +145,7 @@ struct SnapAIStatusPill: View {
             .truncationMode(.middle)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(filled ? tint.opacity(0.11) : SnapAIUI.Surface.control,
-                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .snapAIGlassPill(tint: filled ? tint : .secondary)
     }
 }
 

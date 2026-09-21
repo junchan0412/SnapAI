@@ -140,11 +140,11 @@ final class PromptEditorContainer: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        // 填充由外层 SwiftUI glass field 提供（26+ 为 Liquid Glass，低版本为
+        // Surface.field）；AppKit 侧只画焦点/分隔描边，不再画不透明底。
         let borderWidth: CGFloat = isFocused ? 2 : 1
         let rect = bounds.insetBy(dx: borderWidth / 2, dy: borderWidth / 2)
         let path = NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12)
-        NSColor.textBackgroundColor.setFill()
-        path.fill()
         (isFocused ? NSColor.controlAccentColor.withAlphaComponent(0.65) : NSColor.separatorColor.withAlphaComponent(0.4)).setStroke()
         path.lineWidth = borderWidth
         path.stroke()

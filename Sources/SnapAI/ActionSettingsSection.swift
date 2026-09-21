@@ -35,6 +35,7 @@ struct ActionSettingsSection: View {
                 .padding(SnapAIUI.edgePadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .snapAIScrollEdge()
             .onChange(of: ui.expandedActionID) { _, id in
                 if let id { proxy.scrollTo(id, anchor: .top) }
             }
@@ -68,7 +69,7 @@ struct ActionSettingsSection: View {
                     .foregroundStyle(SnapAIUI.StatusColor.tint(for: notice.kind))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
+                    .snapAIGlassPill(tint: .secondary)
                     .padding(.bottom, 12)
                     .transition(.opacity)
                     .accessibilityLabel(notice.message)
@@ -113,7 +114,8 @@ struct ActionSettingsSection: View {
             Text("全局提示词")
                 .font(SnapAIUI.Typography.sectionTitle)
         }
-        .snapAISurface(padding: 16)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     private var addActionMenu: some View {
@@ -181,7 +183,8 @@ struct ActionSettingsSection: View {
                     .help(HotKeyRecorderText.instructions)
                     .accessibilityLabel("快捷提问的全局快捷键")
         }
-        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     @ViewBuilder
@@ -229,11 +232,11 @@ struct ActionSettingsSection: View {
             }
 
             if isExpanded {
-                Divider().padding(.vertical, 16)
-                actionEditor(action)
+                actionEditor(action).padding(.top, 16)
             }
         }
-        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
+        .padding(16)
+        .snapAIGlassCard()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -254,7 +257,6 @@ struct ActionSettingsSection: View {
                     .foregroundStyle(.secondary)
             }
             actionHotKeyEditor(action)
-            Divider()
             Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
             if action.isTranslation {
                 editorRow("目标语言") {
@@ -295,8 +297,7 @@ struct ActionSettingsSection: View {
                 Text("更多选项 · 图标、分组、模型与推理")
                     .font(SnapAIUI.Typography.metaText)
             }
-            Divider()
-            deleteActionRow(action)
+            deleteActionRow(action).padding(.top, 8)
         }
         .font(SnapAIUI.Typography.bodyText)
     }

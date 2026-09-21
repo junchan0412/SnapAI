@@ -86,13 +86,11 @@ struct PrivacySettingsSection: View {
                     .font(.caption2)
                     .foregroundStyle(SnapAIUI.StatusColor.error)
             }
-            Divider().padding(.vertical, 2)
-            redactionPreviewPanel(preview)
+            redactionPreviewPanel(preview).padding(.top, 10)
         }
         .font(.caption)
         .padding(SnapAIUI.compactPadding)
-        .background(SnapAIUI.Surface.quiet)
-        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+        .snapAIGlassCard(radius: SnapAIUI.controlRadius)
     }
 
     private func redactionRuleRow(_ rule: PrivacyRedactionRule,
@@ -362,7 +360,8 @@ private extension View {
                 content()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -389,7 +388,6 @@ private extension View {
     }
 
     var compactDivider: some View {
-        Divider()
-            .opacity(0.55)
+        Spacer(minLength: SnapAIUI.tightSpacing)
     }
 }

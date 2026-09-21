@@ -14,6 +14,7 @@ struct PermissionSettingsSection: View {
             }
             .padding(SnapAIUI.edgePadding)
         }
+        .snapAIScrollEdge()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: refreshPermissions)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -29,11 +30,11 @@ struct PermissionSettingsSection: View {
                 .textCase(.uppercase)
             VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
                 permissionStatusRow
-                Divider().opacity(0.55)
-                permissionActionsRow
+                permissionActionsRow.padding(.top, 4)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -85,7 +86,6 @@ struct PermissionSettingsSection: View {
                     }
                     Spacer()
                 }
-                Divider().opacity(0.55)
                 HStack(spacing: SnapAIUI.tightSpacing) {
                     Button("打开屏幕录制设置") {
                         NSWorkspace.shared.open(SystemPrivacySettings.screenCaptureURL)
@@ -94,7 +94,8 @@ struct PermissionSettingsSection: View {
                     Spacer()
                 }
             }
-            .snapAISurface(padding: SnapAIUI.compactPadding)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
     }
 

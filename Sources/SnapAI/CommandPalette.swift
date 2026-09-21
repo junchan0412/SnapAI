@@ -245,8 +245,6 @@ struct CommandPaletteView: View {
             }
             .padding(20)
 
-            Divider()
-
             if filteredItems.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -314,6 +312,7 @@ struct CommandPaletteView: View {
                         }
                         .padding(8)
                     }
+                    .snapAIScrollEdge()
                     .onChange(of: selectedIndex) {
                         scrollToSelection(with: proxy)
                     }
@@ -323,7 +322,6 @@ struct CommandPaletteView: View {
                 }
             }
 
-            Divider()
             HStack(spacing: 14) {
                 Label("↑↓ 选择", systemImage: "arrow.up.arrow.down")
                 Label("↩ 执行", systemImage: "return")

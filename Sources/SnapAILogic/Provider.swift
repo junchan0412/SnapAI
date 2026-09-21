@@ -75,6 +75,21 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         return normalizedHost == "localhost" || normalizedHost == "127.0.0.1" || normalizedHost == "::1"
     }
 
+    /// 展示用端点 host（信息密度处理）：设置页与诊断只显示 host，
+    /// 不显示完整 baseURL（含版本段/路径），更不显示 Key（Key 本就不在此 struct 的展示面）。
+    /// 解析失败或为空时返回 nil，由调用方展示“未设置端点”。
+    package var displayHost: String? {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let normalizedBase = AIClient.normalizedBase(trimmed, proto: apiProtocol)
+        guard let url = URL(string: normalizedBase),
+              let host = url.host,
+              !host.isEmpty else {
+            return nil
+        }
+        return host
+    }
+
     // apiKey 不参与编解码,改由本地加密密钥存储管理
     package enum CodingKeys: String, CodingKey {
         case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, requestTimeout

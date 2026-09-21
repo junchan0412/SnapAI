@@ -18,7 +18,6 @@ struct HistoryWindowView: View {
         let presentation = model.presentation
         VStack(spacing: 0) {
             historyToolbar(presentation: presentation)
-            Divider()
             if presentation.entries.isEmpty {
                 emptyState(presentation: presentation)
             } else {
@@ -124,8 +123,7 @@ struct HistoryWindowView: View {
                     }
                 }
                 .padding(10)
-                .background(SnapAIUI.Surface.content, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(SnapAIUI.Surface.border, lineWidth: 1))
+                .snapAIGlassField(radius: 8)
                 Toggle(isOn: $model.favoriteOnly) {
                     Label("收藏", systemImage: model.favoriteOnly ? "star.fill" : "star")
                 }
@@ -150,7 +148,7 @@ struct HistoryWindowView: View {
             }
         }
         .padding(20)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private func filterPopover(presentation: HistoryWindowPresentation) -> some View {
@@ -238,7 +236,7 @@ struct HistoryWindowView: View {
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private func historyDetail(_ entry: HistoryEntry) -> some View {
@@ -277,7 +275,6 @@ struct HistoryWindowView: View {
                 .accessibilityLabel("记录操作")
             }
             .padding(24)
-            Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if let source = entry.sourceDisplayText {
@@ -306,8 +303,8 @@ struct HistoryWindowView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
+            .snapAIScrollEdge()
             .id(entry.id)
-            Divider()
             VStack(spacing: 14) {
                 HStack(spacing: 8) {
                     Image(systemName: "tag").foregroundStyle(.secondary)
@@ -332,7 +329,7 @@ struct HistoryWindowView: View {
                 }
             }
             .padding(20)
-            .background(SnapAIUI.Surface.chrome)
+            .snapAIChrome()
         }
         .background(SnapAIUI.Surface.canvas)
     }

@@ -80,10 +80,8 @@ private struct DiffPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             columnHeader
             diffList
-            Divider()
             footer
         }
         .frame(minWidth: 700, minHeight: 500)
@@ -104,7 +102,7 @@ private struct DiffPreviewView: View {
             summaryPills
         }
         .padding(24)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var summaryPills: some View {
@@ -281,7 +279,7 @@ private struct DiffPreviewView: View {
             .controlSize(.large)
         }
         .padding(20)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var footerMessage: String {

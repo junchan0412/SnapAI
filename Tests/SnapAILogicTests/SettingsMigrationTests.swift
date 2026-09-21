@@ -23,6 +23,18 @@ func testBaseURLNormalization() {
            "keeps local http")
 }
 
+func testProviderDisplayHostShowsOnlyHost() {
+    // 信息密度处理：展示层只显示 host，不暴露完整 baseURL（含版本段/路径）。
+    var provider = AIProvider(name: "t", baseURL: "https://api.supxh.xin/v1", apiKey: "k")
+    expect(provider.displayHost == "api.supxh.xin", "display host strips scheme and version path")
+    provider.baseURL = "http://localhost:11434/v1"
+    expect(provider.displayHost == "localhost", "display host keeps local host without port noise")
+    provider.baseURL = "  "
+    expect(provider.displayHost == nil, "blank endpoint has no display host")
+    provider.baseURL = "not a url at all ///"
+    expect(provider.displayHost == nil, "unparseable endpoint has no display host")
+}
+
 func testPromptRender() {
     var action = AIAction()
     action.prompt = "翻译: {{lang}}\n{{text}}"

@@ -36,9 +36,7 @@ struct ResultView: View {
                 onChangeLanguage: vm.changeLanguage,
                 onClose: onClose
             )
-            Divider()
             scrollContent
-            Divider()
             footer
         }
         .frame(minWidth: 440, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
@@ -93,6 +91,7 @@ struct ResultView: View {
                     if vm.isStreaming { followsOutput = false }
                 })
             }
+            .snapAIScrollEdge()
             .background(ResultOutputAutoScrollObserver(state: vm.outputState) {
                 guard followsOutput, vm.shouldAutoScroll() else { return }
                 var transaction = Transaction()
@@ -124,7 +123,7 @@ struct ResultView: View {
         VStack(spacing: 12) {
             ResultOperationFeedbackHost(coordinator: vm.operationCoordinator)
 
-            HStack(spacing: 8) {
+            SnapAIGlassToolbarGroup(spacing: 8) {
                 Button { vm.showRouteDetails.toggle() } label: {
                     Image(systemName: vm.showRouteDetails ? "info.circle.fill" : "info.circle")
                         .foregroundStyle(vm.showRouteDetails ? Color.accentColor : .secondary)
@@ -177,7 +176,7 @@ struct ResultView: View {
         }
         .padding(.horizontal, SnapAIUI.edgePadding)
         .padding(.vertical, 14)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var requestDetails: some View {
@@ -210,8 +209,7 @@ struct ResultView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(SnapAIUI.Surface.quiet,
-                    in: RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
+        .snapAIGlassCard()
     }
 
     private var routeStatusText: ResultRouteStatusText {

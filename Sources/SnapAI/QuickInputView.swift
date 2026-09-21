@@ -28,7 +28,6 @@ struct QuickInputView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             VStack(alignment: .leading, spacing: 12) {
                 QuickPromptEditor(
                     text: $model.text,
@@ -38,6 +37,7 @@ struct QuickInputView: View {
                     onSubmit: { if canSubmit { model.submit() } }
                 )
                 .frame(minHeight: 144, idealHeight: 160, maxHeight: .infinity)
+                .snapAIGlassField(radius: 12)
 
                 if let preview = model.imagePreview {
                     QuickInputAttachmentRow(image: preview,
@@ -57,7 +57,6 @@ struct QuickInputView: View {
                 }
             }
             .padding(SnapAIUI.edgePadding)
-            Divider()
             footer
         }
         .frame(minWidth: 480, idealWidth: 560, minHeight: 300)
@@ -90,7 +89,7 @@ struct QuickInputView: View {
         }
         .padding(.horizontal, SnapAIUI.edgePadding)
         .padding(.vertical, 16)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var actionMenu: some View {
@@ -116,8 +115,7 @@ struct QuickInputView: View {
             .font(SnapAIUI.Typography.toolbarLabel)
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(SnapAIUI.Surface.control,
-                        in: RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+            .snapAIGlassPill(tint: .secondary)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -177,7 +175,7 @@ struct QuickInputView: View {
         .font(SnapAIUI.Typography.toolbarLabel)
         .padding(.horizontal, SnapAIUI.edgePadding)
         .padding(.vertical, 14)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 }
 
@@ -211,8 +209,7 @@ private struct QuickInputAttachmentRow: View {
             .accessibilityLabel("移除图片附件")
         }
         .padding(10)
-        .background(SnapAIUI.Surface.quiet,
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .snapAIGlassCard(radius: 10)
         .help(detail ?? "图片将随本次提问发送")
     }
 }

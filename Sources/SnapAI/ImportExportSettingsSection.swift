@@ -34,7 +34,8 @@ struct ConfigMigrationSettingsSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(
@@ -62,7 +63,7 @@ struct ConfigMigrationSettingsSection: View {
                     }
                     .font(.caption.weight(.medium))
                     .padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .snapAIGlassCard(radius: 12)
                 }
                 if let notice = configNotice.value {
                     Label(notice.message, systemImage: notice.tone.icon)
@@ -70,7 +71,7 @@ struct ConfigMigrationSettingsSection: View {
                         .foregroundStyle(notice.tone.color)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.regularMaterial, in: Capsule())
+                        .snapAIGlassPill(tint: .secondary)
                         .transition(.opacity)
                         .accessibilityLabel(notice.message)
                 }

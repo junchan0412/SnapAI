@@ -12,10 +12,10 @@ struct HistorySettingsSection: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 16) {
                     historyControls
-                    Divider()
-                    historyStorageModeRow
+                    historyStorageModeRow.padding(.top, 4)
                 }
-                .snapAISurface(padding: 16)
+                .padding(16)
+        .snapAIGlassCard()
                 usageStatsSection
                 HStack(spacing: 8) {
                     Text("历史记录")
@@ -35,6 +35,7 @@ struct HistorySettingsSection: View {
             }
             .padding(SnapAIUI.edgePadding)
         }
+        .snapAIScrollEdge()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .bottom) {
             ResultOperationFeedbackHost(coordinator: operationCoordinator)
@@ -71,8 +72,7 @@ struct HistorySettingsSection: View {
                         }
                         .font(SnapAIUI.Typography.metaText)
                         .padding(10)
-                        .background(SnapAIUI.Surface.quiet)
-                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+                        .snapAIGlassCard(radius: SnapAIUI.controlRadius)
                     }
                 }
                 .padding(.top, 12)
@@ -100,7 +100,8 @@ struct HistorySettingsSection: View {
                         .monospacedDigit()
                 }
             }
-            .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(16)
+        .snapAIGlassCard()
         }
     }
 
@@ -207,7 +208,8 @@ struct HistorySettingsSection: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     private func copyHistoryOutput(_ entry: HistoryEntry) {

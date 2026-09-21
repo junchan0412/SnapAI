@@ -38,12 +38,11 @@ struct FollowUpField: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(SnapAIUI.Surface.field)
-        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
+        .snapAIGlassField()
         .overlay {
             RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                .stroke(isFocused ? SnapAIUI.Surface.focus : SnapAIUI.Surface.divider,
-                        lineWidth: isFocused ? 2 : 1)
+                .stroke(isFocused ? SnapAIUI.Surface.focus : .clear,
+                        lineWidth: isFocused ? 2 : 0)
         }
         .help(FollowUpInputBehavior.helpText)
         .accessibilityLabel(FollowUpInputBehavior.accessibilityLabel)

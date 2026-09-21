@@ -158,6 +158,17 @@ require_match "partial result history tag" 'partialResult = "部分结果"' Sour
 require_match "runTool timeout" 'timeout: TimeInterval = 30' Sources/SnapAILogic/UpdateChecker.swift
 require_match "history store file permissions" 'posixPermissions: 0o600' Sources/SnapAILogic/HistoryStore.swift
 require_match "slow-gap timeout probe" 'testStreamIdleGapWithinRequestTimeout' Tests/Runtime/StreamingRuntimeSmoke.swift
+require_match "liquid glass card helper" 'func snapAIGlassCard' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "liquid glass field helper" 'func snapAIGlassField' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "liquid glass pill helper" 'func snapAIGlassPill' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "chrome transparency helper" 'func snapAIChrome' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
+require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
+require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI
+require_no_match "legacy material fallback" 'regularMaterial' Sources/SnapAI
+require_match "endpoint host display helper" 'var displayHost' Sources/SnapAILogic/Provider.swift
+require_match "endpoint host regression" 'testProviderDisplayHostShowsOnlyHost\(\)' Tests/SnapAILogicTests/main.swift
 require_match "app runtime gate in CI" 'run-app-runtime-tests.sh' .github/workflows/ci.yml
 
 echo "Audit remediation check: ok"

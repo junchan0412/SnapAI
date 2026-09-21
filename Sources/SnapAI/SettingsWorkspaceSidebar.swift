@@ -46,7 +46,6 @@ struct SettingsWorkspaceSidebar: View {
             .scrollContentBackground(.hidden)
 
             VStack(alignment: .leading, spacing: 12) {
-                Divider()
                 VStack(alignment: .leading, spacing: 5) {
                     Label(modelName.isEmpty ? "等待配置模型" : "当前模型",
                           systemImage: modelName.isEmpty ? "circle.dashed" : "circle.inset.filled")

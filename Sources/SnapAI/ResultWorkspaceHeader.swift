@@ -80,7 +80,7 @@ struct ResultWorkspaceHeader: View {
         }
         .padding(.horizontal, SnapAIUI.edgePadding)
         .padding(.vertical, 16)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var actionMenu: some View {

@@ -24,7 +24,6 @@ struct OnboardingView: View {
                         setupRow(number: "1", title: "连接你的 AI", detail: "选择云端服务或本地模型，按你的习惯工作。", ready: isAIConfigurationReady) {
                             Button(isAIConfigurationReady ? "管理模型" : "配置模型", action: openSettings)
                         }
-                        Divider().padding(.leading, 60)
                         setupRow(number: "2", title: "让选中的文字直接可用", detail: "授予辅助功能权限，便可读取选区、复制和写回。快捷提问无需此权限。", ready: permission.axGranted) {
                             Button(permission.axGranted ? "已授权" : "打开系统设置") {
                                 NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
@@ -33,13 +32,12 @@ struct OnboardingView: View {
                             .disabled(permission.axGranted)
                         }
                     }
-                    .background(SnapAIUI.Surface.content, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(SnapAIUI.Surface.border, lineWidth: 1))
+                    .snapAIGlassCard(radius: 12)
                     shortcuts
                 }
                 .padding(32)
             }
-            Divider()
+            .snapAIScrollEdge()
             HStack(spacing: 12) {
                 Text(isAIConfigurationReady ? "模型已就绪，随时开始。" : "也可以稍后在菜单栏中完成配置。")
                     .font(SnapAIUI.Typography.metaText)
@@ -110,7 +108,7 @@ struct OnboardingView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(SnapAIUI.Surface.content, in: RoundedRectangle(cornerRadius: 8))
+        .snapAIGlassCard(radius: 8)
     }
 
     private func setupRow<Controls: View>(number: String, title: String, detail: String, ready: Bool,

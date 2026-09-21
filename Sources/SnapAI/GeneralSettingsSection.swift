@@ -24,6 +24,7 @@ struct GeneralSettingsSection: View {
             }
             .padding(SnapAIUI.edgePadding)
         }
+        .snapAIScrollEdge()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -150,7 +151,8 @@ struct GeneralSettingsSection: View {
                 content()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+            .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -177,7 +179,6 @@ struct GeneralSettingsSection: View {
     }
 
     private var compactDivider: some View {
-        Divider()
-            .opacity(0.55)
+        Spacer(minLength: SnapAIUI.tightSpacing)
     }
 }

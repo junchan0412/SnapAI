@@ -68,7 +68,7 @@ struct SettingsView: View {
                 }
                 .padding(14)
                 .frame(maxWidth: 620)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .snapAIGlassCard(radius: 14)
                 .padding(20)
             }
         }
@@ -89,7 +89,7 @@ struct SettingsView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var pinButton: some View {

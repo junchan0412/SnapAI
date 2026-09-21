@@ -15,7 +15,7 @@ struct ResultThinkingSection: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(SnapAIUI.compactPadding)
-                        .background(SnapAIUI.Surface.quiet)
+                        .snapAIGlassCard(radius: SnapAIUI.controlRadius)
                         .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
                 }
             } label: {
@@ -125,7 +125,6 @@ struct ResultActionsToolbar: View {
                 Divider()
                 menuButton(.exportConversation, action: vm.exportConversation,
                            shortcut: "e", modifiers: [.command], state: state)
-                Divider()
                 menuButton(.copyBriefDiagnostics, action: vm.copyBriefRequestDiagnostics,
                            shortcut: "d", modifiers: [.command, .shift], state: state)
                 menuButton(.copyDiagnostics, action: vm.copyRequestDiagnostics,

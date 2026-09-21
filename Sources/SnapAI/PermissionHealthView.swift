@@ -108,7 +108,6 @@ struct PermissionHealthView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -192,6 +191,7 @@ struct PermissionHealthView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
             }
+            .snapAIScrollEdge()
         }
         .background(SnapAIUI.Surface.canvas)
         .frame(minWidth: 620,
@@ -207,7 +207,7 @@ struct PermissionHealthView: View {
                     .foregroundStyle(SnapAIUI.StatusColor.success)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(.regularMaterial, in: Capsule())
+                    .snapAIGlassPill(tint: SnapAIUI.StatusColor.success)
                     .padding(.bottom, 12)
                     .transition(.opacity)
                     .accessibilityLabel(notice)
@@ -227,7 +227,8 @@ struct PermissionHealthView: View {
                 .font(SnapAIUI.Typography.sectionTitle)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: 16, fillOpacity: SnapAIUI.quietFillOpacity)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     private var header: some View {
@@ -261,7 +262,7 @@ struct PermissionHealthView: View {
             .controlSize(.small)
         }
         .padding(24)
-        .background(SnapAIUI.Surface.chrome)
+        .snapAIChrome()
     }
 
     private var redactionStatusText: String {
@@ -330,16 +331,15 @@ struct PermissionHealthView: View {
                 }
             }
         }
-        .snapAISurface(padding: 16,
-                       fillOpacity: 0.055,
-                       strokeOpacity: 0.08,
-                       radius: SnapAIUI.cardRadius)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     private func copyDiagnostics(full: Bool) {
+        // 诊断文本仅含计数摘要（已配置 x/y、缺失 n），不含 Key 明文/掩码，可安全复制外发。
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(full ? snapshot.diagnosticText : snapshot.briefDiagnosticText, forType: .string)
-        flashCopy(full ? "完整诊断已复制" : "精简诊断已复制")
+        flashCopy(full ? "完整诊断已复制（不含密钥）" : "精简诊断已复制（不含密钥）")
     }
 
     private func copyRecoverySuggestions() {
@@ -396,9 +396,8 @@ struct PermissionHealthView: View {
                 .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .snapAISurface(padding: 16,
-                       fillOpacity: ok ? SnapAIUI.quietFillOpacity : 0.06,
-                       strokeOpacity: ok ? SnapAIUI.strokeOpacity : 0.10)
+        .padding(16)
+        .snapAIGlassCard()
     }
 
     private func detailLine(_ title: String, _ value: String, lineLimit: Int = 2) -> some View {

@@ -136,6 +136,7 @@ struct UpdateAvailableView: View {
                 .font(.system(size: 20, weight: .bold))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+
                     if model.hasNotes {
                         MarkdownView(text: model.releaseNotes)
                             .textSelection(.enabled)
@@ -149,15 +150,11 @@ struct UpdateAvailableView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .snapAIScrollEdge()
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(SnapAIUI.Surface.content,
-                    in: RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                .stroke(SnapAIUI.Surface.border, lineWidth: 1)
-        }
+        .snapAIGlassCard()
     }
 }
 

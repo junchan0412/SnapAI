@@ -30,6 +30,7 @@ struct ProviderSettingsSection: View {
             .padding(SnapAIUI.edgePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .snapAIScrollEdge()
         .confirmationDialog(
             "删除供应商「\(pendingDeleteProvider?.name ?? "")」",
             isPresented: Binding(get: { pendingDeleteProvider != nil },
@@ -63,7 +64,8 @@ struct ProviderSettingsSection: View {
             routingDiagnosticsDisclosure
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .snapAISurface(padding: SnapAIUI.compactPadding, fillOpacity: SnapAIUI.quietFillOpacity)
+        .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
     }
 
     private var currentModelSummaryRow: some View {
@@ -98,7 +100,7 @@ struct ProviderSettingsSection: View {
             return "还没有可用的供应商和模型。请添加供应商、填写 Key 并获取模型。"
         }
         let provider = settings.activeProvider?.name ?? "未选择供应商"
-        let endpoint = settings.activeProvider?.baseURL.isEmpty == false ? (settings.activeProvider?.baseURL ?? "") : "未设置端点"
+        let endpoint = settings.activeProvider?.displayHost ?? "未设置端点"
         return "\(provider) · \(endpoint)"
     }
 
@@ -302,13 +304,17 @@ struct ProviderSettingsSection: View {
                 .accessibilityLabel("调整供应商 \(provider.name) 的排序")
             }
             if isExpanded {
-                Divider().padding(.vertical, 16)
-                providerEditor(provider)
+                providerEditor(provider).padding(.top, 16)
             }
         }
-        .snapAISurface(padding: 16,
-                       fillOpacity: SnapAIUI.quietFillOpacity,
-                       isSelected: provider.id == settings.activeProviderID)
+        .padding(16)
+        .snapAIGlassCard()
+        .overlay {
+            if provider.id == settings.activeProviderID {
+                RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.34), lineWidth: 1)
+            }
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -535,8 +541,7 @@ struct ProviderSettingsSection: View {
         } else {
             modelRows(provider)
                 .frame(maxHeight: provider.models.count > 6 ? 168 : nil)
-                .background(SnapAIUI.Surface.quiet)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .snapAIGlassCard(radius: 8)
         }
     }
 

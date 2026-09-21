@@ -20,12 +20,7 @@ struct ResultSourceSection: View {
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(minHeight: 76, maxHeight: 160)
-                    .background(SnapAIUI.Surface.field,
-                                in: RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                            .stroke(SnapAIUI.Surface.divider, lineWidth: 1)
-                    }
+                    .snapAIGlassField()
                     .disabled(isStreaming)
                     .accessibilityLabel("编辑原文")
                 HStack {
@@ -55,7 +50,6 @@ struct ResultSourceSection: View {
             }
         }
         .padding(12)
-        .background(SnapAIUI.Surface.quiet,
-                    in: RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
+        .snapAIGlassCard()
     }
 }
