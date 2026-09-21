@@ -333,4 +333,4 @@ export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"
 
 ## 许可证
 
-当前仓库尚未附带明确的开源许可证。若你计划复制、修改或再分发,请先联系项目维护者确认授权。
+本项目采用 [MIT License](LICENSE)，详见仓库根目录的 `LICENSE` 文件。

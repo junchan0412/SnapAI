@@ -82,7 +82,10 @@ package final class AIClient {
     package static let thinkingOutputTokenMargin = 1_024
     private let settings: AppSettings
     private let session: URLSession
-    @MainActor private var task: Task<Void, Never>?
+    /// 流式任务句柄。deinit 与 Task 回调都会访问，因此用独立锁保护；
+    /// generation 计数仍由 @MainActor 串行保护，两者配合实现“旧回调自我作废”。
+    private let taskLock = NSLock()
+    private nonisolated(unsafe) var streamTask: Task<Void, Never>?
     @MainActor private var streamGeneration: UInt64 = 0
 
     package init(settings: AppSettings, session: URLSession = .shared) {
@@ -91,15 +94,21 @@ package final class AIClient {
     }
 
     deinit {
-        task?.cancel()
+        taskLock.lock()
+        let running = streamTask
+        taskLock.unlock()
+        running?.cancel()
     }
 
     /// 取消正在进行的流式请求
     @MainActor
     package func cancel() {
         streamGeneration &+= 1
-        task?.cancel()
-        task = nil
+        taskLock.lock()
+        let running = streamTask
+        streamTask = nil
+        taskLock.unlock()
+        running?.cancel()
     }
 
     /// 实际使用的 temperature
@@ -417,7 +426,8 @@ package final class AIClient {
             return
         }
         let session = session
-        task = Task { [weak self] in
+        taskLock.lock()
+        streamTask = Task { [weak self] in
             do {
                 try await Self.performStream(configuration: configuration,
                                              messages: messages,
@@ -431,15 +441,20 @@ package final class AIClient {
                 }
                 guard let self, !Task.isCancelled,
                       self.streamGeneration == requestGeneration else { return }
-                self.task = nil
+                // generation 守卫已保证：能走到这里就没有更新的请求接管，
+                // 因此无条件清空句柄是安全的（与原 self.task = nil 同理）。
+                // 注：Task 闭包是异步上下文，不能用 lock()/unlock()（Swift 6 报错），
+                // 只能用 withLock 作用域锁（同步临界区，不跨越 suspension）。
+                self.taskLock.withLock { self.streamTask = nil }
                 onComplete(nil)
             } catch {
                 guard let self, !Task.isCancelled,
                       self.streamGeneration == requestGeneration else { return }
-                self.task = nil
+                self.taskLock.withLock { self.streamTask = nil }
                 onComplete(error)
             }
         }
+        taskLock.unlock()
     }
 
     private static func validateImagePayloads(_ messages: [ChatMessage]) throws {

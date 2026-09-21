@@ -50,6 +50,7 @@ components = [
         "name": "SnapAI",
         "version": version,
         "bom-ref": "pkg:generic/snapai@" + version,
+        "licenses": [{"license": {"id": "MIT"}}],
         "hashes": [
             {"alg": "SHA-256", "content": os.environ["SNAPAI_SBOM_ZIP_SHA256"]}
         ],
@@ -99,6 +100,7 @@ bom = {
     "metadata": {
         "timestamp": os.environ["SNAPAI_SBOM_GENERATED_AT"],
         "component": components[0],
+        "licenses": [{"license": {"id": "MIT"}}],
         "properties": [
             {"name": "swiftpm.dependencies.count", "value": str(len(deps.get("dependencies", [])))},
             {"name": "swiftpm.identity", "value": deps.get("identity", "snapai")},

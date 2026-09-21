@@ -17,7 +17,7 @@ func log(_ message: String, to logURL: URL) {
 }
 
 @discardableResult
-func run(_ executable: String, _ arguments: [String], logURL: URL) -> Bool {
+func run(_ executable: String, _ arguments: [String], logURL: URL, timeout: TimeInterval = 60) -> Bool {
     let proc = Process()
     proc.executableURL = URL(fileURLWithPath: executable)
     proc.arguments = arguments
@@ -26,8 +26,21 @@ func run(_ executable: String, _ arguments: [String], logURL: URL) -> Bool {
     proc.standardError = pipe
     do {
         try proc.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
+        var outputData = Data()
+        let done = DispatchGroup()
+        done.enter()
+        DispatchQueue.global(qos: .utility).async {
+            outputData = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            done.leave()
+        }
+        if done.wait(timeout: .now() + max(1, timeout)) == .timedOut {
+            proc.terminate()
+            _ = done.wait(timeout: .now() + 5)
+            log("\(executable) 执行超时(\(Int(timeout))s)，已终止。", to: logURL)
+            return false
+        }
+        let data = outputData
         if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
             log(text.trimmingCharacters(in: .whitespacesAndNewlines), to: logURL)
         }

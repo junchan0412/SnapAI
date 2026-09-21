@@ -457,6 +457,7 @@ func testPrivacyHistoryTagExportPriorityIncludesMetadataOnly() {
         PrivacyHistoryTag.privacyPreview,
         PrivacyHistoryTag.metadataOnly
     ], "privacy history export priority keeps metadata-only audit tag")
+    expect(PrivacyHistoryTag.partialResult == "部分结果", "cancelled partial results carry a visible tag")
 }
 
 func testAppSettingsAddHistoryPersistsPrivacyTags() {

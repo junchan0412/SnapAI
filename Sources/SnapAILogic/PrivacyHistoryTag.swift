@@ -11,6 +11,8 @@ package enum PrivacyHistoryTag {
     package static let metadataOnly = "仅元信息"
     package static let sourceTruncated = "原文截断"
     package static let outputTruncated = "结果截断"
+    /// 用户手动停止生成时保留的部分结果，写入历史时自动追加。
+    package static let partialResult = "部分结果"
 
     package static let prioritizedForHistoryExport = [
         localRedaction,

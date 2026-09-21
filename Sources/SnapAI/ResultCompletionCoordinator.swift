@@ -4,6 +4,8 @@ import SnapAILogic
 struct ResultCompletionContext {
     var recordUsage: Bool
     var saveHistory: Bool
+    /// 完成时额外追加的历史标签（如取消时标记“部分结果”）。
+    var additionalHistoryTags: [String] = []
     var action: AIAction
     var sourceText: String
     var outputText: String
@@ -73,7 +75,7 @@ final class ResultCompletionCoordinator {
                 fallbackProviderName: settings.activeProvider?.name ?? "",
                 modelName: context.modelName,
                 fallbackModelName: settings.model,
-                historyTags: context.historyTags,
+                historyTags: context.historyTags + context.additionalHistoryTags,
                 contentStorage: context.contentStorage
             )
             lifecycle.updateHistorySaved(saved)

@@ -38,3 +38,13 @@ jobs:
 
       - name: Offline Streaming Runtime Tests
         run: scripts/run-streaming-runtime-tests.sh
+
+      - name: Offline App Runtime Tests
+        run: scripts/run-app-runtime-tests.sh
+
+      - name: Benchmark Smoke
+        # 只验证基准程序可编译、不崩溃；不做数值门禁（虚拟机噪声大）。
+        # 数值对比见 docs/benchmarks/ 与各版本重构报告。
+        run: |
+          scripts/benchmark-storage.sh
+          scripts/benchmark-streaming.sh

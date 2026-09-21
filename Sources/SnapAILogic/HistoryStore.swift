@@ -130,8 +130,13 @@ package final class HistoryStore {
         }
         Self.bootstrapLock.lock()
         defer { Self.bootstrapLock.unlock() }
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+        let parentDirectory = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parentDirectory,
                                                 withIntermediateDirectories: true)
+        // 历史库包含用户原文与 AI 输出全文：目录收紧到 0700，库文件收紧到 0600，
+        // 与 LocalSecretStore 的 Secrets 目录保持一致。已有文件同样收紧。
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700],
+                                                ofItemAtPath: parentDirectory.path)
         var db: OpaquePointer?
         guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
               let db else {
@@ -144,6 +149,12 @@ package final class HistoryStore {
             try execute(db, "PRAGMA journal_mode=WAL;")
             try execute(db, "PRAGMA foreign_keys=ON;")
             try migrate(db)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
+                                                    ofItemAtPath: url.path)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
+                                                    ofItemAtPath: url.path + "-wal")
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600],
+                                                    ofItemAtPath: url.path + "-shm")
             guard let identity = FileIdentity(url: url) else {
                 throw HistoryStoreFailure("failed to read history store file identity")
             }

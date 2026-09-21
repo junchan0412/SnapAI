@@ -491,12 +491,17 @@ public enum UpdateChecker {
             .first { $0.hasPrefix("designated =>") }
             .map { String($0.dropFirst("designated =>".count)).trimmingCharacters(in: .whitespacesAndNewlines) }
     }
-    public static func runTool(_ executable: String, arguments: [String]) throws {
-        _ = try runToolOutput(executable, arguments: arguments)
+    /// 执行外部工具并返回合并后的 stdout+stderr。
+    /// 为避免子进程输出塞满管道导致互等死锁，读取与等待放在后台串行队列，
+    /// 并设置整体超时（默认 30 秒）；超时会终止子进程并抛错。
+    public static func runTool(_ executable: String, arguments: [String], timeout: TimeInterval = 30) throws {
+        _ = try runToolOutput(executable, arguments: arguments, timeout: timeout)
     }
 
     @discardableResult
-    public static func runToolOutput(_ executable: String, arguments: [String]) throws -> String {
+    public static func runToolOutput(_ executable: String,
+                                     arguments: [String],
+                                     timeout: TimeInterval = 30) throws -> String {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: executable)
         proc.arguments = arguments
@@ -504,9 +509,27 @@ public enum UpdateChecker {
         proc.standardOutput = pipe
         proc.standardError = pipe
         try proc.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
-        let output = String(data: data, encoding: .utf8) ?? ""
+        // 读取与等待都在后台进行，避免“管道满→子进程阻塞→父进程等退出”的死锁；
+        // 整体超时后终止子进程并抛错。
+        let waitQueue = DispatchQueue(label: "com.snapai.run-tool-wait")
+        var outputData = Data()
+        let done = DispatchGroup()
+        done.enter()
+        waitQueue.async {
+            outputData = pipe.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            done.leave()
+        }
+        if done.wait(timeout: .now() + max(1, timeout)) == .timedOut {
+            proc.terminate()
+            _ = done.wait(timeout: .now() + 5)
+            throw NSError(
+                domain: "SnapAI.UpdateChecker",
+                code: -1001,
+                userInfo: [NSLocalizedDescriptionKey: "\(executable) 执行超时(\(Int(timeout))s)，已终止。"]
+            )
+        }
+        let output = String(data: outputData, encoding: .utf8) ?? ""
         guard proc.terminationStatus == 0 else {
             let message = output.isEmpty ? "\(executable) failed" : output
             throw NSError(

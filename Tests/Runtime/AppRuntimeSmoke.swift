@@ -147,9 +147,13 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
             try? await Task.sleep(nanoseconds: 250_000_000)
             check(!vm.isStreaming && vm.output == "partial" && vm.incompleteResultReason != nil,
                   "cancel preserves partial output in both immediate and typewriter modes")
-            check(settings.history.isEmpty && settings.actionUsageCounts.isEmpty && replacements == 0,
-                  "cancel never saves history, records success or auto-replaces")
+            check(settings.history.map(\.output) == ["partial"] &&
+                  settings.history.first?.displayTags.contains("部分结果") == true &&
+                  settings.actionUsageCounts.isEmpty && replacements == 0,
+                  "cancel saves its partial output tagged as partial, without success usage or auto-replace")
 
+            // 取消已保存一条“部分结果”历史；后续错误循环只断言不再新增。
+            let historyCountAfterCancel = settings.history.count
             for (body, thinking) in [(content("partial", done: false), false),
                                      ("data: {broken}\n\n", false),
                                      (content("<think>analysis only</think>"), true)] {
@@ -157,7 +161,7 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
                 vm.start(text: "source", action: action(thinking: thinking), autoReplaceEnabled: true)
                 await waitUntil("error or thinking-only output ends the request") { !vm.isStreaming && vm.errorMessage != nil }
                 try? await Task.sleep(nanoseconds: 50_000_000)
-                check(settings.history.isEmpty && settings.actionUsageCounts.isEmpty && replacements == 0,
+                check(settings.history.count == historyCountAfterCancel && settings.actionUsageCounts.isEmpty && replacements == 0,
                       "errors and thinking-only responses cannot save, count success or auto-replace")
             }
         }

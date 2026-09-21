@@ -299,7 +299,7 @@ struct ProviderSettingsSection: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .frame(width: 24)
-                .accessibilityLabel("供应商排序")
+                .accessibilityLabel("调整供应商 \(provider.name) 的排序")
             }
             if isExpanded {
                 Divider().padding(.vertical, 16)
@@ -517,6 +517,10 @@ struct ProviderSettingsSection: View {
                 ))
                 .textFieldStyle(.roundedBorder).frame(width: 70)
                 Text("秒").font(.caption2).foregroundStyle(.secondary)
+                Text("流式空闲超过此时长会断开，长思考/慢回复请设大。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -575,6 +579,7 @@ struct ProviderSettingsSection: View {
             }
             .buttonStyle(.plain)
             .help("移除模型")
+            .accessibilityLabel("从供应商 \(provider.name) 移除模型 \(entry.name)")
         }
         .padding(.vertical, 4)
     }

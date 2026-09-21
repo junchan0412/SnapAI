@@ -137,6 +137,10 @@ validate_release_version "Resources/Info.plist" "$SOURCE_VERSION" "$SOURCE_BUILD
 step "检查 diff 空白问题"
 git diff --check
 
+step "检查开源许可证"
+test -f LICENSE || { echo "error: 缺少 LICENSE 文件。" >&2; exit 1; }
+grep -Fq "[MIT License](LICENSE)" README.md || { echo "error: README 许可证章节未引用 LICENSE。" >&2; exit 1; }
+
 step "运行审计修复状态检查"
 scripts/run-audit-remediation-check.sh
 
@@ -287,6 +291,9 @@ components = [root] + bom.get("components", [])
 refs = [component["bom-ref"] for component in components]
 require(len(refs) == len(set(refs)), "存在重复 bom-ref")
 require(root["name"] == "SnapAI" and root["version"] == tag, "应用版本不匹配")
+for component in (root, bom.get("metadata", {})):
+    licenses = component.get("licenses", [])
+    require(any(entry.get("license", {}).get("id") == "MIT" for entry in licenses), "许可证声明缺失 (MIT)")
 properties = {entry["name"]: entry["value"] for entry in root.get("properties", [])}
 require(properties.get("git.commit") == commit, "git commit 不匹配")
 require(properties.get("release.asset") == Path(zip_path).name, "安装包名称不匹配")

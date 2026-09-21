@@ -254,7 +254,10 @@ final class ResultViewModel: ObservableObject {
         output = completeText
         isStreaming = false
         if !completeText.isEmpty { incompleteResultReason = .cancelled }
-        finishMetrics(recordUsage: false, saveHistory: false)
+        // 取消不计成功、不自动写回，但部分结果会保存到历史并打上“部分结果”标签。
+        finishMetrics(recordUsage: false,
+                      saveHistory: true,
+                      additionalHistoryTags: completeText.isEmpty ? [] : [PrivacyHistoryTag.partialResult])
     }
 
     func copyOutput() {
@@ -510,10 +513,11 @@ final class ResultViewModel: ObservableObject {
         }
     }
 
-    private func finishMetrics(recordUsage: Bool, saveHistory: Bool) {
+    private func finishMetrics(recordUsage: Bool, saveHistory: Bool, additionalHistoryTags: [String] = []) {
         let context = ResultCompletionContext(
             recordUsage: recordUsage,
             saveHistory: saveHistory,
+            additionalHistoryTags: additionalHistoryTags,
             action: action,
             sourceText: sourceText,
             outputText: completeText,

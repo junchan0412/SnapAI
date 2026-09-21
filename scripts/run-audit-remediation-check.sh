@@ -151,4 +151,13 @@ for regression in testServerSentEventParserPreservesFramingAndUnicode testAIStre
   require_match "registered regression: $regression" "$regression\(\)" Tests/SnapAILogicTests/main.swift
 done
 
+test -f LICENSE || fail "MIT license file LICENSE is missing"
+require_match "license referenced by README" '\[MIT License\]\(LICENSE\)' README.md
+require_match "cancel saves tagged partial history" 'additionalHistoryTags: completeText.isEmpty' Sources/SnapAI/ResultViewModel.swift
+require_match "partial result history tag" 'partialResult = "部分结果"' Sources/SnapAILogic/PrivacyHistoryTag.swift
+require_match "runTool timeout" 'timeout: TimeInterval = 30' Sources/SnapAILogic/UpdateChecker.swift
+require_match "history store file permissions" 'posixPermissions: 0o600' Sources/SnapAILogic/HistoryStore.swift
+require_match "slow-gap timeout probe" 'testStreamIdleGapWithinRequestTimeout' Tests/Runtime/StreamingRuntimeSmoke.swift
+require_match "app runtime gate in CI" 'run-app-runtime-tests.sh' .github/workflows/ci.yml
+
 echo "Audit remediation check: ok"

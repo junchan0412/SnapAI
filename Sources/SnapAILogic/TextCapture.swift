@@ -232,6 +232,8 @@ package enum TextCapture {
                                          &focused) == .success,
            let element = focused,
            isAXUIElementRef(element) {
+            // CF toll-free 桥接类型：真正的类型安全由上面的 isAXUIElementRef 保证，
+            // 此处 as! 只是 CFTypeRef→AXUIElement 的桥接手续（as? 会被编译器判为恒成功）。
             let axElement = element as! AXUIElement
             var visited = AXTraversalCounter()
             if let text = selectedText(in: axElement, depth: focusedAXTraversalDepth, visited: &visited) {

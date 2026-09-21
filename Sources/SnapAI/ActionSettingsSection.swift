@@ -419,6 +419,7 @@ struct ActionSettingsSection: View {
             .controlSize(.small)
             .disabled(settings.actions.first?.id == action.id)
             .help("上移到上一行")
+            .accessibilityLabel("将动作 \(action.name) 上移")
             Button {
                 moveAction(action.id, up: false)
             } label: {
@@ -427,6 +428,7 @@ struct ActionSettingsSection: View {
             .controlSize(.small)
             .disabled(settings.actions.last?.id == action.id)
             .help("下移到下一行")
+            .accessibilityLabel("将动作 \(action.name) 下移")
             Spacer()
             Button(role: .destructive) {
                 pendingDeleteAction = action
