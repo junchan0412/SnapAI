@@ -18,6 +18,8 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 > 2.0.1：统一各窗口区域的表面配色，消除标题栏、工具栏、正文与侧栏之间的色差与接缝，并将散落的硬编码颜色收敛为语义设计令牌。详见 [2.0.1 Release Notes](docs/RELEASE_NOTES_2.0.1.md)。
 >
 > 2.0.2：应用内更新窗口重构为原生对话框（图标、发布说明卡片、下载进度窗），删除主界面各区域之间的分割线，并修复供应商行排序菜单的重复箭头图标。详见 [2.0.2 Release Notes](docs/RELEASE_NOTES_2.0.2.md)。
+>
+> 2.0.3：审查驱动的维护版本——新增 MIT 许可证；取消生成不再丢弃部分结果（入库并打“部分结果”标签）；修复流式任务并发与外部进程超时隐患；历史库文件权限收紧；补无障碍标签与超时提示；CI 接入 app runtime 与 benchmark；1.x 文档归档。详见 [2.0.3 Release Notes](docs/RELEASE_NOTES_2.0.3.md)。
 
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 
