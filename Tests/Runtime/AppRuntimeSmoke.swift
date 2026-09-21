@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Foundation
 import SnapAILogic
 
@@ -328,19 +329,20 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         await waitUntil("the unpinned result window is active before opening details") { NSApp.isActive && resultWindow.isKeyWindow }
         await waitUntil("the real result details button appears in the accessibility tree") {
-            self.accessibilityElement(in: resultWindow, matching: {
-                $0.accessibilityIdentifier?() == "SnapAI.Result.RequestDetails"
-            }) != nil
+            self.axElement(identifier: "SnapAI.Result.RequestDetails") != nil
         }
-        guard let detailsButton = accessibilityElement(in: resultWindow, matching: {
-            $0.accessibilityIdentifier?() == "SnapAI.Result.RequestDetails"
-        }) else {
+        guard let detailsButton = axElement(identifier: "SnapAI.Result.RequestDetails") else {
             failures.append("the visible result window exposes its real details button")
             result.hide()
             other.close()
             return
         }
-        postClick(on: detailsButton, in: resultWindow)
+        if let frame = axFrame(of: detailsButton), !frame.isNull, !frame.isEmpty {
+            check(true, "the real details button has a clickable frame")
+        } else {
+            failures.append("the real details button has a clickable frame")
+        }
+        axPress(detailsButton)
         await waitUntil("the unpinned result has a real visible popover") {
             vm.showRouteDetails && self.hasVisiblePopover(in: resultWindow)
         }
@@ -383,35 +385,62 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         NSApp.postEvent(event, atStart: false)
     }
 
-    private func postClick(on element: AnyObject, in window: NSWindow) {
-        guard let frame = element.accessibilityFrame?(), !frame.isEmpty else {
-            failures.append("the real details button has a clickable frame")
-            return
+    // 同进程 AX 查询必须走 AXUIElement API：NSAccessibility 的 accessibilityChildren
+    // 在非激活浮动面板 + SwiftUI 宿主下只暴露结构骨架，不含 identifier 树；
+    // 而 AXUIElementCopyAttributeValue 能看到完整树，且同进程 press 不需要 AX 信任。
+    private func axAppRoot() -> AXUIElement {
+        AXUIElementCreateApplication(NSRunningApplication.current.processIdentifier)
+    }
+
+    private func axFind(_ element: AXUIElement, identifier: String) -> AXUIElement? {
+        var idRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXIdentifierAttribute as CFString, &idRef)
+        if (idRef as? String) == identifier { return element }
+        var kidsRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &kidsRef)
+        for kid in (kidsRef as? [AXUIElement]) ?? [] {
+            if let found = axFind(kid, identifier: identifier) { return found }
         }
-        let local = window.convertFromScreen(frame)
-        let location = NSPoint(x: local.midX, y: local.midY)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
-                                          timestamp: ProcessInfo.processInfo.systemUptime,
-                                          windowNumber: window.windowNumber, context: nil,
-                                          eventNumber: 0, clickCount: 1, pressure: 1)!
-            NSApp.postEvent(event, atStart: false)
+        return nil
+    }
+
+    private func axElement(identifier: String) -> AXUIElement? {
+        axFind(axAppRoot(), identifier: identifier)
+    }
+
+    private func axFrame(of element: AXUIElement) -> CGRect? {
+        var posRef: CFTypeRef?
+        var sizeRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posRef)
+        AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeRef)
+        guard let posRef = posRef, let sizeRef = sizeRef else { return nil }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(posRef as! AXValue, .cgPoint, &origin),
+              AXValueGetValue(sizeRef as! AXValue, .cgSize, &size) else { return nil }
+        return CGRect(origin: origin, size: size)
+    }
+
+    private func axPress(_ element: AXUIElement) {
+        let error = AXUIElementPerformAction(element, kAXPressAction as CFString)
+        check(error.rawValue == 0, "the real details button accepts an accessibility press action")
+    }
+
+    private func axContainsPopover(_ element: AXUIElement) -> Bool {
+        var roleRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+        if (roleRef as? String) == (kAXPopoverRole as String) { return true }
+        var kidsRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &kidsRef)
+        for kid in (kidsRef as? [AXUIElement]) ?? [] {
+            if axContainsPopover(kid) { return true }
         }
+        return false
     }
 
     private func hasVisiblePopover(in window: NSWindow) -> Bool {
-        accessibilityElement(in: window, matching: { $0.accessibilityRole?() == .popover }) != nil ||
+        axContainsPopover(axAppRoot()) ||
             window.childWindows?.contains(where: { $0.isVisible }) == true
-    }
-
-    private func accessibilityElement(in object: Any,
-                                      matching predicate: (AnyObject) -> Bool) -> AnyObject? {
-        let element = object as AnyObject
-        if predicate(element) { return element }
-        for child in element.accessibilityChildren?() ?? [] {
-            if let found = accessibilityElement(in: child, matching: predicate) { return found }
-        }
-        return nil
     }
 
     private func finish() async {
