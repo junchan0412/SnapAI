@@ -259,6 +259,7 @@ package enum AIRequestRouter {
 
     package static func providerReadiness(_ provider: AIProvider) -> ProviderReadiness {
         guard provider.isEnabled else { return .disabled }
+        // 注意:仅判空 trim,发送时由 Settings.apiKey 统一 trim,此处不改写存储。
         guard !provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .missingAPIKey
         }

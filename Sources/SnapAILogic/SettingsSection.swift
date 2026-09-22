@@ -2,7 +2,8 @@ import Foundation
 import CoreGraphics
 
 public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
-    case ai
+    case model
+    case provider
     case actions
     case history
     case general
@@ -10,9 +11,19 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     public var id: String { rawValue }
 
+    /// 旧 `ai` 分区的持久化/自动化别名。重命名后仍能解析回来。
+    public init?(resolvingLegacy rawValue: String) {
+        if rawValue == "ai" {
+            self = .model
+            return
+        }
+        self.init(rawValue: rawValue)
+    }
+
     public var title: String {
         switch self {
-        case .ai: return "AI 模型"
+        case .model: return "AI 模型"
+        case .provider: return "AI 供应商"
         case .actions: return "动作"
         case .history: return "历史"
         case .general: return "通用"
@@ -22,7 +33,8 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     public var icon: String {
         switch self {
-        case .ai: return "cpu"
+        case .model: return "cpu"
+        case .provider: return "network"
         case .actions: return "wand.and.stars"
         case .history: return "clock.arrow.circlepath"
         case .general: return "slider.horizontal.3"
@@ -32,8 +44,10 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     public var subtitle: String {
         switch self {
-        case .ai:
-            return "供应商、模型、路由策略"
+        case .model:
+            return "当前模型、路由策略"
+        case .provider:
+            return "供应商、Key、模型列表"
         case .actions:
             return "动作模板、快捷键、写回行为"
         case .history:
@@ -47,7 +61,8 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
 
     public var tabWidth: CGFloat {
         switch self {
-        case .ai: return 96
+        case .model: return 96
+        case .provider: return 96
         case .actions: return 82
         case .history: return 82
         case .general: return 82

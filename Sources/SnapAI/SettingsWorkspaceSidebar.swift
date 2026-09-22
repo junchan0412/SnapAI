@@ -33,7 +33,8 @@ struct SettingsWorkspaceSidebar: View {
                 set: { if let section = $0 { selection = section } }
             )) {
                 Section("工作空间") {
-                    sidebarRow(.ai)
+                    sidebarRow(.model)
+                    sidebarRow(.provider)
                     sidebarRow(.actions)
                     sidebarRow(.history)
                 }

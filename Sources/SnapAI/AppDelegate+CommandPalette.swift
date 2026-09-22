@@ -113,10 +113,18 @@ extension AppDelegate {
             CommandPaletteItem(
                 id: "settings-ai",
                 title: "打开 AI 模型设置",
-                subtitle: "供应商、模型、自动路由、fallback",
+                subtitle: "当前模型、自动路由、fallback",
                 systemImage: "cpu",
-                keywords: "settings preferences ai model provider route fallback 模型 供应商 路由",
-                perform: { [weak self] in self?.showSettings(section: .ai) }
+                keywords: "settings preferences ai model route fallback 模型 路由",
+                perform: { [weak self] in self?.showSettings(section: .model) }
+            ),
+            CommandPaletteItem(
+                id: "settings-provider",
+                title: "打开 AI 供应商设置",
+                subtitle: "供应商、API Key、模型列表、连接测试",
+                systemImage: "network",
+                keywords: "settings preferences provider endpoint apikey models connection 供应商 端点 密钥 模型 连接",
+                perform: { [weak self] in self?.showSettings(section: .provider) }
             ),
             CommandPaletteItem(
                 id: "settings-actions",

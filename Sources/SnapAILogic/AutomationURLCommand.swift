@@ -117,8 +117,10 @@ package enum AutomationSettingsSectionSelection {
     package static func resolve(_ query: String?, fallback: SettingsSection) -> SettingsSection {
         guard let key = query?.trimmedNonEmpty?.automationLookupKey else { return fallback }
         switch key {
-        case "ai", "model", "models", "provider", "providers", "llm", "api", "apikey", "keychain", "ai模型", "供应商", "模型":
-            return .ai
+        case "ai", "model", "models", "routing", "route", "autoroute", "fallback", "llm", "api", "apikey", "keychain", "ai模型", "模型", "路由":
+            return .model
+        case "provider", "providers", "endpoint", "endpoints", "key", "keys", "供应商", "端点":
+            return .provider
         case "actions", "action", "prompt", "prompts", "hotkey", "hotkeys", "shortcut", "shortcuts", "keyboardshortcut", "keyboardshortcuts", "动作", "快捷键", "提示词":
             return .actions
         case "history", "histories", "historyrecords", "record", "records", "log", "logs", "历史", "历史记录":

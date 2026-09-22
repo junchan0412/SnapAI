@@ -169,6 +169,17 @@ require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI
 require_no_match "legacy material fallback" 'regularMaterial' Sources/SnapAI
 require_match "endpoint host display helper" 'var displayHost' Sources/SnapAILogic/Provider.swift
 require_match "endpoint host regression" 'testProviderDisplayHostShowsOnlyHost\(\)' Tests/SnapAILogicTests/main.swift
+require_match "provider page section" 'case provider' Sources/SnapAILogic/SettingsSection.swift
+require_match "model page section" 'case model' Sources/SnapAILogic/SettingsSection.swift
+require_match "legacy ai alias compat" 'resolvingLegacy' Sources/SnapAILogic/SettingsSection.swift
+require_match "provider settings page" 'struct ProviderSettingsSection' Sources/SnapAI/ProviderSettingsSection.swift
+require_match "model settings page" 'struct ModelSettingsSection' Sources/SnapAI/ModelSettingsSection.swift
+require_match "provider summary card" 'providerSummaryCard' Sources/SnapAI/ProviderSettingsSection.swift
+require_match "provider readiness hint" 'providerReadiness' Sources/SnapAI/ProviderSettingsSection.swift
+require_match "settings apiKey trims whitespace" 'trimmingCharacters' Sources/SnapAILogic/Settings.swift
+require_match "anthropic key whitespace regression" 'testAnthropicAPIKeyWhitespaceIsIgnoredForRequests' Tests/SnapAILogicTests/main.swift
+require_match "anthropic readiness regression" 'testAnthropicProviderReadinessCoversConfigureFailures' Tests/SnapAILogicTests/main.swift
+require_match "legacy section alias regression" 'testLegacyAISectionAliasResolvesToModelPage' Tests/SnapAILogicTests/main.swift
 require_match "app runtime gate in CI" 'run-app-runtime-tests.sh' .github/workflows/ci.yml
 
 echo "Audit remediation check: ok"

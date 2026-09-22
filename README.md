@@ -22,6 +22,8 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 > 2.0.3：审查驱动的维护版本——新增 MIT 许可证；取消生成不再丢弃部分结果（入库并打“部分结果”标签）；修复流式任务并发与外部进程超时隐患；历史库文件权限收紧；补无障碍标签与超时提示；CI 接入 app runtime 与 benchmark；1.x 文档归档。详见 [2.0.3 Release Notes](docs/RELEASE_NOTES_2.0.3.md)。
 >
 > 2.0.4：Liquid Glass 视觉重构——全界面统一为 macOS 26 Liquid Glass（低版本自动回退），删除结构性色块与分隔线；供应商端点只显示 host，诊断复制明确不含密钥。详见 [2.0.4 Release Notes](docs/RELEASE_NOTES_2.0.4.md)。
+>
+> 2.0.5：AI 设置页拆分——“AI 模型”（当前模型、路由策略）与“AI 供应商”（连接、Key、模型列表）独立成页；Anthropic 配置修复（Key 空白自动忽略、协议专属端点提示、就绪状态行）；命令面板、自动化深链与旧别名保持兼容。详见 [2.0.5 Release Notes](docs/RELEASE_NOTES_2.0.5.md)。
 
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 
@@ -174,7 +176,8 @@ SnapAI 也支持 `snapai://` URL Scheme。常用示例:
 snapai://run?action=总结&text=需要处理的文本
 snapai://translate?lang=en&text=你好
 snapai://quick?action=翻译&text=预填内容
-snapai://settings/ai
+snapai://settings/ai        # 兼容旧链,打开 AI 模型页
+snapai://settings/provider  # 打开 AI 供应商页
 snapai://history
 snapai://palette
 snapai://health

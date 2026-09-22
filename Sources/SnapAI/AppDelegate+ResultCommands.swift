@@ -40,7 +40,7 @@ extension AppDelegate {
     }
 
     func openAISettingsFromResult() {
-        showSettings(section: .ai)
+        showSettings(section: .model)
     }
 
     @objc func replaceResultFromMenu(_ sender: Any?) {

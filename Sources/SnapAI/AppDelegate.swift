@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                            imageData: nil)
         }
         panelController = FloatingPanelController(vm: resultVM) { [weak self] in
-            self?.showSettings(section: .ai)
+            self?.showSettings(section: .model)
         }
 
         quickInputModel = QuickInputModel(settings: settings)

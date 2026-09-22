@@ -47,6 +47,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         case "commands": showCommands()
         case "welcome": windows?.showOnboarding()
         case "actions": windows?.showSettings(section: .actions)
+        case "provider": windows?.showSettings(section: .provider)
+        case "model": windows?.showSettings(section: .model)
         case "history-settings": windows?.showSettings(section: .history)
         case "health":
             health = PermissionHealthController(settings: settings, hotKeyFailures: { [] },

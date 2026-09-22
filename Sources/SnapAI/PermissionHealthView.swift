@@ -138,12 +138,12 @@ struct PermissionHealthView: View {
                         healthCard("API Key", snapshot.enabledProviderCount > 0 && snapshot.enabledProviderMissingAPIKeyCount == 0,
                                    apiKeyHealthText,
                                    actionTitle: "打开 AI 设置") {
-                            openSettingsSection("ai")
+                            openSettingsSection("provider")
                         }
                         healthCard("AI 请求", snapshot.requestReadyProviderCount > 0,
                                    requestReadinessText,
                                    actionTitle: "打开 AI 设置") {
-                            openSettingsSection("ai")
+                            openSettingsSection("provider")
                         }
                     }
 

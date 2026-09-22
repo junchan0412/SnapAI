@@ -573,10 +573,16 @@ func testAutomationActionSelectionNormalizesQueries() {
 }
 
 func testAutomationSettingsSectionSelectionNormalizesQueries() {
-    expect(AutomationSettingsSectionSelection.resolve("AI", fallback: .general) == .ai,
+    expect(AutomationSettingsSectionSelection.resolve("AI", fallback: .general) == .model,
            "settings section selection resolves cased AI alias")
-    expect(AutomationSettingsSectionSelection.resolve("api_key", fallback: .general) == .ai,
+    expect(AutomationSettingsSectionSelection.resolve("api_key", fallback: .general) == .model,
            "settings section selection normalizes AI key aliases")
+    expect(AutomationSettingsSectionSelection.resolve("provider", fallback: .general) == .provider,
+           "settings section selection routes provider aliases to the provider page")
+    expect(AutomationSettingsSectionSelection.resolve("供应商", fallback: .general) == .provider,
+           "settings section selection routes Chinese provider aliases to the provider page")
+    expect(AutomationSettingsSectionSelection.resolve("ai", fallback: .general) == .model,
+           "legacy ai alias still resolves to the model page")
     expect(AutomationSettingsSectionSelection.resolve("hot-keys", fallback: .general) == .actions,
            "settings section selection normalizes hotkey aliases")
     expect(AutomationSettingsSectionSelection.resolve("history_records", fallback: .general) == .history,
@@ -585,7 +591,7 @@ func testAutomationSettingsSectionSelectionNormalizesQueries() {
            "settings section selection normalizes permission aliases")
     expect(AutomationSettingsSectionSelection.resolve("permission/screen-recording", fallback: .general) == .permission,
            "settings section selection normalizes composite permission aliases")
-    expect(AutomationSettingsSectionSelection.resolve("login_item", fallback: .ai) == .permission,
+    expect(AutomationSettingsSectionSelection.resolve("login_item", fallback: .model) == .permission,
            "settings section selection resolves login item aliases")
     expect(AutomationSettingsSectionSelection.resolve("missing", fallback: .history) == .history,
            "settings section selection falls back for unknown sections")
@@ -598,8 +604,12 @@ func testAutomationRouterParsesURLsAndSettingsSections() {
            "automation router parses raw URL strings into automation commands")
     expect(AutomationRouter.command(from: "not a url") == nil,
            "automation router rejects invalid URL strings")
-    expect(AutomationRouter.settingsSection(for: "history_records", fallback: .ai) == .history,
+    expect(AutomationRouter.settingsSection(for: "history_records", fallback: .model) == .history,
            "automation router resolves settings section aliases")
+    expect(AutomationRouter.settingsSection(for: "ai", fallback: .general) == .model,
+           "automation router keeps legacy ai URLs working on the model page")
+    expect(AutomationRouter.settingsSection(for: "provider", fallback: .general) == .provider,
+           "automation router resolves provider URLs to the provider page")
     expect(AutomationRouter.settingsSection(for: nil, fallback: .permission) == .permission,
            "automation router keeps current settings section as fallback")
 }

@@ -81,7 +81,7 @@ final class AISettingsUI: ObservableObject {
 
 @MainActor
 final class SettingsNavigationModel: ObservableObject {
-    @Published var selectedSection: SettingsSection = .ai
+    @Published var selectedSection: SettingsSection = .model
 
     func select(_ section: SettingsSection) {
         selectedSection = section

@@ -138,7 +138,11 @@ package final class AppSettings: ObservableObject, Codable {
 
     package var apiProtocol: APIProtocol { activeProvider?.apiProtocol ?? .openAI }
     package var baseURL: String { activeProvider?.baseURL ?? "" }
-    package var apiKey: String { activeProvider?.apiKey ?? "" }
+    /// 粘贴 API Key 时常带入前后空格/换行,Anthropic 服务端不忽略空格(直接 401 invalid)。
+    /// 在此统一 trim,测试连接/拉取模型/流式请求与就绪检查全部受益;存储层仍保留原文。
+    package var apiKey: String {
+        (activeProvider?.apiKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     package var model: String {
         guard let provider = activeProvider else { return "" }
         let enabledModels = provider.enabledModelNames

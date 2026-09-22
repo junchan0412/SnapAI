@@ -125,8 +125,10 @@ struct SettingsView: View {
     @ViewBuilder
     private var selectedSectionContent: some View {
         switch navigation.selectedSection {
-        case .ai:
+        case .model:
             aiTab
+        case .provider:
+            providerTab
         case .actions:
             actionsTab
         case .history:
@@ -139,6 +141,14 @@ struct SettingsView: View {
     }
 
     private var aiTab: some View {
+        ModelSettingsSection(settings: settings,
+                             ui: ui,
+                             onChange: onChange,
+                             commit: commit,
+                             applyCommit: applyCommit)
+    }
+
+    private var providerTab: some View {
         ProviderSettingsSection(settings: settings,
                                 ui: ui,
                                 modelLoader: modelLoader,

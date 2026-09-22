@@ -1556,3 +1556,44 @@ func testAppSettingsUpsertsHistoryContextProfileByName() {
     expect(namedSettings.contextProfiles[0].id == namedCreate.profile.id,
            "custom named history context upsert preserves profile identity")
 }
+
+func testAnthropicAPIKeyWhitespaceIsIgnoredForRequests() {
+    // 回归:粘贴 Key 带前后空格/换行时,Anthropic 服务端不忽略空格(401 invalid)。
+    // Settings.apiKey 统一 trim,请求层与就绪检查无需各自处理。
+    let settings = AppSettings()
+    let provider = AIProvider(id: "anthropic-ws", name: "Anthropic", apiProtocol: .anthropic,
+                              baseURL: "https://api.anthropic.com/v1", apiKey: "  sk-ant-test-key\n",
+                              models: [AIModelEntry(name: "claude-haiku-4-5")])
+    settings.providers = [provider]
+    settings.activeProviderID = provider.id
+    settings.activeModel = "claude-haiku-4-5"
+    expect(settings.apiKey == "sk-ant-test-key", "settings.apiKey trims pasted whitespace")
+    expect(provider.apiKey == "  sk-ant-test-key\n", "stored key keeps original text")
+    expect(AIRequestRouter.providerReadiness(provider) == .ready, "whitespace-only-padded key still counts as present")
+}
+
+func testAnthropicProviderReadinessCoversConfigureFailures() {
+    // 配置失败的三种典型状态都能给出可操作提示,而不是静默失败。
+    var noKey = AIProvider(name: "Anthropic", apiProtocol: .anthropic,
+                           baseURL: "https://api.anthropic.com/v1", apiKey: "",
+                           models: [AIModelEntry(name: "claude-haiku-4-5")])
+    expect(AIRequestRouter.providerReadiness(noKey) == .missingAPIKey, "empty key is missing-api-key")
+    noKey.apiKey = "sk-ant-x"
+    noKey.models = []
+    expect(AIRequestRouter.providerReadiness(noKey) == .noEnabledModels, "no models after fetch is surfaced")
+    noKey.models = [AIModelEntry(name: "claude-haiku-4-5")]
+    noKey.baseURL = "api.anthropic.com/v1/messages"
+    expect(AIRequestRouter.providerReadiness(noKey) == .ready, "method-path endpoint normalizes to ready")
+    expect(AIRequestRouter.providerRecoverySuggestion(noKey) == "无需处理", "ready provider needs no action")
+}
+
+func testLegacyAISectionAliasResolvesToModelPage() {
+    // 分区拆分兼容:旧 "ai" 别名落到模型页,供应商相关走供应商页。
+    expect(SettingsSection(resolvingLegacy: "ai") == .model, "legacy ai resolves to model page")
+    expect(SettingsSection(resolvingLegacy: "provider") == .provider, "provider resolves directly")
+    expect(SettingsSection(resolvingLegacy: "unknown") == nil, "unknown section stays nil")
+    expect(AutomationSettingsSectionSelection.resolve("ai", fallback: .general) == .model,
+           "automation ai alias lands on model page")
+    expect(AutomationSettingsSectionSelection.resolve("供应商", fallback: .general) == .provider,
+           "automation provider alias lands on provider page")
+}

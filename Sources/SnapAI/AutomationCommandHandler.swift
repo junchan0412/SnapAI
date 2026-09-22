@@ -106,7 +106,7 @@ extension AppDelegate {
         guard let selection = AutomationModelSelection.resolve(providerQuery: providerQuery,
                                                                modelQuery: modelQuery,
                                                                settings: settings) else {
-            showSettings(section: .ai)
+            showSettings(section: .model)
             return
         }
         settings.activate(providerID: selection.providerID,
@@ -256,7 +256,7 @@ extension AppDelegate {
 
     func setRoutingPreferenceFromAutomation(_ preference: AIRoutingPreference?) {
         guard let preference else {
-            showSettings(section: .ai)
+            showSettings(section: .model)
             return
         }
         settings.routingPreference = preference
