@@ -28,8 +28,7 @@ struct WorkModeSettingsSection: View {
                     Spacer(minLength: 12)
                 }
 
-                Divider()
-                    .opacity(0.55)
+                Spacer(minLength: SnapAIUI.tightSpacing)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: SnapAIUI.tightSpacing)], spacing: SnapAIUI.tightSpacing) {
                     ForEach(WorkModePreset.allCases) { mode in

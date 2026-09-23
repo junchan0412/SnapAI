@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SnapAILogic
 
@@ -144,5 +145,37 @@ struct SnapAIGlassToolbarGroup<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 侧栏毛玻璃（behind-window vibrancy）
+//
+// 参考 macOS 系统设置：左侧栏是 behind-window 的 .sidebar 毛玻璃（桌面透过来），
+// 右侧详情区是不透明基底。SwiftUI 的 NavigationSplitView 侧栏本应自动获得该材质，
+// 但当宿主 NSWindow 不透明时无法透出桌面。此处显式铺一层 behind-window 材质，
+// 并由 WindowCoordinator 把设置窗口设为 isOpaque=false + clear 背景，保证真实透明。
+struct SnapAIVisualEffect: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .sidebar
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+        nsView.state = .active
+    }
+}
+
+extension View {
+    /// 侧栏 behind-window 毛玻璃底。铺在侧栏内容最底层，桌面透过窗口显现。
+    func snapAISidebarGlass() -> some View {
+        background(SnapAIVisualEffect(material: .sidebar).ignoresSafeArea())
     }
 }

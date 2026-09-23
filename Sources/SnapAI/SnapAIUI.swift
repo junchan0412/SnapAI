@@ -35,12 +35,11 @@ enum SnapAIUI {
     }
 
     // MARK: - 语义表面(统一浅色/深色模式下的层次)
-    // 结构性区域(canvas/chrome)共用同一窗口基底,消除标题栏、工具栏、footer 与正文之间的接缝色差;
+    // 结构性区域统一用 canvas 窗口基底,消除标题栏、工具栏、footer 与正文之间的接缝色差;
     // 仅真正需要抬升的内容(content/field:文本编辑器、输入框、卡片、代码块)使用文本背景色并配边框强调层次。
     enum Surface {
         static let canvas = Color(nsColor: .windowBackgroundColor)
         static let content = Color(nsColor: .textBackgroundColor)
-        static let chrome = canvas
         static let field = Color(nsColor: .textBackgroundColor)
         static let control = Color.primary.opacity(regularFillOpacity)
         static let quiet = Color.primary.opacity(quietFillOpacity)
@@ -90,41 +89,6 @@ final class SnapAITransientState<Value>: ObservableObject {
         dismissWorkItem?.cancel()
         dismissWorkItem = nil
         value = nil
-    }
-}
-
-private struct SnapAISurfaceModifier: ViewModifier {
-    var padding: CGFloat
-    var fillOpacity: Double
-    var strokeOpacity: Double
-    var radius: CGFloat
-    var isSelected: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(SnapAIUI.Surface.content)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor.opacity(0.34) : Color.primary.opacity(strokeOpacity), lineWidth: 1)
-            }
-    }
-}
-
-extension View {
-    func snapAISurface(padding: CGFloat = SnapAIUI.sectionPadding,
-                       fillOpacity: Double = SnapAIUI.regularFillOpacity,
-                       strokeOpacity: Double = SnapAIUI.strokeOpacity,
-                       radius: CGFloat = SnapAIUI.cardRadius,
-                       isSelected: Bool = false) -> some View {
-        modifier(SnapAISurfaceModifier(padding: padding,
-                                       fillOpacity: fillOpacity,
-                                       strokeOpacity: strokeOpacity,
-                                       radius: radius,
-                                       isSelected: isSelected))
     }
 }
 

@@ -24,6 +24,8 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 > 2.0.4：Liquid Glass 视觉重构——全界面统一为 macOS 26 Liquid Glass（低版本自动回退），删除结构性色块与分隔线；供应商端点只显示 host，诊断复制明确不含密钥。详见 [2.0.4 Release Notes](docs/RELEASE_NOTES_2.0.4.md)。
 >
 > 2.0.5：AI 设置页拆分——“AI 模型”（当前模型、路由策略）与“AI 供应商”（连接、Key、模型列表）独立成页；Anthropic 配置修复（Key 空白自动忽略、协议专属端点提示、就绪状态行）；命令面板、自动化深链与旧别名保持兼容。详见 [2.0.5 Release Notes](docs/RELEASE_NOTES_2.0.5.md)。
+>
+> 2.0.6：设置窗口 Liquid Glass 收尾——侧栏 behind-window 毛玻璃（桌面透过来）+ 详情区不透明兜底；删除 `snapAISurface` / `Surface.chrome` 死代码与最后一处卡片内结构性分隔线。详见 [2.0.6 Release Notes](docs/RELEASE_NOTES_2.0.6.md)。
 
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 

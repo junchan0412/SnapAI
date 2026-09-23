@@ -163,6 +163,9 @@ require_match "liquid glass field helper" 'func snapAIGlassField' Sources/SnapAI
 require_match "liquid glass pill helper" 'func snapAIGlassPill' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "chrome transparency helper" 'func snapAIChrome' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
+require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
+require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
 require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
 require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
 require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI

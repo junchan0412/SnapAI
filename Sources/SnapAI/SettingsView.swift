@@ -40,6 +40,8 @@ struct SettingsView: View {
                 settingsContentSurface
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 窗口本身透明（侧栏 behind-window 毛玻璃透出桌面），详情区用不透明
+            // canvas 兜底，还原系统设置的“侧栏透明 + 详情实底”布局。
             .background(SnapAIUI.Surface.canvas)
         }
         .navigationSplitViewStyle(.balanced)

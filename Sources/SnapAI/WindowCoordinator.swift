@@ -54,9 +54,16 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         let window = NSWindow(contentViewController: makeSettingsContentController())
         window.title = "SnapAI 设置"
         window.identifier = NSUserInterfaceItemIdentifier("SnapAI.SettingsWindow")
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.isRestorable = false
+        // 全 Liquid Glass：窗口非不透明 + clear 背景,让侧栏 behind-window 毛玻璃
+        // 透出桌面;标题栏透明并融入内容,详情区由内容自身的不透明基底兜底。
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.delegate = self
         window.setContentSize(NSSize(width: 1000, height: 720))
         window.minSize = NSSize(width: 840, height: 620)

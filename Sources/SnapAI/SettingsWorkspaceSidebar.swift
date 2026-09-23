@@ -45,6 +45,7 @@ struct SettingsWorkspaceSidebar: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            .snapAIChrome()
 
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
@@ -74,6 +75,7 @@ struct SettingsWorkspaceSidebar: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
+        .snapAISidebarGlass()
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
     }
 
