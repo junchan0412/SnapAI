@@ -1423,6 +1423,101 @@ func testICloudPullDecisionProtectsLocalChangesAndConflicts() {
            "permission diagnostics summarize iCloud revision, dirty state, and last sync status")
 }
 
+func testICloudPullIfNeededEndToEndRecovery() {
+    // pullIfNeeded 的三条恢复路径全部可达,且失败时本地配置原样保留:
+    // apply(远端更新合并) / skip(冲突保留本机) / 无远端数据(静默返回)。
+    // 真机 iCloud 在 CI 不可用,因此用可注入的 NSUbiquitousKeyValueStore 子类
+    // 模拟远端数据——与 StorageRuntimeTests 的 StorageCloudStore 同一手法。
+    final class ProbeCloudStore: NSUbiquitousKeyValueStore {
+        var remoteData: Data?
+        var submitted: [Data] = []
+        override func data(forKey aKey: String) -> Data? { remoteData }
+        override func set(_ aData: Data?, forKey aKey: String) {
+            if let aData { submitted.append(aData) }
+        }
+        override func synchronize() -> Bool { true }
+    }
+
+    // 路径 1:远端 revision 更新,本机无未上传修改 -> 合并并更新 revision。
+    do {
+        let settings = AppSettings()
+        settings.iCloudSyncEnabled = true
+        settings.iCloudDeviceID = "local-device"
+        settings.iCloudRevision = 3
+        settings.iCloudHasLocalChanges = false
+        settings.temperature = 0.3
+
+        var remote = CloudSettingsPayload(settings: settings)
+        remote.deviceID = "remote-device"
+        remote.revision = 4
+        remote.temperature = 0.9
+        let cloud = ProbeCloudStore()
+        cloud.remoteData = try? JSONEncoder().encode(remote)
+        let applied = iCloudSync(store: cloud).pullIfNeeded(into: settings)
+        expect(applied, "newer remote payload applies through pullIfNeeded")
+        expect(settings.temperature == 0.9 && settings.iCloudRevision == 4,
+               "applied remote payload updates settings and revision")
+        expect(settings.iCloudLastSyncStatus.contains("已应用远端 revision 4"),
+               "applied remote payload records an actionable status")
+    }
+
+    // 路径 2:本机有未上传修改 -> 保留本机,本地值与脏标记都不动。
+    do {
+        let settings = AppSettings()
+        settings.iCloudSyncEnabled = true
+        settings.iCloudDeviceID = "local-device"
+        settings.iCloudRevision = 3
+        settings.iCloudHasLocalChanges = true
+        settings.temperature = 0.3
+
+        var remote = CloudSettingsPayload(settings: settings)
+        remote.deviceID = "remote-device"
+        remote.revision = 4
+        remote.temperature = 0.9
+        let cloud = ProbeCloudStore()
+        cloud.remoteData = try? JSONEncoder().encode(remote)
+        let applied = iCloudSync(store: cloud).pullIfNeeded(into: settings)
+        expect(!applied, "conflicted remote payload must not overwrite local changes")
+        expect(settings.temperature == 0.3 && settings.iCloudRevision == 3,
+               "conflict keeps local values and revision untouched")
+        expect(settings.iCloudHasLocalChanges &&
+               settings.iCloudLastSyncStatus.contains("本机有未上传修改"),
+               "conflict preserves the dirty flag with an actionable status")
+    }
+
+    // 路径 3:远端无数据 -> 静默返回,不改本地任何状态。
+    do {
+        let settings = AppSettings()
+        settings.iCloudSyncEnabled = true
+        settings.iCloudDeviceID = "local-device"
+        settings.iCloudRevision = 3
+        settings.temperature = 0.3
+        settings.iCloudLastSyncStatus = "之前的状态"
+        let cloud = ProbeCloudStore()
+        cloud.remoteData = nil
+        let applied = iCloudSync(store: cloud).pullIfNeeded(into: settings)
+        expect(!applied, "missing remote payload returns without applying")
+        expect(settings.temperature == 0.3 && settings.iCloudRevision == 3 &&
+               settings.iCloudLastSyncStatus == "之前的状态",
+               "missing remote payload leaves local state untouched")
+    }
+
+    // 路径 4:同步开关关闭 -> 直接返回,远端数据再新也不合并。
+    do {
+        let settings = AppSettings()
+        settings.iCloudSyncEnabled = false
+        settings.iCloudDeviceID = "local-device"
+        settings.iCloudRevision = 3
+        var remote = CloudSettingsPayload(settings: settings)
+        remote.deviceID = "remote-device"
+        remote.revision = 9
+        let cloud = ProbeCloudStore()
+        cloud.remoteData = try? JSONEncoder().encode(remote)
+        let applied = iCloudSync(store: cloud).pullIfNeeded(into: settings)
+        expect(!applied, "disabled sync never applies remote payloads")
+    }
+}
+
 func testWorkModePresetsApplyCoherentSettings() {
     let settings = AppSettings()
 

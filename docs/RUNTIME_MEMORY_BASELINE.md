@@ -43,3 +43,21 @@ scripts/profile-runtime-memory.sh SnapAI quick-input
 - 历史窗口大数据量滚动。
 - ResultView 流式输出与 Markdown 渲染。
 - `UpdateChecker` 下载、解压和替换阶段。
+
+## 2.0.6 基线(设置窗口 Liquid Glass 收尾后)
+
+测量环境:Apple Silicon、macOS 27.2、release 配置 + 本地签名构建、
+`scripts/run-ui-preview.sh <surface> light` 启动的隔离预览进程
+(`com.snapai.preview` 独立 UserDefaults suite,预览假数据 1 供应商 / 4 条历史),
+启动后静置约 10 秒再用 `scripts/profile-runtime-memory.sh <pid> <label>` 采样。
+footprint 数值含 SwiftUI 渲染树与窗口材质,不同设备与系统版本下仅可同条件对比。
+
+| 场景 | Physical footprint | Peak | RSS | 观察 |
+| --- | ---: | ---: | ---: | --- |
+| 设置窗口打开(AI 模型页) | 50 MB | 51 MB | 约 130 MB | 全量设置树 + 侧栏 behind-window 材质 |
+| 快捷提问面板 | 27 MB | 27 MB | 约 105 MB | 最轻的输入面板 |
+| 历史窗口(4 条预览数据) | 40 MB | 40 MB | 约 128 MB | 双栏 + Markdown 渲染 |
+
+与 1.6.55 对比:设置窗口初次显示 48–50 MB → 50 MB,基本持平;
+关闭窗口释放 hosting controller 的生命周期策略(1.6.56 节)保持不变,
+2.0.6 未引入新的常驻分配。

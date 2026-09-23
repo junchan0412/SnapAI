@@ -166,6 +166,7 @@ require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAI
 require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
+require_match "icloud conflict recovery test" 'testICloudPullIfNeededEndToEndRecovery' Tests/SnapAILogicTests/main.swift
 require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
 require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
 require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI
