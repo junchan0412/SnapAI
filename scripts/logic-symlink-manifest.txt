@@ -29,6 +29,7 @@ HistoryWindowRefreshPolicy.swift
 HotKeyCoordinator.swift
 HotKeyManager.swift
 HotKeyUtilities.swift
+ImageTextRecognition.swift
 InstallLogCommand.swift
 LocalModelHealth.swift
 LocalSecretStore.swift

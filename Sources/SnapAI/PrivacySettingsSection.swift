@@ -27,6 +27,15 @@ struct PrivacySettingsSection: View {
                     set: { settings.redactionEnabled = $0; commit() }
                 )
             )
+            compactDivider
+            toggleRow(
+                title: "图片本地 OCR",
+                description: "截图/粘贴图片后先在本机识别文字,纯文本图转文字发送,图片不出本机。",
+                isOn: Binding(
+                    get: { settings.imageOCREnabled },
+                    set: { settings.imageOCREnabled = $0; commit() }
+                )
+            )
             // 规则常驻可见:即便脱敏关闭也能看到已有规则数量与有效性,提升可发现性。
             compactDivider
             redactionRulesEditor

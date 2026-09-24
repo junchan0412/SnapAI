@@ -232,6 +232,19 @@ func testSettingsPersistenceRecoveryAndValidation() {
     }
 }
 
+func testImageTextRecognitionRejectsUnreliableInput() {
+    // OCR 是"省流量/省隐私"的优化路径:无文本、低置信、损坏数据一律返回 nil,
+    // 调用方继续走视觉模型,绝不阻塞发送。
+    expect(SnapAIImageTextRecognition.recognizeText(in: Data()) == nil,
+           "empty data has no text to recognize")
+    expect(SnapAIImageTextRecognition.recognizeText(in: Data([0x00, 0x01, 0x02])) == nil,
+           "non-image bytes decode to no reliable text")
+    expect(SnapAIImageTextRecognition.minimumConfidence == 0.5,
+           "OCR adoption threshold is locked at 0.5 average confidence")
+    expect(SnapAIImageTextRecognition.minimumTextLength == 8,
+           "OCR adoption threshold rejects icon/watermark noise under 8 characters")
+}
+
 func testHistorySearchDeduplicatesAndRejectsDeletedRows() {
     let newest = storageEntry(2)
     var duplicate = newest

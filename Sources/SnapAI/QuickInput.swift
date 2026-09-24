@@ -21,6 +21,8 @@ final class QuickInputModel: ObservableObject {
 
     private var sendFeedbackWork: DispatchWorkItem?
     private var transientWork: DispatchWorkItem?
+    /// OCR 代际令牌:新图片使旧识别结果作废,避免串入错误的文字。
+    private var ocrGeneration = 0
 
     init(settings: AppSettings) { self.settings = settings }
 
@@ -63,6 +65,7 @@ final class QuickInputModel: ObservableObject {
     }
 
     func clearImage() {
+        ocrGeneration &+= 1
         imageData = nil
         imagePreview = nil
         imageMimeType = "image/png"
@@ -100,6 +103,35 @@ final class QuickInputModel: ObservableObject {
         imagePreview = preview
         imageMimeType = payload.mimeType
         imageNotice = .success(QuickInputImageStatus.optimizedMessage(payload: payload))
+        startLocalOCRIfEnabled(data: payload.data)
+    }
+
+    /// 图片本地 OCR:纯文本截图转文字,走文本通道发送,省流量且图片不出本机。
+    /// 后台识别,成功后把文字拼入输入框并移除图片;失败/低置信则静默保留图片走视觉模型。
+    private func startLocalOCRIfEnabled(data: Data) {
+        guard settings.imageOCREnabled else { return }
+        ocrGeneration &+= 1
+        let generation = ocrGeneration
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let recognized = SnapAIImageTextRecognition.recognizeText(in: data)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.ocrGeneration else { return }
+                guard let recognized else { return }
+                self.applyOCRResult(recognized.text)
+            }
+        }
+    }
+
+    private func applyOCRResult(_ recognizedText: String) {
+        let trimmed = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            text = trimmed
+        } else {
+            text = text + "\n\n" + trimmed
+        }
+        clearImage()
+        imageNotice = .success("已在本地识别图片文字,图片不出本机,按发送直接提问。")
     }
 }
 

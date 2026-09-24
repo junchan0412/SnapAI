@@ -14,7 +14,7 @@ swiftc -O -whole-module-optimization -parse-as-library -enable-testing \
   Sources/SnapAILogic/*.swift \
   -o "$SNAPAI_STREAM_TEST_DIR/SnapAILogic.o" \
   -framework AppKit -framework Carbon -framework ApplicationServices \
-  -framework ServiceManagement -lsqlite3
+  -framework ServiceManagement -framework Vision -lsqlite3
 
 swiftc -O -parse-as-library -package-name snapai \
   -I "$SNAPAI_STREAM_TEST_DIR" \
@@ -25,6 +25,6 @@ swiftc -O -parse-as-library -package-name snapai \
   "$SNAPAI_STREAM_TEST_DIR/SnapAILogic.o" \
   -o "$SNAPAI_STREAM_TEST_DIR/StreamingRuntimeSmoke" \
   -framework AppKit -framework Carbon -framework ApplicationServices \
-  -framework ServiceManagement -lsqlite3
+  -framework ServiceManagement -framework Vision -lsqlite3
 
 SNAPAI_LOGIC_TESTS=1 "$SNAPAI_STREAM_TEST_DIR/StreamingRuntimeSmoke"

@@ -194,6 +194,7 @@ package struct CloudSettingsPayload: Codable {
     package var workModePreset: WorkModePreset
     package var privacyPreviewEnabled: Bool
     package var redactionEnabled: Bool
+    package var imageOCREnabled: Bool
     package var redactionRules: [PrivacyRedactionRule]
     package var historyContentStorage: HistoryContentStorage
     package var contextProfiles: [ContextProfile]
@@ -235,6 +236,7 @@ package struct CloudSettingsPayload: Codable {
         workModePreset = settings.workModePreset
         privacyPreviewEnabled = settings.privacyPreviewEnabled
         redactionEnabled = settings.redactionEnabled
+        imageOCREnabled = settings.imageOCREnabled
         redactionRules = AppSettings.sanitizedImportedRedactionRules(settings.redactionRules)
         historyContentStorage = settings.historyContentStorage
         let context = AppSettings.sanitizedImportedContextProfiles(settings.contextProfiles,
@@ -251,6 +253,7 @@ package struct CloudSettingsPayload: Codable {
         case useAXFirst, showDockIcon, typewriterSpeed
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
+        case imageOCREnabled
         case historyContentStorage
         case contextProfiles, activeContextProfileID
     }
@@ -295,6 +298,7 @@ package struct CloudSettingsPayload: Codable {
         workModePreset = (try? c.decode(WorkModePreset.self, forKey: .workModePreset)) ?? .standard
         privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
         redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
+        imageOCREnabled = (try? c.decode(Bool.self, forKey: .imageOCREnabled)) ?? true
         redactionRules = AppSettings.sanitizedImportedRedactionRules(
             (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
         )
@@ -340,6 +344,7 @@ package struct CloudSettingsPayload: Codable {
         settings.workModePreset = workModePreset
         settings.privacyPreviewEnabled = privacyPreviewEnabled
         settings.redactionEnabled = redactionEnabled
+        settings.imageOCREnabled = imageOCREnabled
         settings.redactionRules = redactionRules
         settings.historyContentStorage = historyContentStorage
         settings.contextProfiles = contextProfiles

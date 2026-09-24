@@ -33,6 +33,7 @@ swiftc -parse-as-library -package-name snapai -D SNAPAI_MANUAL_TEST_MAIN \
   -framework Carbon \
   -framework ApplicationServices \
   -framework ServiceManagement \
+  -framework Vision \
   -lsqlite3
 
 SNAPAI_LOGIC_TESTS=1 "$OUT"

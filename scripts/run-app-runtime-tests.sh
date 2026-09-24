@@ -15,7 +15,7 @@ swiftc -O -whole-module-optimization -parse-as-library -enable-testing \
   -emit-object Sources/SnapAILogic/*.swift \
   -o "$SNAPAI_APP_TEST_DIR/SnapAILogic.o" \
   -framework AppKit -framework SwiftUI -framework Carbon \
-  -framework ApplicationServices -framework ServiceManagement -lsqlite3
+  -framework ApplicationServices -framework ServiceManagement -framework Vision -lsqlite3
 
 SNAPAI_APP_TEST_SOURCES=()
 for source_file in Sources/SnapAI/*.swift; do
@@ -32,7 +32,7 @@ swiftc -O -parse-as-library -package-name snapai \
   "$SNAPAI_APP_TEST_DIR/SnapAILogic.o" \
   -o "$SNAPAI_TEST_BUNDLE/Contents/MacOS/SnapAIRuntimeSmoke" \
   -framework AppKit -framework SwiftUI -framework Carbon \
-  -framework ApplicationServices -framework ServiceManagement -lsqlite3
+  -framework ApplicationServices -framework ServiceManagement -framework Vision -lsqlite3
 
 cat > "$SNAPAI_TEST_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

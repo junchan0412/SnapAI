@@ -1207,6 +1207,34 @@ func testCloudSettingsPayloadPreservesRoutingPreferenceAndNormalizesModel() {
            "cloud payload preserves usable active context after sanitizing")
 }
 
+func testImageOCREnabledRoundTripsThroughSettingsAndCloudPayload() {
+    // OCR 开关默认开、旧配置缺字段回退开、Codable 与 iCloud payload 全链路保留。
+    expect(AppSettings().imageOCREnabled, "image OCR defaults to enabled")
+    let legacyJSON = "{}".data(using: .utf8)!
+    let legacy = (try? JSONDecoder().decode(AppSettings.self, from: legacyJSON)) ?? AppSettings()
+    expect(legacy.imageOCREnabled, "legacy settings without the flag default to enabled")
+
+    let source = AppSettings()
+    source.imageOCREnabled = false
+    guard let data = try? JSONEncoder().encode(source),
+          let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) else {
+        expect(false, "image OCR flag round-trips through settings codable")
+        return
+    }
+    expect(!decoded.imageOCREnabled, "image OCR disabled state survives settings encode/decode")
+
+    let payload = CloudSettingsPayload(settings: source)
+    expect(!payload.imageOCREnabled, "cloud payload carries the disabled OCR flag")
+    guard let payloadData = try? JSONEncoder().encode(payload),
+          let decodedPayload = try? JSONDecoder().decode(CloudSettingsPayload.self, from: payloadData) else {
+        expect(false, "image OCR flag round-trips through cloud payload codable")
+        return
+    }
+    let target = AppSettings()
+    decodedPayload.apply(to: target)
+    expect(!target.imageOCREnabled, "cloud payload applies the disabled OCR flag")
+}
+
 func testCloudSettingsPayloadRemapsActiveProviderAfterProviderIDRepair() {
     let source = AppSettings()
     var firstProvider = AIProvider(name: "First", apiProtocol: .openAI,

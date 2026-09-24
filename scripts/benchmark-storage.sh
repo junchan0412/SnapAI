@@ -16,7 +16,7 @@ compile_benchmark() {
   swiftc -O -parse-as-library -package-name SnapAI \
     "$source_root"/Sources/SnapAILogic/*.swift Tests/Performance/StorageBenchmarks.swift \
     -o "$destination" -framework AppKit -framework Carbon \
-    -framework ApplicationServices -framework ServiceManagement -lsqlite3
+    -framework ApplicationServices -framework ServiceManagement -framework Vision -lsqlite3
 }
 
 if [ "$#" -eq 1 ]; then

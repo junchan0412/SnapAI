@@ -97,6 +97,7 @@ package final class AppSettings: ObservableObject, Codable {
     @Published package var redactionRules: [PrivacyRedactionRule] = PrivacyRedactionRule.defaults()
     @Published package var contextProfiles: [ContextProfile] = ContextProfile.defaults()
     @Published package var activeContextProfileID: String = ""
+    @Published package var imageOCREnabled: Bool = true // 图片本地 OCR:纯文本截图转文字发送
 
     // 历史 / 引导 / 窗口尺寸
     @Published package var history: [HistoryEntry] = [] {
@@ -215,6 +216,7 @@ package final class AppSettings: ObservableObject, Codable {
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
         case contextProfiles, activeContextProfileID
+        case imageOCREnabled
         case history, historyLimit, historyContentStorage, savedHistoryFilters, onboardingDone, panelWidth, panelHeight
         case resultPanelDismissMode
         case actionUsageCounts, iCloudSyncEnabled
@@ -269,6 +271,7 @@ package final class AppSettings: ObservableObject, Codable {
         workModePreset = (try? c.decode(WorkModePreset.self, forKey: .workModePreset)) ?? .standard
         privacyPreviewEnabled = (try? c.decode(Bool.self, forKey: .privacyPreviewEnabled)) ?? false
         redactionEnabled = (try? c.decode(Bool.self, forKey: .redactionEnabled)) ?? false
+        imageOCREnabled = (try? c.decode(Bool.self, forKey: .imageOCREnabled)) ?? true
         let decodedRedactionRules = (try? c.decode([PrivacyRedactionRule].self, forKey: .redactionRules)) ?? PrivacyRedactionRule.defaults()
         redactionRules = Self.sanitizedStoredRedactionRules(decodedRedactionRules)
         if redactionRules != decodedRedactionRules {
@@ -418,6 +421,7 @@ package final class AppSettings: ObservableObject, Codable {
         try c.encode(privacyPreviewEnabled, forKey: .privacyPreviewEnabled)
         try c.encode(redactionEnabled, forKey: .redactionEnabled)
         try c.encode(redactionRules, forKey: .redactionRules)
+        try c.encode(imageOCREnabled, forKey: .imageOCREnabled)
         try c.encode(contextProfiles, forKey: .contextProfiles)
         try c.encode(activeContextProfileID, forKey: .activeContextProfileID)
         // History content lives in HistoryStore. Keep decoding this key for
