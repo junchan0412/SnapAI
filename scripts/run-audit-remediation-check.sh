@@ -167,6 +167,8 @@ require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/Sn
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
 require_match "icloud conflict recovery test" 'testICloudPullIfNeededEndToEndRecovery' Tests/SnapAILogicTests/main.swift
+require_match "ci readonly preflight job" 'readonly-preflight' .github/workflows/ci.yml
+require_match "release pipeline doc" '本机:签名发布' docs/RELEASE_PIPELINE.md
 require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
 require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
 require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI

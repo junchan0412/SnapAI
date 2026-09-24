@@ -5,6 +5,15 @@ on:
     branches:
       - main
   pull_request:
+  # 只读发布预检:手动触发,不签名、不写 tag、不创建 Release。
+  # 覆盖 preflight-release.sh 的可移植部分(空白/门禁/供应链/测试/构建);
+  # 签名、打包、SBOM、tag、Release 仍只在本机执行,见 docs/RELEASE_PIPELINE.md。
+  workflow_dispatch:
+    inputs:
+      skip-package:
+        description: "Skip release zip/manifest packaging (always skipped on CI runners)"
+        required: false
+        default: "true"
 
 jobs:
   build-and-test:
@@ -48,3 +57,59 @@ jobs:
         run: |
           scripts/benchmark-storage.sh
           scripts/benchmark-streaming.sh
+
+  # 只读发布预检:与 build-and-test 共享 runner 镜像,但入口对齐本机
+  # preflight 的只读前缀,供发版前在云端重放一次。
+  readonly-preflight:
+    name: Readonly Preflight
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        # actions/checkout v4, pinned to an immutable commit SHA.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
+      - name: Whitespace Check
+        run: git diff --check
+
+      - name: License Check
+        run: |
+          test -f LICENSE
+          grep -Fq "[MIT License](LICENSE)" README.md
+
+      - name: Audit Remediation Check
+        run: scripts/run-audit-remediation-check.sh
+
+      - name: Logic Target Boundary Check
+        run: scripts/check-logic-symlinks.sh
+
+      - name: Supply Chain Scan
+        run: scripts/run-supply-chain-scan.sh
+
+      - name: Logic Tests
+        run: scripts/run-logic-tests.sh
+
+      - name: Offline Streaming + App Runtime Tests
+        run: |
+          scripts/run-streaming-runtime-tests.sh
+          scripts/run-app-runtime-tests.sh
+
+      - name: macOS Smoke Tests
+        run: scripts/run-macos-smoke-tests.sh --skip-logic
+
+      - name: SwiftPM Build
+        run: swift build
+
+      - name: Debug Bundle Smoke
+        # CI runner 没有稳定签名身份,只能做 debug 构建 + 无签名启动验证;
+        # release 签名构建、打包、SBOM、tag、Release 仍只在本机执行。
+        run: |
+          ./build.sh --debug
+          codesign --verify --deep --strict SnapAI.app
+          SNAPAI_ALLOW_UNSIGNED_MANIFEST=1 scripts/run-app-launch-smoke.sh SnapAI.app
