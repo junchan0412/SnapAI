@@ -102,18 +102,20 @@ extension AppDelegate {
         }
     }
 
-    func switchModelFromAutomation(providerQuery: String?, modelQuery: String?) {
+    @discardableResult
+    func switchModelFromAutomation(providerQuery: String?, modelQuery: String?) -> String {
         guard let selection = AutomationModelSelection.resolve(providerQuery: providerQuery,
                                                                modelQuery: modelQuery,
                                                                settings: settings) else {
             showSettings(section: .model)
-            return
+            return "未找到匹配的模型,已打开模型设置。"
         }
         settings.activate(providerID: selection.providerID,
                           model: selection.modelName,
                           recordManualPreference: true)
         buildMenu()
         installMainMenu()
+        return "已切换到 \(settings.activeProvider?.name ?? "") / \(settings.model)"
     }
 
     func switchContextFromAutomation(profileQuery: String?) {

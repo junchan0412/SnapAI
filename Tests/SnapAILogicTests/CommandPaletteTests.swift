@@ -614,6 +614,25 @@ func testAutomationRouterParsesURLsAndSettingsSections() {
            "automation router keeps current settings section as fallback")
 }
 
+func testAutomationIntentsCoverCoreShortcutsPaths() {
+    // Shortcuts Intent 只做参数装配,真正的命令语义归属 AutomationURLCommand:
+    // 三个 Intent 的输入必须能无损映射到已有的 URL 命令。
+    expect(AutomationURLCommand.parse(snapAIURL(host: "quick", queryItems: [
+        URLQueryItem(name: "text", value: "总结这段")
+    ])) == .openQuickInput(text: "总结这段"),
+    "quick intent maps to openQuickInput command")
+    expect(AutomationURLCommand.parse(snapAIURL(host: "model", queryItems: [
+        URLQueryItem(name: "provider", value: "OpenAI"),
+        URLQueryItem(name: "model", value: "gpt-4o"),
+    ])) == .switchModel(providerQuery: "OpenAI", modelQuery: "gpt-4o"),
+    "switch-model intent maps to switchModel command")
+    expect(AutomationURLCommand.parse(snapAIURL(host: "run", queryItems: [
+        URLQueryItem(name: "action", value: "总结"),
+        URLQueryItem(name: "text", value: "hello"),
+    ])) == .run(actionQuery: "总结", text: "hello", options: .empty),
+    "run-action intent maps to run command")
+}
+
 func testAutomationURLCommandParsing() {
     let run = snapAIURL(host: "run", queryItems: [
         URLQueryItem(name: "action", value: "润色"),

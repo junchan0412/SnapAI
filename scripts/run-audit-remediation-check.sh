@@ -166,6 +166,9 @@ require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAI
 require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
+require_match "image OCR recognition" 'enum SnapAIImageTextRecognition' Sources/SnapAILogic/ImageTextRecognition.swift
+require_match "image OCR threshold test" 'testImageTextRecognitionRejectsUnreliableInput' Tests/SnapAILogicTests/main.swift
+require_match "image OCR settings round-trip test" 'testImageOCREnabledRoundTripsThroughSettingsAndCloudPayload' Tests/SnapAILogicTests/main.swift
 require_match "icloud conflict recovery test" 'testICloudPullIfNeededEndToEndRecovery' Tests/SnapAILogicTests/main.swift
 require_match "ci readonly preflight job" 'readonly-preflight' .github/workflows/ci.yml
 require_match "release pipeline doc" '本机:签名发布' docs/RELEASE_PIPELINE.md
