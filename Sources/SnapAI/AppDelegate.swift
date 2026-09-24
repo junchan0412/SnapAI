@@ -31,7 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var lastWriteBackRecord: TextWriteBackRecord?
     var lastWriteBackStatusSummary: String?
     /// 文本捕获代际令牌(#bug2):每次新触发自增,旧捕获回调据此自我作废,避免过期结果弹「未检测到选中文字」。
-    private var captureGeneration: Int = 0
+    var captureGeneration: Int = 0
+    /// 提交装配(取词→脱敏预览→隐私确认→启动请求),触发流程的装配细节收拢于此。
+    private var submissionPipeline: SubmissionPipeline!
 
     override init() {
         settings = AppSettings.shared
@@ -79,16 +81,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             self?.replaceSelection(original: original, with: replacement)
         }
         resultVM.onAppend = { [weak self] text in self?.appendSelection(with: text) }   // #8
+        submissionPipeline = SubmissionPipeline(host: self)
         resultVM.prepareFollowUpSubmission = { [weak self] text, action in
-            self?.prepareTextForSubmission(text,
-                                           action: action,
-                                           imageData: nil,
-                                           userPromptOverride: text)
+            self?.submissionPipeline.prepareTextForSubmission(text,
+                                                              action: action,
+                                                              imageData: nil,
+                                                              userPromptOverride: text)
         }
         resultVM.prepareSourceSubmission = { [weak self] text, action in
-            self?.prepareTextForSubmission(text,
-                                           action: action,
-                                           imageData: nil)
+            self?.submissionPipeline.prepareTextForSubmission(text,
+                                                              action: action,
+                                                              imageData: nil)
         }
         panelController = FloatingPanelController(vm: resultVM) { [weak self] in
             self?.showSettings(section: .model)
@@ -661,41 +664,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func triggerCapturedSelection(action: AIAction,
                                           preferredTarget: NSRunningApplication? = nil,
                                           forceDismissTransientUIBeforeCopy: Bool = false) {
-        // #bug2 代际令牌:新触发使所有未完成的旧捕获回调失效,避免过期空结果弹「未检测到选中文字」。
-        captureGeneration += 1
-        let gen = captureGeneration
-        previousApp = captureTargetApp(preferredTarget: preferredTarget)
-        previousSelectionSnapshot = nil
-        previousCaptureMethod = nil
-        TextCapture.captureDetailed(preferAX: settings.useAXFirst,
-                                    targetApp: previousApp,
-                                    forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy) { [weak self] outcome in
-            guard let self = self else { return }
-            // 过期捕获丢弃:已有更新的触发覆盖了本次。
-            guard gen == self.captureGeneration else { return }
-            // 已有动作在跑则丢弃本次空结果,避免在正常生成中弹「未检测到选中文字」。
-            guard !self.resultVM.isStreaming else { return }
-            let text = outcome.usableText
-            guard let text = text, !text.isEmpty else {
-                self.recordTextCaptureOutcome(outcome)
-                self.showNoSelectionNotice(action: action)
-                return
-            }
-            self.recordTextCaptureOutcome(outcome)
-            self.previousSelectionSnapshot = TextCapture.recentSelectionSnapshot(matching: text)
-            self.previousCaptureMethod = outcome.method
-            guard let prepared = self.prepareTextForSubmission(text,
-                                                               action: action,
-                                                               imageData: nil) else { return }
-            self.resultVM.start(text: prepared.text,
-                                originalText: text,
-                                action: action,
-                                submissionPrivacy: prepared.diagnostic,
-                                autoReplaceEnabled: AutomationWriteBackPolicy.capturedSelection(action: action).autoReplaceEnabled,
-                                captureMethod: outcome.method,
-                                sourceContext: SelectionSourceContext.make(appName: self.previousApp?.localizedName))
-            self.panelController.show()
-        }
+        submissionPipeline.triggerCapturedSelection(action: action,
+                                                    preferredTarget: preferredTarget,
+                                                    forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy)
     }
 
     func captureTargetApp(preferredTarget: NSRunningApplication?) -> NSRunningApplication? {
@@ -729,70 +700,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                                autoReplaceEnabled: Bool = false,
                                captureMethod: TextCaptureMethod? = nil,
                                sourceContext: SelectionSourceContext? = nil) -> Bool {
-        guard let prepared = prepareTextForSubmission(text,
-                                                      action: action,
-                                                      imageData: imageData) else { return false }
-        quickInput.hide()
-        resultVM.start(text: prepared.text,
-                       originalText: originalText,
-                       action: action,
-                       imageData: imageData,
-                       imageMimeType: imageMimeType,
-                       submissionPrivacy: prepared.diagnostic,
-                       autoReplaceEnabled: autoReplaceEnabled,
-                       captureMethod: captureMethod,
-                       sourceContext: sourceContext)
-        panelController.show()
-        return true
+        submissionPipeline.runQuickInput(text: text,
+                                         action: action,
+                                         originalText: originalText,
+                                         imageData: imageData,
+                                         imageMimeType: imageMimeType,
+                                         autoReplaceEnabled: autoReplaceEnabled,
+                                         captureMethod: captureMethod,
+                                         sourceContext: sourceContext)
     }
 
     func prepareTextForSubmission(_ text: String,
                                           action: AIAction,
                                           imageData: Data?,
                                           userPromptOverride: String? = nil) -> PrivacyPreparedSubmission? {
-        let redactionPreview = settings.redactionEnabled
-            ? PrivacyFilter.preview(text: text, rules: settings.redactionRules)
-            : PrivacyRedactionPreview(output: text, reports: [])
-        let processedOverride = userPromptOverride.map { _ in redactionPreview.output }
-        let preview = PrivacySubmissionPreview(action: action,
-                                               originalText: text,
-                                               redactionPreview: redactionPreview,
-                                               systemPrompt: settings.effectiveSystemPrompt,
-                                               redactionEnabled: settings.redactionEnabled,
-                                               hasImage: imageData != nil,
-                                               historyContentStorage: settings.historyContentStorage,
-                                               userPromptOverride: processedOverride)
-        let previewRequirement = preview.previewRequirement(userPreferenceEnabled: settings.privacyPreviewEnabled)
-        let prepared = PrivacyPreparedSubmission(
-            text: preview.processedText,
-            diagnostic: preview.diagnostic(previewRequirement: previewRequirement)
-        )
-        guard previewRequirement.isRequired else { return prepared }
-        return confirmPrivacyPreview(preview, requirement: previewRequirement) ? prepared : nil
+        submissionPipeline.prepareTextForSubmission(text,
+                                                    action: action,
+                                                    imageData: imageData,
+                                                    userPromptOverride: userPromptOverride)
     }
 
     func confirmPrivacyPreview(_ preview: PrivacySubmissionPreview,
                                        requirement: PrivacyPreviewRequirement) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "发送给 AI 前确认"
-        alert.informativeText = requirement.confirmationMessage(redactionEnabled: preview.redactionEnabled)
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "发送")
-        alert.addButton(withTitle: "取消")
-
-        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 560, height: 240))
-        scroll.hasVerticalScroller = true
-        scroll.borderType = .bezelBorder
-        let textView = NSTextView(frame: scroll.bounds)
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.string = preview.contentText(previewRequirement: requirement)
-        textView.textContainerInset = NSSize(width: 8, height: 8)
-        scroll.documentView = textView
-        alert.accessoryView = scroll
-        NSApp.activate(ignoringOtherApps: true)
-        return alert.runModal() == .alertFirstButtonReturn
+        submissionPipeline.confirmPrivacyPreview(preview, requirement: requirement)
     }
 
     /// #bug2 「未检测到选中的文字」改为非模态提示:在结果窗口显示瞬时横幅,不再弹出阻塞式模态 alert。
