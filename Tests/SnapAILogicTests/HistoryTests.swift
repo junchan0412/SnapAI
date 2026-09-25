@@ -562,6 +562,34 @@ func testHistorySearchIncludesLocalSemanticMatches() {
            "history semantic matches still respect action/model/tag/favorite facets")
 }
 
+func testHistoryEmbeddingSearchRecallsSemanticallySimilarEntries() {
+    // "年终奖怎么算"与"年终奖计算方法"是同义句(en 距离约 0.23,命中),
+    // 与"红烧肉做法"无关(en 距离约 0.27,排除);空查询/零 limit/超长截断都有守卫。
+    let bonus = HistoryEntry(id: "bonus",
+                             date: Date(timeIntervalSince1970: 3),
+                             actionName: "提问",
+                             source: "年终奖计算方法",
+                             output: "",
+                             provider: "OpenAI",
+                             model: "gpt-4o-mini")
+    let recipe = HistoryEntry(id: "recipe",
+                              date: Date(timeIntervalSince1970: 2),
+                              actionName: "提问",
+                              source: "红烧肉做法",
+                              output: "",
+                              provider: "OpenAI",
+                              model: "gpt-4o-mini")
+    let recalled = HistoryEmbeddingSearch.search(query: "年终奖怎么算",
+                                                 entries: [recipe, bonus],
+                                                 limit: 10)
+    expect(recalled.map(\.id) == ["bonus"],
+           "embedding search recalls the synonymous bonus entry, got \(recalled.map(\.id))")
+    expect(HistoryEmbeddingSearch.search(query: "", entries: [bonus], limit: 10).isEmpty,
+           "embedding search rejects empty queries")
+    expect(HistoryEmbeddingSearch.search(query: "年终奖", entries: [bonus], limit: 0).isEmpty,
+           "embedding search rejects zero limit")
+}
+
 func testHistoryFilterCriteriaMatchesMultipleTermsAndFacets() {
     let favorite = HistoryEntry(date: Date(timeIntervalSince1970: 0),
                                 actionName: " 总结 ",

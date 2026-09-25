@@ -490,6 +490,13 @@ package enum HistorySearch {
             append(entry)
         }
 
+        // 最后一路:系统语义向量召回(FTS 与概念表都未命中的高确信候选)。
+        for entry in HistoryEmbeddingSearch.search(query: query,
+                                                   entries: memoryEntries,
+                                                   limit: storeLimit) {
+            append(entry)
+        }
+
         return candidates.filter { criteria.matchesFacets($0) }
     }
 }
