@@ -166,6 +166,8 @@ require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAI
 require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
+require_match "history embedding search" 'enum HistoryEmbeddingSearch' Sources/SnapAILogic/HistoryEmbeddingSearch.swift
+require_match "history embedding test" 'testHistoryEmbeddingSearchRecallsSemanticallySimilarEntries' Tests/SnapAILogicTests/main.swift
 require_match "usage dashboard" 'struct UsageDashboard' Sources/SnapAILogic/UsageDashboard.swift
 require_match "usage dashboard test" 'testUsageDashboardAggregatesProvidersByRequests' Tests/SnapAILogicTests/main.swift
 require_match "usage dashboard card" 'usageCard' Sources/SnapAI/ModelSettingsSection.swift
