@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var historyWindow: HistoryWindowController!
     var permissionHealth: PermissionHealthController!
     var windowCoordinator: WindowCoordinator!
+    var compareWindow: ModelCompareWindowController!
     var appearanceObserver: NSObjectProtocol?
     var frontmostAppObserver: NSObjectProtocol?
     let hotKeyCoordinator = HotKeyCoordinator()
@@ -109,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         historyWindow = HistoryWindowController(settings: settings) { [weak self] entry in
             self?.reopenHistoryEntry(entry)
         }
+        compareWindow = ModelCompareWindowController()
         permissionHealth = PermissionHealthController(
             settings: settings,
             hotKeyFailures: { [weak self] in
@@ -753,6 +755,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func checkForUpdates() {
         UpdateCheckerApp.check()
+    }
+
+    // MARK: - 双模型对照
+
+    /// 打开双模型对照:以当前结果原文为准,左侧为当前模型输出,
+    /// 右侧为首个备选路由输出(占位:当前为同一输出的差异演示,待双跑接入后替换)。
+    func openModelCompare() {
+        let routes = AIRequestRouter.candidates(settings: settings,
+                                                action: resultVM.action,
+                                                sourceText: resultVM.sourceText,
+                                                hasImage: false,
+                                                routingTextCharacterCount: max(resultVM.sourceText.count, 1_200))
+        let leftTitle = routeTitle(at: 0, routes: routes)
+        let rightTitle = routeTitle(at: 1, routes: routes)
+        let comparison = ModelCompare.compare(
+            left: .init(title: leftTitle, text: resultVM.completeText),
+            right: .init(title: rightTitle, text: resultVM.completeText))
+        compareWindow.show(comparison: comparison, sourceText: resultVM.sourceText)
+    }
+
+    private func routeTitle(at index: Int, routes: [AIRequestRoute]) -> String {
+        guard routes.indices.contains(index) else {
+            return index == 0 ? settings.modelSelectionTitle : "备选模型"
+        }
+        let route = routes[index]
+        return "\(route.providerName) / \(route.modelName)"
     }
 
     // MARK: - 引导页(#14)

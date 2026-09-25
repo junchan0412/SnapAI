@@ -87,6 +87,14 @@ extension AppDelegate {
                 perform: { [weak self] in self?.reopenHistoryEntry(entry) }
             ))
         }
+        items.append(CommandPaletteItem(
+            id: "model-compare",
+            title: "双模型对照",
+            subtitle: "并排对比两个模型的输出",
+            systemImage: "rectangle.split.2x1",
+            keywords: "compare ab diff 对照 对比 双模型",
+            perform: { [weak self] in self?.openModelCompare() }
+        ))
         appendWorkModeCommandPaletteItems(to: &items)
         appendSettingsToggleCommandPaletteItems(to: &items)
         appendDisplayBehaviorCommandPaletteItems(to: &items)
