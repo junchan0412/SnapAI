@@ -1,0 +1,32 @@
+/* SnapAI 主路径中文 */
+"Quick Input" = "快捷提问";
+"Send" = "发送";
+"Sent" = "已发送";
+"Ask a question, or paste text…" = "写下问题，或贴入一段文字…";
+"What would you like to know about this image?" = "想了解这张图片的什么？";
+"Screenshot" = "截图";
+"Capturing" = "截图中";
+"Paste Image" = "粘贴图片";
+"Close Quick Input (Esc)" = "关闭快捷提问 (Esc)";
+"Send Prompt (Return)" = "发送提问 (↩)";
+"Request Details" = "请求详情";
+"Hide request details" = "收起请求详情";
+"View model, route, timing and diagnostics" = "查看模型、路由、耗时与诊断";
+"Settings" = "设置";
+"AI Model" = "AI 模型";
+"AI Providers" = "AI 供应商";
+"Actions" = "动作";
+"History" = "历史";
+"General" = "通用";
+"Permissions" = "权限";
+"Compare Models" = "双模型对照";
+"Model Comparison" = "双模型对照";
+"Usage" = "使用统计";
+"Copy" = "复制";
+"Cancel" = "取消";
+"Delete" = "删除";
+"Retry" = "重试";
+"Done" = "完成";
+"Search" = "搜索";
+
+"Send Follow-up" = "发送追问";

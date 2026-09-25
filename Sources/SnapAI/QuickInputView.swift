@@ -32,8 +32,8 @@ struct QuickInputView: View {
                 QuickPromptEditor(
                     text: $model.text,
                     placeholder: model.imagePreview == nil
-                        ? "写下问题，或贴入一段文字…"
-                        : "想了解这张图片的什么？",
+                        ? SnapAIL10n.string("Ask a question, or paste text…")
+                        : SnapAIL10n.string("What would you like to know about this image?"),
                     onSubmit: { if canSubmit { model.submit() } }
                 )
                 .frame(minHeight: 144, idealHeight: 160, maxHeight: .infinity)
@@ -70,7 +70,7 @@ struct QuickInputView: View {
                 .foregroundStyle(.tint)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 3) {
-                Text("快捷提问")
+                Text(SnapAIL10n.string("Quick Input"))
                     .font(SnapAIUI.Typography.panelTitle)
                 Text(settings.model.isEmpty ? "SnapAI" : settings.model)
                     .font(SnapAIUI.Typography.metaText)
@@ -84,8 +84,8 @@ struct QuickInputView: View {
                 Image(systemName: "xmark")
             }
             .buttonStyle(SnapAIIconButtonStyle(circular: false))
-            .help("关闭快捷提问 (Esc)")
-            .accessibilityLabel("关闭快捷提问")
+            .help(SnapAIL10n.string("Close Quick Input (Esc)"))
+            .accessibilityLabel(SnapAIL10n.string("Close Quick Input (Esc)"))
         }
         .padding(.horizontal, SnapAIUI.edgePadding)
         .padding(.vertical, 16)
@@ -135,13 +135,13 @@ struct QuickInputView: View {
                     } else {
                         Image(systemName: "camera")
                     }
-                    Text(model.isCapturing ? "截图中" : "截图")
+                    Text(model.isCapturing ? SnapAIL10n.string("Capturing") : SnapAIL10n.string("Screenshot"))
                 }
             }
             .disabled(model.isCapturing)
             .help("截取当前屏幕并附加到提问")
             Button(action: model.pasteImageFromClipboard) {
-                Label("粘贴图片", systemImage: "photo.on.rectangle")
+                Label(SnapAIL10n.string("Paste Image"), systemImage: "photo.on.rectangle")
             }
             .disabled(model.isCapturing)
             .help("添加剪贴板中的图片")
@@ -161,15 +161,15 @@ struct QuickInputView: View {
             }
             Button { model.submit() } label: {
                 HStack(spacing: 7) {
-                    Text(model.didJustSend ? "已发送" : "发送")
+                    Text(model.didJustSend ? SnapAIL10n.string("Sent") : SnapAIL10n.string("Send"))
                     Image(systemName: model.didJustSend ? "checkmark" : "return")
                         .font(.system(size: 11, weight: .semibold))
                 }
             }
             .buttonStyle(SnapAIPrimaryButtonStyle())
             .disabled(!canSubmit)
-            .help("发送提问 (↩)")
-            .accessibilityLabel(model.didJustSend ? "已发送" : "发送提问")
+            .help(SnapAIL10n.string("Send Prompt (Return)"))
+            .accessibilityLabel(model.didJustSend ? SnapAIL10n.string("Sent") : SnapAIL10n.string("Send Prompt (Return)"))
         }
         .buttonStyle(.borderless)
         .font(SnapAIUI.Typography.toolbarLabel)

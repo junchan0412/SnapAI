@@ -1,0 +1,32 @@
+/* SnapAI 主路径英文(源语言,key 即英文) */
+"Quick Input" = "Quick Input";
+"Send" = "Send";
+"Sent" = "Sent";
+"Ask a question, or paste text…" = "Ask a question, or paste text…";
+"What would you like to know about this image?" = "What would you like to know about this image?";
+"Screenshot" = "Screenshot";
+"Capturing" = "Capturing";
+"Paste Image" = "Paste Image";
+"Close Quick Input (Esc)" = "Close Quick Input (Esc)";
+"Send Prompt (Return)" = "Send Prompt (Return)";
+"Request Details" = "Request Details";
+"Hide request details" = "Hide request details";
+"View model, route, timing and diagnostics" = "View model, route, timing and diagnostics";
+"Settings" = "Settings";
+"AI Model" = "AI Model";
+"AI Providers" = "AI Providers";
+"Actions" = "Actions";
+"History" = "History";
+"General" = "General";
+"Permissions" = "Permissions";
+"Compare Models" = "Compare Models";
+"Model Comparison" = "Model Comparison";
+"Usage" = "Usage";
+"Copy" = "Copy";
+"Cancel" = "Cancel";
+"Delete" = "Delete";
+"Retry" = "Retry";
+"Done" = "Done";
+"Search" = "Search";
+
+"Send Follow-up" = "Send Follow-up";

@@ -1732,6 +1732,15 @@ func testAnthropicProviderReadinessCoversConfigureFailures() {
     expect(AIRequestRouter.providerRecoverySuggestion(noKey) == "无需处理", "ready provider needs no action")
 }
 
+func testSettingsSectionTitlesResolveThroughLocalization() {
+    // 本地化:titleKey 即英文原文,中文走 strings 表;title 永不返回空串。
+    for section in SettingsSection.allCases {
+        expect(!section.titleKey.isEmpty, "section \(section.rawValue) has a localization key")
+        expect(!section.title.isEmpty, "section \(section.rawValue) resolves a non-empty title")
+    }
+    expect(SettingsSection.model.titleKey == "AI Model", "model section key is English source")
+}
+
 func testLegacyAISectionAliasResolvesToModelPage() {
     // 分区拆分兼容:旧 "ai" 别名落到模型页,供应商相关走供应商页。
     expect(SettingsSection(resolvingLegacy: "ai") == .model, "legacy ai resolves to model page")

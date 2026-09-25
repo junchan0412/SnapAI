@@ -20,15 +20,19 @@ public enum SettingsSection: String, CaseIterable, Identifiable, Hashable {
         self.init(rawValue: rawValue)
     }
 
-    public var title: String {
+    public var titleKey: String {
         switch self {
-        case .model: return "AI 模型"
-        case .provider: return "AI 供应商"
-        case .actions: return "动作"
-        case .history: return "历史"
-        case .general: return "通用"
-        case .permission: return "权限"
+        case .model: return "AI Model"
+        case .provider: return "AI Providers"
+        case .actions: return "Actions"
+        case .history: return "History"
+        case .general: return "General"
+        case .permission: return "Permissions"
         }
+    }
+
+    public var title: String {
+        NSLocalizedString(titleKey, tableName: nil, bundle: .main, value: titleKey, comment: "")
     }
 
     public var icon: String {

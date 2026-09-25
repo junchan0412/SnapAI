@@ -130,7 +130,7 @@ struct ResultView: View {
                 }
                 .buttonStyle(SnapAIIconButtonStyle(circular: false))
                 .help(vm.showRouteDetails ? "收起请求详情" : "查看模型、路由、耗时与诊断")
-                .accessibilityLabel(vm.showRouteDetails ? "收起请求详情" : "展开请求详情")
+                .accessibilityLabel(vm.showRouteDetails ? SnapAIL10n.string("Hide request details") : SnapAIL10n.string("View model, route, timing and diagnostics"))
                 .accessibilityIdentifier("SnapAI.Result.RequestDetails")
                 .popover(isPresented: $vm.showRouteDetails, arrowEdge: .bottom) {
                     requestDetails
@@ -170,7 +170,7 @@ struct ResultView: View {
                 .buttonStyle(SnapAIPrimaryButtonStyle())
                 .keyboardShortcut(.return, modifiers: [.command, .option])
                 .help("发送追问 (↩ 发送，⇧↩ 换行)")
-                .accessibilityLabel("发送追问")
+                .accessibilityLabel(SnapAIL10n.string("Send Follow-up"))
                 .disabled(!canSendFollowUp)
             }
         }
@@ -182,7 +182,7 @@ struct ResultView: View {
     private var requestDetails: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("请求详情")
+                Text(SnapAIL10n.string("Request Details"))
                     .font(SnapAIUI.Typography.sectionLabel)
                 Spacer()
                 Text(vm.routeStatusTitle)

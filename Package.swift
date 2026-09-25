@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SnapAI",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -30,6 +31,7 @@ let package = Package(
             name: "SnapAI",
             dependencies: ["SnapAILogic"],
             path: "Sources/SnapAI",
+            resources: [.copy("Resources")],
             packageAccess: true,
             linkerSettings: [
                 .linkedFramework("Carbon"),

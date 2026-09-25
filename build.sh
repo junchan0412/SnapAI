@@ -59,6 +59,10 @@ cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 for asset in AppIconLight.png AppIconDark.png AppIconLight.icns AppIconDark.icns ManifestPublicKey.pem; do
   cp "Resources/$asset" "$STAGED_APP/Contents/Resources/$asset"
 done
+for lang in en zh-Hans; do
+  mkdir -p "$STAGED_APP/Contents/Resources/$lang.lproj"
+  cp "Sources/SnapAI/Resources/$lang.lproj/Localizable.strings" "$STAGED_APP/Contents/Resources/$lang.lproj/"
+done
 printf 'APPL????' > "$STAGED_APP/Contents/PkgInfo"
 
 if [ "$CONFIGURATION" = "release" ]; then
