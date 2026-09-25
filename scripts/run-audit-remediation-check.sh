@@ -166,6 +166,9 @@ require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAI
 require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
+require_match "usage dashboard" 'struct UsageDashboard' Sources/SnapAILogic/UsageDashboard.swift
+require_match "usage dashboard test" 'testUsageDashboardAggregatesProvidersByRequests' Tests/SnapAILogicTests/main.swift
+require_match "usage dashboard card" 'usageCard' Sources/SnapAI/ModelSettingsSection.swift
 require_match "shortcuts intents" 'struct SnapAIRunActionIntent' Sources/SnapAI/SnapAIIntents.swift
 require_match "shortcuts mapping test" 'testAutomationIntentsCoverCoreShortcutsPaths' Tests/SnapAILogicTests/main.swift
 require_match "image OCR recognition" 'enum SnapAIImageTextRecognition' Sources/SnapAILogic/ImageTextRecognition.swift
