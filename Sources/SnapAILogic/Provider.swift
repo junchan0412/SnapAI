@@ -65,7 +65,15 @@ package struct AIProvider: Codable, Identifiable, Equatable {
     }
 
     /// 是否指向本机模型服务。用于隐私模式下优先选择不离开本机的路由。
+    /// 是否 Apple 端侧模型(FoundationModels,不经过网络)。
+    package var isAppleOnDevice: Bool {
+        name == AppleOnDeviceModel.providerName
+            || baseURL.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                .hasPrefix(AppleOnDeviceModel.placeholderBaseURL)
+    }
+
     package var isLocalEndpoint: Bool {
+        if isAppleOnDevice { return true }
         let normalizedBase = AIClient.normalizedBase(baseURL, proto: apiProtocol)
         guard let url = URL(string: normalizedBase),
               let host = url.host else {
@@ -184,6 +192,11 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         case .lmStudio:
             return AIProvider(name: "LM Studio 本地", apiProtocol: .openAI,
                               baseURL: "http://localhost:1234/v1", apiKey: "lm-studio", models: [])
+        case .apple:
+            return AIProvider(name: AppleOnDeviceModel.providerName, apiProtocol: .openAI,
+                              baseURL: AppleOnDeviceModel.placeholderBaseURL,
+                              apiKey: "apple-on-device",
+                              models: [AIModelEntry(name: AppleOnDeviceModel.modelName, enabled: true)])
         case .blank:
             return AIProvider()
         }
@@ -195,6 +208,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         case anthropic = "Anthropic"
         case ollama = "Ollama 本地"
         case lmStudio = "LM Studio 本地"
+        case apple = "Apple 本机模型"
         case blank = "空白"
         package var id: String { rawValue }
     }

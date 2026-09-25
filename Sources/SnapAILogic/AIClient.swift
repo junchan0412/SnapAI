@@ -326,6 +326,18 @@ package final class AIClient {
     /// 测试当前激活供应商的连通性:发一条极小的非流式请求,成功返回 true。
     /// 失败时抛出可读错误。
     package func testConnection() async throws {
+        // Apple 端侧模型:无网络,用系统三态 + 一句端侧问候验证。
+        if settings.activeProvider?.isAppleOnDevice == true {
+            let availability = AppleOnDeviceModel.availability()
+            guard availability.isAvailable else {
+                throw AIError.streamError(availability.displayText)
+            }
+            guard #available(macOS 26, *) else {
+                throw AIError.streamError(AppleOnDeviceModel.availability().displayText)
+            }
+            _ = try await AppleOnDeviceModel.respond(to: "hi")
+            return
+        }
         try validateReady(requireModel: true)
         let proto = settings.apiProtocol
         let url: URL
@@ -374,6 +386,14 @@ package final class AIClient {
     /// 拉取可用模型列表(GET /models)。两种协议都兼容该端点。
     /// 返回模型 id 数组(已排序去重)。失败时抛错。
     package func listModels() async throws -> [String] {
+        // Apple 端侧模型:模型列表固定,无需拉取。
+        if settings.activeProvider?.isAppleOnDevice == true {
+            let availability = AppleOnDeviceModel.availability()
+            guard availability.isAvailable else {
+                throw AIError.streamError(availability.displayText)
+            }
+            return [AppleOnDeviceModel.modelName]
+        }
         try validateReady(requireModel: false)
         let url = try endpoint("/models")
 
@@ -416,6 +436,12 @@ package final class AIClient {
                 onToken: @escaping (String) -> Void,
                 onThinking: ((String) -> Void)? = nil,
                 onComplete: @escaping (Error?) -> Void) {
+        // Apple 端侧模型:非流式单次 respond,一次性回吐(无 thinking)。
+        if settings.activeProvider?.isAppleOnDevice == true {
+            cancel()
+            runAppleOnDevice(messages: messages, onToken: onToken, onComplete: onComplete)
+            return
+        }
         cancel()
         let requestGeneration = streamGeneration
         let configuration: StreamConfiguration
@@ -475,6 +501,45 @@ package final class AIClient {
     package static func encodedImagePayloadByteCount(dataByteCount: Int, mimeType: String) -> Int {
         let base64ByteCount = ((max(0, dataByteCount) + 2) / 3) * 4
         return "data:\(mimeType);base64,".utf8.count + base64ByteCount
+    }
+
+    /// Apple 端侧单次问答:拼 system + 用户文本,后台 respond,主线程回吐。
+    @MainActor
+    private func runAppleOnDevice(messages: [ChatMessage],
+                                  onToken: @escaping (String) -> Void,
+                                  onComplete: @escaping (Error?) -> Void) {
+        let availability = AppleOnDeviceModel.availability()
+        guard availability.isAvailable else {
+            onComplete(AIError.streamError(availability.displayText))
+            return
+        }
+        guard #available(macOS 26, *) else {
+            onComplete(AIError.streamError(AppleOnDeviceModel.availability().displayText))
+            return
+        }
+        let requestGeneration = streamGeneration
+        let systemPrompt = messages.first(where: { $0.role == .system })?.content
+        let userText = messages.filter { $0.role != .system }.map(\.content).joined(separator: "\n\n")
+        let hasImage = messages.contains { $0.imageData != nil }
+        streamTask = Task { [weak self] in
+            do {
+                guard !hasImage else {
+                    throw AIError.streamError("Apple 本机模型不支持图片输入,已为你保留云端视觉模型路由。")
+                }
+                let text = try await AppleOnDeviceModel.respond(to: userText.isEmpty ? "hi" : userText,
+                                                                systemPrompt: systemPrompt)
+                guard let self, !Task.isCancelled,
+                      self.streamGeneration == requestGeneration else { return }
+                self.taskLock.withLock { self.streamTask = nil }
+                onToken(text)
+                onComplete(nil)
+            } catch {
+                guard let self, !Task.isCancelled,
+                      self.streamGeneration == requestGeneration else { return }
+                self.taskLock.withLock { self.streamTask = nil }
+                onComplete(error)
+            }
+        }
     }
 
     private struct StreamConfiguration {

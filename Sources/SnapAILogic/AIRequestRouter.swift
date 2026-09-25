@@ -259,6 +259,11 @@ package enum AIRequestRouter {
 
     package static func providerReadiness(_ provider: AIProvider) -> ProviderReadiness {
         guard provider.isEnabled else { return .disabled }
+        // Apple 端侧模型:不走 URL/Key 校验,可用性由系统三态决定。
+        if provider.isAppleOnDevice {
+            guard !provider.enabledModelNames.isEmpty else { return .noEnabledModels }
+            return AppleOnDeviceModel.availability().isAvailable ? .ready : .invalidBaseURL
+        }
         // 注意:仅判空 trim,发送时由 Settings.apiKey 统一 trim,此处不改写存储。
         guard !provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .missingAPIKey
@@ -279,6 +284,10 @@ package enum AIRequestRouter {
     }
 
     package static func providerRecoverySuggestion(_ provider: AIProvider) -> String {
+        // Apple 端侧模型:直接给出系统三态的可操作提示。
+        if provider.isAppleOnDevice {
+            return AppleOnDeviceModel.availability().displayText
+        }
         let readiness = providerReadiness(provider)
         if let local = LocalModelHealth.make(provider: provider),
            let suggestion = local.recoverySuggestion(for: readiness) {

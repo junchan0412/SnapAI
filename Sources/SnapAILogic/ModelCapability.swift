@@ -15,6 +15,11 @@ package struct ModelCapability: Equatable {
 
 package enum ModelCapabilityRegistry {
     package static func capability(for modelName: String, providerName: String = "") -> ModelCapability {
+        // Apple 端侧模型:画像固定(无视觉/短上下文/快速省钱),不走启发式猜测。
+        if providerName == AppleOnDeviceModel.providerName
+            || modelName == AppleOnDeviceModel.modelName {
+            return AppleOnDeviceModel.capability()
+        }
         let model = modelName.lowercased()
         let provider = providerName.lowercased()
         let haystack = "\(provider) \(model)"

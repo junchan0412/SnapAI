@@ -23,6 +23,28 @@ func testBaseURLNormalization() {
            "keeps local http")
 }
 
+func testAppleOnDevicePresetIsLocalAndDowngraded() {
+    // Apple 预设:本机端点 + 固定画像(无视觉/短上下文),路由据此降级长文本与图片任务。
+    let preset = AIProvider.preset(.apple)
+    expect(preset.isAppleOnDevice, "apple preset is recognized as on-device")
+    expect(preset.isLocalEndpoint, "apple preset counts as a local endpoint for privacy routing")
+    expect(preset.enabledModelNames == [AppleOnDeviceModel.modelName],
+           "apple preset ships one enabled system model")
+    let capability = ModelCapabilityRegistry.capability(for: AppleOnDeviceModel.modelName,
+                                                        providerName: AppleOnDeviceModel.providerName)
+    expect(!capability.supportsVision && !capability.supportsLongContext,
+           "apple on-device capability declares no vision and short context")
+    expect(capability.isFast && capability.isEconomical,
+           "apple on-device capability declares fast and economical")
+    expect(AppleOnDeviceModel.availability().displayText.count > 0,
+           "apple availability always explains itself without silent failure")
+    // 本机不可用(macOS 27 CI 无 Apple Intelligence)时 readiness 不为 ready,
+    // 但恢复建议必须可读 —— 降级提示不断链。
+    let readiness = AIRequestRouter.providerReadiness(preset)
+    expect(AIRequestRouter.providerRecoverySuggestion(preset).count > 0,
+           "apple provider always has an actionable recovery hint, got readiness \(readiness)")
+}
+
 func testProviderDisplayHostShowsOnlyHost() {
     // 信息密度处理：展示层只显示 host，不暴露完整 baseURL（含版本段/路径）。
     var provider = AIProvider(name: "t", baseURL: "https://api.supxh.xin/v1", apiKey: "k")

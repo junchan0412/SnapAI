@@ -9,6 +9,7 @@ AppSettingsContext.swift
 AppSettingsHistory.swift
 AppSettingsImportSanitization.swift
 AppSettingsWorkMode.swift
+AppleOnDeviceModel.swift
 AutomationRouter.swift
 AutomationURLCommand.swift
 CaptureCoordinator.swift
