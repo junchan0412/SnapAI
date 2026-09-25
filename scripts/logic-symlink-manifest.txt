@@ -39,6 +39,7 @@ LoginItem.swift
 MarkdownExportSafety.swift
 MarkdownPresentation.swift
 ModelCapability.swift
+ModelCompare.swift
 ModelSwitchCommand.swift
 PrivacyFilter.swift
 PrivacyHistoryTag.swift

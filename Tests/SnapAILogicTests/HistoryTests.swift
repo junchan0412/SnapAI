@@ -16,6 +16,23 @@ func testTextDiffSummary() {
     expect(rows.contains { $0.kind == .unchanged && $0.original == "D" }, "keeps common suffix")
 }
 
+func testModelComparePairsOutputsWithNeutralSummary() {
+    let comparison = ModelCompare.compare(
+        left: .init(title: "A/gpt", text: "第一行\n第二行"),
+        right: .init(title: "B/claude", text: "第一行\n第二行改"))
+    expect(!comparison.isIdentical, "different outputs are not identical")
+    expect(comparison.left.changedLineCount > 0, "changed lines are counted for badges")
+    expect(ModelCompare.summaryText(for: comparison).contains("行"),
+           "summary names changed line counts")
+
+    let identical = ModelCompare.compare(
+        left: .init(title: "A", text: "相同"),
+        right: .init(title: "B", text: "相同"))
+    expect(identical.isIdentical, "equal texts compare identical")
+    expect(ModelCompare.summaryText(for: identical) == "两侧输出完全一致",
+           "identical outputs get an exact-match summary")
+}
+
 func testTextDiffCapsLargePreviewRows() {
     let original = (0..<2_000).map { "old-\($0)" }.joined(separator: "\n")
     let revised = (0..<2_000).map { "new-\($0)" }.joined(separator: "\n")
