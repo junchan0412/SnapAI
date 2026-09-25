@@ -12,6 +12,7 @@ struct ModelSettingsSection: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 aiOverviewCard
+                usageCard
                 temperatureRow
             }
             .padding(SnapAIUI.edgePadding)
@@ -217,6 +218,55 @@ struct ModelSettingsSection: View {
         }
         .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
         .clipped()
+    }
+
+    private var usageCard: some View {
+        let names = Dictionary(uniqueKeysWithValues: settings.providers.map { ($0.id, $0.name) })
+        let rows = UsageDashboard.rows(table: RoutingMetricsStore.shared.snapshot(),
+                                       providerNames: names)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("使用统计").font(SnapAIUI.Typography.sectionTitle)
+                Spacer()
+                Text("共 \(UsageDashboard.totalRequests(rows: rows)) 次请求")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            if rows.isEmpty {
+                Text("暂无请求记录,完成一次提问后这里会显示各供应商的请求与成功率。")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(rows, id: \.providerID) { row in
+                    HStack(spacing: 8) {
+                        Text(row.displayName)
+                            .font(SnapAIUI.Typography.bodyText.weight(.medium))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        Text("\(row.requests) 次")
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text("成功率 \(row.successRateText)")
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                        Text("平均 \(row.averageElapsedText)")
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(row.displayName),\(row.requests)次请求,成功率\(row.successRateText),平均耗时\(row.averageElapsedText)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SnapAIUI.compactPadding)
+        .snapAIGlassCard()
     }
 
     private var temperatureRow: some View {

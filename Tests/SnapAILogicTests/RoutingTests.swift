@@ -2419,6 +2419,27 @@ func testRoutingMetricsRecordPerformanceAndFailures() {
     expect(table.scoreAdjustment(for: route) > 0, "good local performance improves route score")
 }
 
+func testUsageDashboardAggregatesProvidersByRequests() {
+    var table = RoutingMetricsTable.empty
+    let a = AIRequestRoute(providerID: "p-a", providerName: "Alpha",
+                           modelName: "m1", reason: "r")
+    let b = AIRequestRoute(providerID: "p-b", providerName: "Beta",
+                           modelName: "m2", reason: "r")
+    table.recordSuccess(route: a, elapsedMilliseconds: 1_000, firstTokenMilliseconds: 200)
+    table.recordSuccess(route: a, elapsedMilliseconds: 3_000, firstTokenMilliseconds: 400)
+    table.recordFailure(route: a, elapsedMilliseconds: 2_000, firstTokenMilliseconds: nil, reason: "timeout")
+    table.recordFailure(route: b, elapsedMilliseconds: 500, firstTokenMilliseconds: nil, reason: "401")
+
+    let rows = UsageDashboard.rows(table: table, providerNames: ["p-a": "Alpha", "p-b": "Beta"])
+    expect(rows.map(\.providerID) == ["p-a", "p-b"], "usage dashboard sorts providers by request count")
+    expect(rows.first?.requests == 3, "usage dashboard counts attempts including failures")
+    expect(rows.first?.successRateText == "67%", "usage dashboard formats success rate")
+    expect(rows.first?.averageElapsedText == "2.0s", "usage dashboard formats average latency")
+    expect(rows.last?.displayName == "Beta", "usage dashboard resolves provider display names")
+    expect(UsageDashboard.totalRequests(rows: rows) == 4, "usage dashboard totals all requests")
+    expect(UsageDashboard.rows(table: .empty).isEmpty, "usage dashboard is empty without records")
+}
+
 func testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes() {
     let route = AIRequestRoute(providerID: "provider-1",
                                providerName: "Provider",
