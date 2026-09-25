@@ -166,6 +166,9 @@ require_match "scroll edge helper" 'func snapAIScrollEdge' Sources/SnapAI/SnapAI
 require_match "sidebar glass helper" 'func snapAISidebarGlass' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "sidebar glass usage" 'snapAISidebarGlass' Sources/SnapAI/SettingsWorkspaceSidebar.swift
 require_match "settings window transparency" 'titlebarAppearsTransparent' Sources/SnapAI/WindowCoordinator.swift
+require_match "localized strings tables" 'Localizable.strings' build.sh
+require_match "localization helper" 'enum SnapAIL10n' Sources/SnapAI/SnapAIL10n.swift
+require_match "localization test" 'testSettingsSectionTitlesResolveThroughLocalization' Tests/SnapAILogicTests/main.swift
 require_match "model compare core" 'struct ModelCompare' Sources/SnapAILogic/ModelCompare.swift
 require_match "model compare test" 'testModelComparePairsOutputsWithNeutralSummary' Tests/SnapAILogicTests/main.swift
 require_match "model compare window" 'final class ModelCompareWindowController' Sources/SnapAI/ModelCompareWindow.swift
