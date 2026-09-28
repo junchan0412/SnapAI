@@ -42,6 +42,7 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         windows = WindowCoordinator(settings: settings, onSettingsChange: {}, onTryQuickInput: { [weak self] in self?.showQuickInput() })
         switch surface {
         case "result": showResult()
+        case "result-stream": showResult(streaming: true)
         case "quick": showQuickInput()
         case "history", "empty-history": showHistory()
         case "commands": showCommands()
@@ -50,6 +51,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         case "provider": windows?.showSettings(section: .provider)
         case "model": windows?.showSettings(section: .model)
         case "history-settings": windows?.showSettings(section: .history)
+        case "general": windows?.showSettings(section: .general)
+        case "permission": windows?.showSettings(section: .permission)
         case "health":
             health = PermissionHealthController(settings: settings, hotKeyFailures: { [] },
                                                 textCaptureStatus: { "就绪" }, writeBackStatus: { "就绪" },
@@ -99,17 +102,42 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = menu
     }
 
-    private func showResult() {
+    private func showResult(streaming: Bool = false) {
         let vm = ResultViewModel(settings: settings)
         vm.action = settings.enabledActions.first { $0.name == AIAction.summarizeName } ?? AIAction()
         vm.sourceText = Self.source
         vm.activeProviderName = "OpenAI"
         vm.activeModelName = "gpt-4.1"
-        _ = vm.streamingCoordinator.appendContentToken(Self.output, extractsThinkTags: false)
-        vm.output = Self.output
-        vm.completionCoordinator.state.replace(with: ResultCompletionMetrics(elapsed: 1.84, characterCount: Self.output.count))
         result = FloatingPanelController(vm: vm, onOpenAISettings: { [weak self] in self?.windows?.openSettings() })
         result?.show()
+        if streaming {
+            startStreamingDemo(vm)
+        } else {
+            _ = vm.streamingCoordinator.appendContentToken(Self.output, extractsThinkTags: false)
+            vm.output = Self.output
+            vm.completionCoordinator.state.replace(with: ResultCompletionMetrics(elapsed: 1.84, characterCount: Self.output.count))
+        }
+    }
+
+    /// 流式采样面(`--preview result-stream`):按 token 分片把示例文档推进结果窗口,
+    /// 覆盖约 16 秒,供脚本在流式期间采样 footprint(见 docs/RUNTIME_MEMORY_BASELINE.md)。
+    /// 走的是真实 ResultViewModel 输出路径:isStreaming 置位、output 增长、每片触发 Markdown 重渲染。
+    private func startStreamingDemo(_ vm: ResultViewModel) {
+        let document = String(repeating: Self.output + "\n\n", count: 16)
+        vm.isStreaming = true
+        Task { @MainActor in
+            var index = document.startIndex
+            while index < document.endIndex {
+                let end = document.index(index, offsetBy: 60, limitedBy: document.endIndex) ?? document.endIndex
+                let chunk = String(document[index..<end])
+                _ = vm.streamingCoordinator.appendContentToken(chunk, extractsThinkTags: false)
+                vm.output += chunk
+                index = end
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
+            _ = vm.streamingCoordinator.finish()
+            vm.isStreaming = false
+        }
     }
 
     private func showHistory() {

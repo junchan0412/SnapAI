@@ -1,6 +1,9 @@
 import SnapAILogic
 import AppKit
 
+// 启动耗时打点:必须是 main 的第一条语句,之后的 dyld/全局初始化都不再计入。
+LaunchTiming.markMainEntry()
+
 let arguments = ProcessInfo.processInfo.arguments
 let environment = ProcessInfo.processInfo.environment
 let launchSmoke: (settings: AppSettings, directory: URL, token: String)?

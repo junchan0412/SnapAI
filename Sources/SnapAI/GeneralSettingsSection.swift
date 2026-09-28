@@ -11,7 +11,10 @@ struct GeneralSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
+            // 按需构建:与 ActionSettingsSection / HistorySettingsSection 一致,
+            // 屏外子区块不进视图树,设置窗口常驻 footprint 明显下降(见
+            // docs/RUNTIME_MEMORY_BASELINE.md 的「按 section 分布」一节)。
+            LazyVStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 WorkModeSettingsSection(settings: settings) {
                     commit()
                 }
@@ -174,6 +177,8 @@ struct GeneralSettingsSection: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                // 可见标题在左侧独立文本里,开关自身要带上名字,VoiceOver 才能读出「这是哪个开关」。
+                .accessibilityLabel(title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
