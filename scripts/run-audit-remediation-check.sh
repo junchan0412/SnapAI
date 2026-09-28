@@ -235,6 +235,11 @@ require_match "model binding uses pure helper" 'SettingsPageBinding.modelValue' 
 require_match "action binding uses pure helper" 'SettingsPageBinding.actionValue' Sources/SnapAI/ActionSettingsSection.swift
 require_no_match "inline provider keypath binding" '\?\? AIProvider\(\)\[keyPath:' Sources/SnapAI
 
+# App Intents 元数据:SwiftPM 不跑 Xcode 的提取阶段,必须在 build.sh 里补
+require_match "app intents metadata extraction" 'appintentsmetadataprocessor' build.sh
+require_match "app intents metadata lands in bundle" 'Metadata.appintents/version.json' build.sh
+require_match "app intents source" 'struct SnapAIRunActionIntent' Sources/SnapAI/SnapAIIntents.swift
+
 # App runtime smoke 的 AX 遍历必须有界:无界递归在 AX 树出现环时栈溢出,
 # 以 SIGSEGV(栈保护页)形式随机打断发版预检。
 require_match "bounded ax walk" 'maximumAXNodes' Tests/Runtime/AppRuntimeSmoke.swift

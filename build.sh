@@ -64,6 +64,35 @@ for lang in en zh-Hans; do
   cp "Sources/SnapAI/Resources/$lang.lproj/Localizable.strings" "$STAGED_APP/Contents/Resources/$lang.lproj/"
 done
 printf 'APPL????' > "$STAGED_APP/Contents/PkgInfo"
+# App Intents 元数据:Xcode 会在构建阶段跑 appintentsmetadataprocessor,
+# SwiftPM 不会 —— 少了这一步,Shortcuts 根本列不出本应用的 Intent
+# (元数据落在 Contents/Resources/Metadata.appintents,与第三方应用一致)。
+printf '==> 提取 App Intents 元数据\n'
+APPINTENTS_SOURCES="$STAGING_DIR/appintents-sources.txt"
+APPINTENTS_CONSTVALS="$STAGING_DIR/appintents-constvals.txt"
+find Sources/SnapAI -name '*.swift' > "$APPINTENTS_SOURCES"
+find .build/out/Intermediates.noindex/SnapAI.build -path '*SnapAI-p.build*' \
+  -name '*.swiftconstvalues' > "$APPINTENTS_CONSTVALS"
+if [ ! -s "$APPINTENTS_CONSTVALS" ]; then
+  echo "error: 找不到 SwiftPM 产出的 .swiftconstvalues,无法提取 App Intents 元数据。" >&2
+  exit 1
+fi
+xcrun appintentsmetadataprocessor \
+  --output "$STAGED_APP/Contents/Resources" \
+  --toolchain-dir "$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain" \
+  --module-name SnapAI \
+  --sdk-root "$(xcrun --sdk macosx --show-sdk-path)" \
+  --xcode-version "$(xcodebuild -version | awk '/Build version/{print $3}')" \
+  --platform-family macosx \
+  --deployment-target 14.0 \
+  --target-triple "$(uname -m)-apple-macos14.0" \
+  --source-file-list "$APPINTENTS_SOURCES" \
+  --swift-const-vals-list "$APPINTENTS_CONSTVALS" \
+  --quiet-warnings
+if [ ! -f "$STAGED_APP/Contents/Resources/Metadata.appintents/version.json" ]; then
+  echo "error: App Intents 元数据未生成,Shortcuts 将看不到本应用。" >&2
+  exit 1
+fi
 
 if [ "$CONFIGURATION" = "release" ]; then
   echo "==> 精简发行符号（dSYM 保留在 SwiftPM 构建目录）"
@@ -72,6 +101,8 @@ if [ "$CONFIGURATION" = "release" ]; then
 fi
 
 printf '==> 签名 (%s)\n' "$SIGN_IDENTITY"
+# 由内向外:Sparkle 内含 XPC 服务与 Updater.app,必须先于外壳签好。
+codesign --force --deep --sign "$SIGN_IDENTITY" "$STAGED_APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign "$SIGN_IDENTITY" "$STAGED_APP/Contents/Helpers/SnapAIUpdater"
 codesign --force --sign "$SIGN_IDENTITY" "$STAGED_APP"
 codesign --verify --deep --strict "$STAGED_APP"
