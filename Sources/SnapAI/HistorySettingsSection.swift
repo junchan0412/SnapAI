@@ -118,6 +118,7 @@ struct HistorySettingsSection: View {
             Spacer()
             Stepper("保留 \(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
                 .font(SnapAIUI.Typography.metaText)
+                .accessibilityLabel("保留历史记录条数")
                 .fixedSize()
                 .onChange(of: settings.historyLimit) { commit() }
         }

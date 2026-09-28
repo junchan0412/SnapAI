@@ -108,6 +108,7 @@ struct HistoryWindowView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                     TextField("搜索原文、结果、模型或语义…", text: $model.query)
+                        .accessibilityLabel("搜索历史记录")
                         .textFieldStyle(.plain)
                         .font(SnapAIUI.Typography.bodyText)
                         .focused($searchFocused)
@@ -309,6 +310,7 @@ struct HistoryWindowView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "tag").foregroundStyle(.secondary)
                     TextField("添加标签，用逗号分隔", text: tagBinding(for: entry))
+                        .accessibilityLabel("添加标签，用逗号分隔")
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
                         .focused($focusedTagID, equals: entry.id)

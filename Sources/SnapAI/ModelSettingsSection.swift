@@ -142,11 +142,14 @@ struct ModelSettingsSection: View {
                     }
                 }
                 .frame(width: 200)
+                .accessibilityLabel("优先偏好")
                 .onChange(of: settings.routingPreference) { commit() }
             }
             Toggle("根据动作与内容自动选择模型", isOn: $settings.autoRouteEnabled)
+                .accessibilityLabel("根据动作与内容自动选择模型")
                 .onChange(of: settings.autoRouteEnabled) { commit() }
             Toggle("请求失败时尝试备用模型", isOn: $settings.fallbackEnabled)
+                .accessibilityLabel("请求失败时尝试备用模型")
                 .onChange(of: settings.fallbackEnabled) { commit() }
         }
         .toggleStyle(.switch)
@@ -275,6 +278,7 @@ struct ModelSettingsSection: View {
             Slider(value: $settings.temperature, in: 0...1, step: 0.05) { editing in
                 if !editing { commit() }
             }
+            .accessibilityLabel("Temperature")
         }
         .padding(.top, 4)
     }

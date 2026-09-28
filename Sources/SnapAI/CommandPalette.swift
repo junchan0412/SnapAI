@@ -230,6 +230,7 @@ struct CommandPaletteView: View {
                     .foregroundStyle(.secondary)
                 TextField("搜索动作、模型、历史记录或设置…", text: $model.query)
                     .textFieldStyle(.plain)
+                    .accessibilityLabel("搜索动作、模型、历史记录或设置")
                     .font(.system(size: 18))
                     .onSubmit {
                         model.selectedItem()?.perform()

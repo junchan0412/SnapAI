@@ -109,14 +109,18 @@ struct PrivacySettingsSection: View {
             HStack(spacing: 6) {
                 Toggle("", isOn: bindingForRedactionRule(rule.id, \.isEnabled))
                     .labelsHidden()
+                    .accessibilityLabel("启用规则 \(rule.name)")
                 TextField("名称", text: bindingForRedactionRule(rule.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 82)
+                    .accessibilityLabel("规则名称")
                 TextField("正则表达式", text: bindingForRedactionRule(rule.id, \.pattern, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("正则表达式")
                 TextField("替换为", text: bindingForRedactionRule(rule.id, \.replacement, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 86)
+                    .accessibilityLabel("替换为")
                 Button {
                     settings.redactionRules.removeAll { $0.id == rule.id }
                     commit()
@@ -141,11 +145,14 @@ struct PrivacySettingsSection: View {
             TextField("名称", text: $ui.newRedactionName)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 82)
+                .accessibilityLabel("新规则名称")
             TextField("正则表达式", text: $ui.newRedactionPattern)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("新规则正则表达式")
             TextField("替换为", text: $ui.newRedactionReplacement)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 86)
+                .accessibilityLabel("新规则替换为")
             Button {
                 addRedactionRule()
             } label: {
@@ -169,6 +176,7 @@ struct PrivacySettingsSection: View {
                     .foregroundStyle(preview.invalidReports.isEmpty ? Color.secondary : SnapAIUI.StatusColor.error)
             }
             TextEditor(text: $ui.redactionSample)
+                .accessibilityLabel("规则测试样本")
                 .font(.system(size: 12))
                 .frame(height: PrivacyFilter.defaultSampleEditorHeight)
                 .scrollContentBackground(.hidden)
@@ -265,6 +273,7 @@ struct ContextProfileSettingsSection: View {
             }
             .frame(width: 170)
             .controlSize(.small)
+            .accessibilityLabel("当前使用的上下文包")
             .onChange(of: settings.activeContextProfileID) { commit() }
         }
     }
@@ -275,9 +284,11 @@ struct ContextProfileSettingsSection: View {
                 Toggle("", isOn: bindingForContextProfile(profile.id, \.isEnabled))
                     .labelsHidden()
                     .controlSize(.small)
+                    .accessibilityLabel("启用上下文包 \(profile.name)")
                 TextField("名称", text: bindingForContextProfile(profile.id, \.name, policy: .deferredSave), onCommit: commit)
                     .textFieldStyle(.roundedBorder)
                     .controlSize(.small)
+                    .accessibilityLabel("上下文包名称")
                 if settings.activeContextProfileID == profile.id {
                     Text("使用中")
                         .font(.caption2.weight(.semibold))
@@ -299,6 +310,7 @@ struct ContextProfileSettingsSection: View {
                 .help("删除上下文包")
             }
             TextEditor(text: bindingForContextProfile(profile.id, \.content, policy: .deferredSave))
+                .accessibilityLabel("上下文包 \(profile.name) 的内容")
                 .font(.system(size: 12))
                 .frame(height: 58)
                 .scrollContentBackground(.hidden)
@@ -320,6 +332,7 @@ struct ContextProfileSettingsSection: View {
             TextField("新上下文包名称", text: $ui.newContextName)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
+                .accessibilityLabel("新上下文包名称")
             Button {
                 addContextProfile()
             } label: {
@@ -392,6 +405,8 @@ private extension View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                // 标题是左侧独立文本,开关自身不带名字时 VoiceOver 只会读「勾选框」。
+                .accessibilityLabel(title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
