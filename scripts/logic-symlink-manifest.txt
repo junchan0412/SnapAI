@@ -68,6 +68,7 @@ SelectionSourceContext.swift
 SensitiveTextSanitizer.swift
 ServicePasteboardText.swift
 Settings.swift
+SettingsPageBinding.swift
 SettingsPersistence.swift
 SettingsSection.swift
 SettingsToggleCommand.swift

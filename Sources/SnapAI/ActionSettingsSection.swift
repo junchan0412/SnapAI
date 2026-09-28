@@ -457,11 +457,11 @@ struct ActionSettingsSection: View {
     private func bindingForAction<V>(_ id: String,
                                      _ keyPath: WritableKeyPath<AIAction, V>,
                                      policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
+        // keypath 读写在 SettingsPageBinding(Logic),有单测覆盖;这里只做包装与 commit。
         Binding(
-            get: { (settings.actions.first(where: { $0.id == id }) ?? AIAction())[keyPath: keyPath] },
+            get: { SettingsPageBinding.actionValue(settings, actionID: id, keyPath: keyPath) },
             set: { newValue in
-                guard let idx = settings.actions.firstIndex(where: { $0.id == id }) else { return }
-                settings.actions[idx][keyPath: keyPath] = newValue
+                guard SettingsPageBinding.setActionValue(settings, actionID: id, keyPath: keyPath, to: newValue) else { return }
                 applyCommit(policy)
             }
         )

@@ -486,14 +486,11 @@ struct ProviderSettingsSection: View {
     private func bindingForProvider<V>(_ id: String,
                                        _ keyPath: WritableKeyPath<AIProvider, V>,
                                        policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
+        // keypath 读写在 SettingsPageBinding(Logic),有单测覆盖;这里只做包装与 commit。
         Binding(
-            get: {
-                (settings.providers.first(where: { $0.id == id }) ?? AIProvider())[keyPath: keyPath]
-            },
+            get: { SettingsPageBinding.providerValue(settings, providerID: id, keyPath: keyPath) },
             set: { newValue in
-                guard let idx = settings.providers.firstIndex(where: { $0.id == id }) else { return }
-                settings.providers[idx][keyPath: keyPath] = newValue
-                settings.normalizeActive()
+                guard SettingsPageBinding.setProviderValue(settings, providerID: id, keyPath: keyPath, to: newValue) else { return }
                 applyCommit(policy)
             }
         )
@@ -504,19 +501,17 @@ struct ProviderSettingsSection: View {
                                     _ keyPath: WritableKeyPath<AIModelEntry, V>) -> Binding<V> {
         Binding(
             get: {
-                guard let provider = settings.providers.first(where: { $0.id == providerID }),
-                      let model = provider.models.first(where: { $0.name == modelName }) else {
-                    return AIModelEntry(name: "")[keyPath: keyPath]
-                }
-                return model[keyPath: keyPath]
+                SettingsPageBinding.modelValue(settings,
+                                               providerID: providerID,
+                                               modelName: modelName,
+                                               keyPath: keyPath)
             },
             set: { newValue in
-                guard let providerIndex = settings.providers.firstIndex(where: { $0.id == providerID }),
-                      let modelIndex = settings.providers[providerIndex].models.firstIndex(where: { $0.name == modelName }) else {
-                    return
-                }
-                settings.providers[providerIndex].models[modelIndex][keyPath: keyPath] = newValue
-                settings.normalizeActive()
+                guard SettingsPageBinding.setModelValue(settings,
+                                                        providerID: providerID,
+                                                        modelName: modelName,
+                                                        keyPath: keyPath,
+                                                        to: newValue) else { return }
                 commit()
             }
         )
