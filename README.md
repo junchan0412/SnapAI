@@ -25,6 +25,8 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 >
 > 2.0.5：AI 设置页拆分——“AI 模型”（当前模型、路由策略）与“AI 供应商”（连接、Key、模型列表）独立成页；Anthropic 配置修复（Key 空白自动忽略、协议专属端点提示、就绪状态行）；命令面板、自动化深链与旧别名保持兼容。详见 [2.0.5 Release Notes](docs/RELEASE_NOTES_2.0.5.md)。
 >
+> 2.0.8：更新通道迁移到 Sparkle（appcast + EdDSA 签名 + 标准更新窗口，自签名即可、无需公证）；补上 App Intents 元数据，Shortcuts 首次能列出并执行 SnapAI；引入第一个第三方依赖 Sparkle 并接入真实供应链扫描。详见 [2.0.8 Release Notes](docs/RELEASE_NOTES_2.0.8.md)。
+
 > 2.0.7：Shortcuts（App Intents）、用量看板、历史语义搜索、截图 OCR、Apple 端侧模型、双模型对照、英文本地化；配套 AppDelegate 拆分、冷启动与内存基线、无障碍走查（16 个界面 0 处无名称控件）、发布链路进 CI。详见 [2.0.7 Release Notes](docs/RELEASE_NOTES_2.0.7.md)。
 
 > 2.0.6：设置窗口 Liquid Glass 收尾——侧栏 behind-window 毛玻璃（桌面透过来）+ 详情区不透明兜底；删除 `snapAISurface` / `Surface.chrome` 死代码与最后一处卡片内结构性分隔线。详见 [2.0.6 Release Notes](docs/RELEASE_NOTES_2.0.6.md)。
