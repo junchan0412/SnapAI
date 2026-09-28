@@ -28,6 +28,18 @@ require_no_match() {
   fi
 }
 
+require_max_lines() {
+  local label="$1"
+  local limit="$2"
+  local path="$3"
+  local lines
+
+  lines=$(wc -l < "$path" | tr -d ' ')
+  if [ "$lines" -gt "$limit" ]; then
+    fail "$label check failed: $path has $lines lines (limit $limit)"
+  fi
+}
+
 grep -Eq 'uses: actions/checkout@[0-9a-f]{40}$' .github/workflows/ci.yml \
   || fail "CI checkout action must stay pinned to an immutable commit SHA"
 
@@ -62,7 +74,7 @@ require_match "closed window content release" 'closedWindow\.contentViewControll
 require_match "settings content lazy rebuild" 'window\.contentViewController = makeSettingsContentController\(\)' Sources/SnapAI/WindowCoordinator.swift
 require_no_match "unsafe AppKit automatic release" 'window\.isReleasedWhenClosed = true' Sources/SnapAI/WindowCoordinator.swift
 require_match "routing metrics background persistence" 'persistenceQueue\.asyncAfter' Sources/SnapAILogic/RoutingMetrics.swift
-require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/AppDelegate.swift
+require_match "routing metrics termination flush" 'RoutingMetricsStore\.shared\.flushPersistence\(\)' Sources/SnapAI/LaunchCoordinator.swift
 require_match "routing metrics coalescing tests" 'testRoutingMetricsStoreCoalescesBackgroundPersistenceAndFlushes' Tests/SnapAILogicTests/RoutingTests.swift
 require_match "streaming result render mode" 'ResultContentRenderMode\.resolve' Sources/SnapAI/ResultLiveOutputView.swift
 require_match "streaming scroll throttle" 'ResultAutoScrollPolicy\.shouldScroll' Sources/SnapAI/ResultViewModel.swift
@@ -144,7 +156,7 @@ require_match "app runtime gate" 'run-app-runtime-tests.sh' scripts/preflight-re
 require_match "native deployment gate" 'validate_binary_deployment' scripts/preflight-release.sh
 require_match "latest request callback ownership" 'self.requestID == requestID' Sources/SnapAI/ResultViewModel.swift
 require_match "reopened panel ownership" 'panel.presentationID == presentationID' Sources/SnapAI/FloatingPanel.swift
-require_match "settings terminate flush" 'settings.save\(\)' Sources/SnapAI/AppDelegate.swift
+require_match "settings terminate flush" 'settings.save\(\)' Sources/SnapAI/LaunchCoordinator.swift
 require_no_match "UI render flush side effects" 'vm\.completeText' Sources/SnapAI/ResultView.swift
 
 for regression in testServerSentEventParserPreservesFramingAndUnicode testAIStreamDecoderDetectsIncompleteAndLimitedResponses testHistoryStoreMigrationAndIndexTransactions testHistoryStoreConnectionRecoveryAndConcurrency testSettingsPersistenceRecoveryAndValidation testLocalSecretStoreConcurrentWritesAndRecovery; do
@@ -204,5 +216,61 @@ require_match "anthropic key whitespace regression" 'testAnthropicAPIKeyWhitespa
 require_match "anthropic readiness regression" 'testAnthropicProviderReadinessCoversConfigureFailures' Tests/SnapAILogicTests/main.swift
 require_match "legacy section alias regression" 'testLegacyAISectionAliasResolvesToModelPage' Tests/SnapAILogicTests/main.swift
 require_match "app runtime gate in CI" 'run-app-runtime-tests.sh' .github/workflows/ci.yml
+
+# 设置页绑定下沉到 Logic(界面层零依赖,只能在 view model 层测)
+require_match "settings page binding" 'package enum SettingsPageBinding' Sources/SnapAILogic/SettingsPageBinding.swift
+require_match "settings page binding test" 'testSettingsPageBindingCoversProviderModelAndActionKeyPaths' Tests/SnapAILogicTests/main.swift
+require_match "provider binding uses pure helper" 'SettingsPageBinding.providerValue' Sources/SnapAI/ProviderSettingsSection.swift
+require_match "model binding uses pure helper" 'SettingsPageBinding.modelValue' Sources/SnapAI/ProviderSettingsSection.swift
+require_match "action binding uses pure helper" 'SettingsPageBinding.actionValue' Sources/SnapAI/ActionSettingsSection.swift
+require_no_match "inline provider keypath binding" '\?\? AIProvider\(\)\[keyPath:' Sources/SnapAI
+
+# 发布链路进 CI:范围空白检查、版本一致性、完整历史检出
+require_match "ci range whitespace check" 'ci-whitespace-check' .github/workflows/ci.yml
+require_match "ci version consistency" 'Version Consistency' .github/workflows/ci.yml
+require_match "ci full history checkout" 'fetch-depth: 0' .github/workflows/ci.yml
+require_match "ci whitespace script" 'git diff --check "\$base\.\.HEAD"' scripts/ci-whitespace-check.sh
+
+# 无障碍走查:AX 名称走查脚本 + 走查文档 + 关键控件补名
+require_match "ax audit script" 'ax-audit' scripts/ax-audit.sh
+require_match "ax audit helper" 'kAXDescriptionAttribute' scripts/support/ax-audit.swift
+require_match "ax walkthrough doc" '无可读名称的交互控件' docs/ACCESSIBILITY_WALKTHROUGH.md
+require_match "model page slider label" 'accessibilityLabel\("Temperature"\)' Sources/SnapAI/ModelSettingsSection.swift
+require_match "settings toggle row label" 'accessibilityLabel\(title\)' Sources/SnapAI/GeneralSettingsSection.swift
+require_match "privacy toggle row label" 'accessibilityLabel\(title\)' Sources/SnapAI/PrivacySettingsSection.swift
+require_match "command palette field label" 'accessibilityLabel\("搜索动作、模型、历史记录或设置"\)' Sources/SnapAI/CommandPalette.swift
+
+# 截图自动化:preview harness 逐 surface 直出,替代手工 window-id + screencapture
+require_match "screenshot automation" 'screencapture -x -o -l' scripts/screenshots-all.sh
+require_match "screenshot window id helper" 'CGWindowListCopyWindowInfo' scripts/support/window-id.swift
+
+# 冷启动耗时:exec→main→就绪 打点 + 文档基线
+require_match "startup timing type" 'enum LaunchTiming' Sources/SnapAI/LaunchTiming.swift
+require_match "startup main entry mark" 'LaunchTiming.markMainEntry' Sources/SnapAI/main.swift
+require_match "startup ready mark" 'LaunchTiming.markReady' Sources/SnapAI/LaunchCoordinator.swift
+require_match "startup measurement script" 'measure-startup' scripts/measure-startup.sh
+require_match "startup baseline doc" 'exec->ready' docs/STARTUP_BASELINE.md
+
+# 设置窗口 footprint:按 section 采样 + 屏外子区块不构建
+require_match "settings section profile script" 'profile-settings-sections' scripts/profile-settings-sections.sh
+require_match "settings section profile doc" '按 section 分布' docs/RUNTIME_MEMORY_BASELINE.md
+require_match "menu bar idle baseline" '菜单栏空闲态长期驻留' docs/RUNTIME_MEMORY_BASELINE.md
+require_match "streaming peak baseline" '流式输出峰值' docs/RUNTIME_MEMORY_BASELINE.md
+require_match "update download baseline" '更新窗口与下载阶段' docs/RUNTIME_MEMORY_BASELINE.md
+require_match "general section lazy stack" 'LazyVStack' Sources/SnapAI/GeneralSettingsSection.swift
+require_match "preview general surface" 'case "general"' Sources/SnapAI/AppPreview.swift
+require_match "preview permission surface" 'case "permission"' Sources/SnapAI/AppPreview.swift
+
+# AppDelegate 拆分(启动装配/菜单栏/全局热键/面板编排)
+require_max_lines "AppDelegate single-file size" 300 Sources/SnapAI/AppDelegate.swift
+require_match "launch coordinator" 'final class LaunchCoordinator' Sources/SnapAI/LaunchCoordinator.swift
+require_match "panel coordinator" 'final class PanelCoordinator' Sources/SnapAI/PanelCoordinator.swift
+require_match "hotkey coordinator" 'final class HotKeyRegistrationCoordinator' Sources/SnapAI/HotKeyRegistrationCoordinator.swift
+require_match "status menu builder" 'enum StatusMenuBuilder' Sources/SnapAI/StatusMenuBuilder.swift
+require_match "main menu builder" 'enum MainMenuBuilder' Sources/SnapAI/MainMenuBuilder.swift
+require_match "menu actions extension" 'func reopenHistoryEntry' Sources/SnapAI/AppDelegate+MenuActions.swift
+require_match "submission facade extension" 'func runQuickInput' Sources/SnapAI/AppDelegate+Submission.swift
+require_no_match "coordinator strong host cycle" '(strong|unowned) var host: AppDelegate' Sources/SnapAI/LaunchCoordinator.swift Sources/SnapAI/PanelCoordinator.swift Sources/SnapAI/HotKeyRegistrationCoordinator.swift
+require_no_match "assembly back in AppDelegate" 'NSStatusBar\.system\.statusItem' Sources/SnapAI/AppDelegate.swift
 
 echo "Audit remediation check: ok"
