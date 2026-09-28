@@ -18,7 +18,10 @@ on:
 jobs:
   build-and-test:
     name: Build and Test
-    runs-on: macos-14
+    # macos-14 已废弃且默认 Xcode 没有 macOS 26 SDK,编不过 .glassEffect /
+    # GlassEffectContainer / scrollEdgeEffectStyle(Liquid Glass);macos-26
+    # 默认 Xcode 26.6,SDK 与「锚定 26+」的产品前提一致。
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -69,7 +72,7 @@ jobs:
   readonly-preflight:
     name: Readonly Preflight
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-14
+    runs-on: macos-26
 
     steps:
       - name: Checkout
