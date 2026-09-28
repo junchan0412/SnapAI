@@ -251,6 +251,10 @@ require_match "appcast verified in preflight" 'sparkle:edSignature' scripts/pref
 require_match "appcast generator back-verifies signature" '回验' scripts/generate-appcast.sh
 require_match "sparkle tools pinned by hash" 'SPARKLE_SHA256' scripts/fetch-sparkle-tools.sh
 
+# 构建脚本不能依赖 ripgrep:runner 镜像没有 rg,而且它在 if 条件里只会静默走错分支
+require_no_match "build.sh avoids rg" 'rg -Fq' build.sh
+require_match "build.sh const-values path is layout agnostic" "path '\*/SnapAI.build/\*'" build.sh
+
 # App Intents 元数据:SwiftPM 不跑 Xcode 的提取阶段,必须在 build.sh 里补
 require_match "app intents metadata extraction" 'appintentsmetadataprocessor' build.sh
 require_match "app intents metadata lands in bundle" 'Metadata.appintents/version.json' build.sh

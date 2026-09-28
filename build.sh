@@ -35,7 +35,7 @@ if [ "$RELEASE_BUILD" = "1" ] && [ "$CONFIGURATION" != "release" ]; then
   exit 1
 fi
 
-if [ -z "$SIGN_IDENTITY" ] && security find-identity -p codesigning -v | rg -Fq "\"$LOCAL_IDENTITY_NAME\""; then
+if [ -z "$SIGN_IDENTITY" ] && security find-identity -p codesigning -v | grep -Fq "\"$LOCAL_IDENTITY_NAME\""; then
   SIGN_IDENTITY="$LOCAL_IDENTITY_NAME"
 fi
 if [ "$RELEASE_BUILD" = "1" ] && { [ -z "$SIGN_IDENTITY" ] || [ "$SIGN_IDENTITY" = "-" ]; }; then
@@ -87,10 +87,15 @@ printf '==> 提取 App Intents 元数据\n'
 APPINTENTS_SOURCES="$STAGING_DIR/appintents-sources.txt"
 APPINTENTS_CONSTVALS="$STAGING_DIR/appintents-constvals.txt"
 find Sources/SnapAI -name '*.swift' > "$APPINTENTS_SOURCES"
-find .build/out/Intermediates.noindex/SnapAI.build -path '*SnapAI-p.build*' \
-  -name '*.swiftconstvalues' > "$APPINTENTS_CONSTVALS"
+# 中间产物布局随 Xcode/SwiftPM 版本变化(.build/out/Intermediates.noindex/… 或
+# .build/<triple>/<config>/…),按「目录名恰为 SnapAI.build」精确匹配,
+# 顺便排除 SnapAILogic / SnapAIUpdater / 测试 target 的同名前缀。
+find .build -type f -path '*/SnapAI.build/*' -name '*.swiftconstvalues' \
+  > "$APPINTENTS_CONSTVALS"
 if [ ! -s "$APPINTENTS_CONSTVALS" ]; then
-  echo "error: 找不到 SwiftPM 产出的 .swiftconstvalues,无法提取 App Intents 元数据。" >&2
+  echo "error: 找不到应用 target 的 .swiftconstvalues,无法提取 App Intents 元数据。" >&2
+  echo "已找到的 const-values 文件(前 10 条):" >&2
+  find .build -name '*.swiftconstvalues' 2>/dev/null | head -10 >&2 || true
   exit 1
 fi
 xcrun appintentsmetadataprocessor \
