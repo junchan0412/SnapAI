@@ -265,6 +265,28 @@ if [ "$RUN_PACKAGE" -eq 1 ]; then
     exit 1
   fi
 
+  step "验证 Sparkle appcast"
+  APPCAST_PATH="dist/appcast.xml"
+  test -f "$APPCAST_PATH"
+  APPCAST_SIGNATURE=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST_PATH" | head -1)
+  APPCAST_LENGTH=$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' "$APPCAST_PATH" | head -1)
+  APPCAST_URL=$(sed -n 's/.*url="\([^"]*\)".*/\1/p' "$APPCAST_PATH" | head -1)
+  [ -n "$APPCAST_SIGNATURE" ] || { echo "error: appcast 缺少 sparkle:edSignature。" >&2; exit 1; }
+  if [ "$APPCAST_LENGTH" != "$(wc -c < "$ZIP_PATH" | tr -d ' ')" ]; then
+    echo "error: appcast length 与 zip 不一致。" >&2
+    echo "appcast: $APPCAST_LENGTH" >&2
+    echo "zip:     $(wc -c < "$ZIP_PATH" | tr -d ' ')" >&2
+    exit 1
+  fi
+  case "$APPCAST_URL" in
+    *"/releases/download/$TAG/$(basename "$ZIP_PATH")") ;;
+    *) echo "error: appcast enclosure url 与 tag/zip 不一致: $APPCAST_URL" >&2; exit 1 ;;
+  esac
+  grep -F "<sparkle:version>$VERSION</sparkle:version>" "$APPCAST_PATH" >/dev/null \
+    || { echo "error: appcast sparkle:version 与 Info.plist 不一致。" >&2; exit 1; }
+  grep -F "<title>SnapAI $VERSION</title>" "$APPCAST_PATH" >/dev/null \
+    || { echo "error: appcast 缺少 SnapAI $VERSION 条目。" >&2; exit 1; }
+
   step "验证 SBOM 标识、引用与来源"
   python3 - "$SBOM_PATH" "$ZIP_PATH" "$TAG" "$(git rev-parse HEAD)" <<'PY'
 import hashlib

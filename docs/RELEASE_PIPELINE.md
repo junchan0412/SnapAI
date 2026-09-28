@@ -17,7 +17,8 @@ Actions → CI → Run workflow。跑 `readonly-preflight` job,覆盖本机
 - `run-supply-chain-scan.sh`(零第三方依赖时直接通过)
 - `run-logic-tests.sh`、`run-streaming-runtime-tests.sh`、
   `run-app-runtime-tests.sh`、`run-macos-smoke-tests.sh --skip-logic`
-- `swift build` + `./build.sh --debug` + 无签名 bundle 启动 smoke
+- `swift build` + `./build.sh --debug`(含 Sparkle 框架嵌入与 App Intents 元数据提取)
+  + 无签名 bundle 启动 smoke
 
 CI runner 没有稳定签名身份,因此只做 debug 构建验证可启动性,不做
 release 签名构建、不打包、不生成 SBOM、不写 tag、不创建 Release。
@@ -33,6 +34,38 @@ checkout action 已 pin 到不可变 commit SHA(审计门禁锁定)。
 - `scripts/measure-startup.sh`、`scripts/profile-settings-sections.sh` ——
   性能基线,必须在同一台机器上前后对比才有意义
   (见 `docs/STARTUP_BASELINE.md`、`docs/RUNTIME_MEMORY_BASELINE.md`)。
+
+## 更新通道:Sparkle
+
+2.0.8 起应用内更新改走 Sparkle(appcast + EdDSA 签名),不再自研下载与替换流程。
+
+- **feed**:`SUFeedURL` = `https://github.com/junchan0412/SnapAI/releases/latest/download/appcast.xml`
+  (所以**每个 Release 都必须带 `appcast.xml`**,否则「检查更新」会找不到通道);
+- **公钥**:`SUPublicEDKey` 在 `Resources/Info.plist`;私钥在
+  `~/.snapai/sparkle/ed25519-private.key`(base64 的 Ed25519 种子),
+  同名 `.pem` 是用来派生公钥做一致性校验的,权限 600,不进仓库;
+- **签名工具**:`scripts/fetch-sparkle-tools.sh` 取官方 `sign_update`(按 SHA-256 固定),
+  装到 `~/.snapai/sparkle-tools/bin/`;
+- **生成与回验**:`scripts/generate-appcast.sh <version>` 在
+  `package-release.sh` 打包后自动执行:签名 → 用官方工具回验 → 比对 Info.plist
+  公钥与私钥派生公钥 → 写 `dist/appcast.xml`;preflight 再做结构校验
+  (signature/length/url/version 与 zip、Info.plist 一致);
+- **完整性模型**:应用内更新由 Sparkle 负责 EdDSA 校验 + 新旧应用代码签名连续性
+  (自签名证书指纹固定,满足该要求);`manifest` + `SBOM` 照常发布,供人工与
+  供应链核对,不再参与应用内安装流程。
+
+发布顺序因此多一步:`gh release create` 的资产里要带上 `dist/appcast.xml`。
+
+## 已知决策(明确记录,避免反复)
+
+- **不做 Apple notarization,继续自签名分发**:本机只有自签名身份
+  `SnapAI Local Signing`(证书指纹 `547f9e9c…`),没有付费开发者账号。
+  影响:首次安装需右键 → 打开(README 已写)。Sparkle 的更新安装不要求公证,
+  只要求**新旧应用签名一致**,自签名满足。
+  若将来申请到 Developer ID,需要:新证书签名 → `Resources/Info.plist` 公钥不变
+  (Sparkle EdDSA 与代码签名是两套)→ 首次公证后按 Apple 流程重新分发。
+- **不补发 v2.0.4 的 Release**:tag 已存在但没有 Release 资产,更新检查走
+  `releases/latest`,用户从 2.0.3 会直接跳到最新版 —— 按决定保持现状,不再回填。
 
 ## 本机:签名发布(唯一写入口)
 

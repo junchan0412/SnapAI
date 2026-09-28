@@ -26,7 +26,7 @@ done
 if [ ${#surfaces[@]} -eq 0 ]; then
   surfaces=(model provider actions history-settings general permission
             result quick history commands welcome health
-            empty-settings empty-history update diff)
+            empty-settings empty-history diff)
 fi
 
 helper_bin="${TMPDIR:-/tmp}/snapai-ax-audit"

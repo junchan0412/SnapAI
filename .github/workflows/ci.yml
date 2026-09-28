@@ -46,6 +46,10 @@ jobs:
       - name: Logic Target Boundary Check
         run: scripts/check-logic-symlinks.sh
 
+      - name: Supply Chain Scanner
+        # 仓库已有第三方依赖(Sparkle),扫描不能再走「零依赖直接通过」分支。
+        run: brew install osv-scanner
+
       - name: Supply Chain Scan
         run: scripts/run-supply-chain-scan.sh
 
@@ -114,6 +118,10 @@ jobs:
 
       - name: Logic Target Boundary Check
         run: scripts/check-logic-symlinks.sh
+
+      - name: Supply Chain Scanner
+        # 仓库已有第三方依赖(Sparkle),扫描不能再走「零依赖直接通过」分支。
+        run: brew install osv-scanner
 
       - name: Supply Chain Scan
         run: scripts/run-supply-chain-scan.sh

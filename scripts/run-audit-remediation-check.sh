@@ -235,6 +235,22 @@ require_match "model binding uses pure helper" 'SettingsPageBinding.modelValue' 
 require_match "action binding uses pure helper" 'SettingsPageBinding.actionValue' Sources/SnapAI/ActionSettingsSection.swift
 require_no_match "inline provider keypath binding" '\?\? AIProvider\(\)\[keyPath:' Sources/SnapAI
 
+# Sparkle 更新通道:依赖、嵌入、通道配置、appcast 生成与回验
+require_match "sparkle dependency" 'sparkle-project/Sparkle' Package.swift
+require_match "sparkle lockfile committed" 'sparkle' Package.resolved
+test -f Package.resolved || fail "Package.resolved must be committed (pin Sparkle)"
+require_match "sparkle framework embedded" 'Sparkle.framework' build.sh
+require_match "sparkle rpath added" 'install_name_tool -add_rpath' build.sh
+require_match "sparkle feed url" 'SUFeedURL' Resources/Info.plist
+require_match "sparkle public key" 'SUPublicEDKey' Resources/Info.plist
+require_match "sparkle automatic checks off" 'SUEnableAutomaticChecks' Resources/Info.plist
+require_match "sparkle wrapper" 'SPUStandardUpdaterController' Sources/SnapAI/UpdateCheckerApp.swift
+require_no_match "custom update window survives" 'UpdateWindowController' Sources/SnapAI
+require_match "appcast generated at package time" 'generate-appcast' scripts/package-release.sh
+require_match "appcast verified in preflight" 'sparkle:edSignature' scripts/preflight-release.sh
+require_match "appcast generator back-verifies signature" '回验' scripts/generate-appcast.sh
+require_match "sparkle tools pinned by hash" 'SPARKLE_SHA256' scripts/fetch-sparkle-tools.sh
+
 # App Intents 元数据:SwiftPM 不跑 Xcode 的提取阶段,必须在 build.sh 里补
 require_match "app intents metadata extraction" 'appintentsmetadataprocessor' build.sh
 require_match "app intents metadata lands in bundle" 'Metadata.appintents/version.json' build.sh

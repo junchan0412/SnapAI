@@ -64,6 +64,22 @@ for lang in en zh-Hans; do
   cp "Sources/SnapAI/Resources/$lang.lproj/Localizable.strings" "$STAGED_APP/Contents/Resources/$lang.lproj/"
 done
 printf 'APPL????' > "$STAGED_APP/Contents/PkgInfo"
+
+# Sparkle 是 SPM 二进制 target,SwiftPM 只负责链接,不会把框架放进 app 包,
+# 也不会给可执行文件加 @executable_path/../Frameworks 的 rpath —— 两件都要在这里补。
+SPARKLE_FRAMEWORK=$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" | head -1)
+if [ -z "$SPARKLE_FRAMEWORK" ]; then
+  echo "error: 找不到 Sparkle.framework(先运行 swift package resolve / swift build)。" >&2
+  exit 1
+fi
+printf '==> 嵌入 Sparkle.framework\n'
+mkdir -p "$STAGED_APP/Contents/Frameworks"
+rm -rf "$STAGED_APP/Contents/Frameworks/Sparkle.framework"
+/usr/bin/ditto "$SPARKLE_FRAMEWORK" "$STAGED_APP/Contents/Frameworks/Sparkle.framework"
+if ! otool -l "$STAGED_APP/Contents/MacOS/SnapAI" | grep -q "@executable_path/../Frameworks"; then
+  xcrun install_name_tool -add_rpath "@executable_path/../Frameworks" "$STAGED_APP/Contents/MacOS/SnapAI"
+fi
+
 # App Intents 元数据:Xcode 会在构建阶段跑 appintentsmetadataprocessor,
 # SwiftPM 不会 —— 少了这一步,Shortcuts 根本列不出本应用的 Intent
 # (元数据落在 Contents/Resources/Metadata.appintents,与第三方应用一致)。

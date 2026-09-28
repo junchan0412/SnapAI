@@ -31,7 +31,7 @@ done
 
 if [ ${#surfaces[@]} -eq 0 ]; then
   surfaces=(settings provider model actions history-settings general permission
-            result quick history commands welcome health diff update update-progress
+            result quick history commands welcome health diff
             empty-history empty-settings)
 fi
 

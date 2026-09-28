@@ -144,5 +144,11 @@
 			<string>润色</string>
 		</dict>
 	</array>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/junchan0412/SnapAI/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>zR7N357e3FTVC0djYW2CayriZkD++qQoHXeh9+bYI3Y=</string>
 </dict>
 </plist>

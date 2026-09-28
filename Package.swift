@@ -12,6 +12,12 @@ let package = Package(
         .executable(name: "SnapAI", targets: ["SnapAI"]),
         .executable(name: "SnapAIUpdater", targets: ["SnapAIUpdater"])
     ],
+    dependencies: [
+        // 更新通道:Sparkle 2(appcast + EdDSA 签名 + 原生更新安装)。
+        // 这是仓库第一个第三方依赖,供应链扫描因此从「零依赖直接通过」
+        // 变为真实扫描(osv-scanner),见 scripts/run-supply-chain-scan.sh。
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6"),
+    ],
     targets: [
         .target(
             name: "SnapAILogic",
@@ -29,7 +35,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "SnapAI",
-            dependencies: ["SnapAILogic"],
+            dependencies: [
+                "SnapAILogic",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/SnapAI",
             resources: [.copy("Resources")],
             packageAccess: true,

@@ -238,7 +238,7 @@ if ! cmp -s Resources/ManifestPublicKey.pem "$APP_BUNDLE/Contents/Resources/Mani
 fi
 
 mkdir -p "$DIST_DIR"
-rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$DIST_DIR/$SBOM_NAME"
+rm -f "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$DIST_DIR/$MANIFEST_NAME.sig" "$DIST_DIR/$SBOM_NAME" "$DIST_DIR/appcast.xml"
 
 /usr/bin/xattr -cr "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
@@ -292,10 +292,14 @@ fi
 verify_manifest "$DIST_DIR/$ZIP_NAME" "$DIST_DIR/$MANIFEST_NAME" "$TAG" "$BUNDLE_ID" "$RELEASE_DESIGNATED_REQUIREMENT" "$RELEASE_CERTIFICATE_FINGERPRINT"
 verify_packaged_zip "$DIST_DIR/$ZIP_NAME" "$SOURCE_VERSION"
 
+# Sparkle 通道:把 zip 的 EdDSA 签名写进 appcast,随 Release 一起分发。
+scripts/generate-appcast.sh "$TAG" "$DIST_DIR/$ZIP_NAME" > /dev/null
+
 echo "$DIST_DIR/$ZIP_NAME"
 echo "$DIST_DIR/$MANIFEST_NAME"
 if [ -f "$DIST_DIR/$MANIFEST_NAME.sig" ]; then
   echo "$DIST_DIR/$MANIFEST_NAME.sig"
 fi
 echo "$DIST_DIR/$SBOM_NAME"
+echo "$DIST_DIR/appcast.xml"
 echo "sha256=$SHA256"
