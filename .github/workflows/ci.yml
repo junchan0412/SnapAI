@@ -25,9 +25,10 @@ jobs:
 
     steps:
       - name: Checkout
-        # actions/checkout v4, pinned to an immutable commit SHA.
+        # actions/checkout v7.0.1(node24 运行时),pinned 到不可变 commit SHA。
+        # v4 跑在 Node 20 上,GitHub 已开始弃用并强制迁到 Node 24。
         # fetch-depth 0:空白检查要对 base..HEAD 的推送范围跑 git diff --check。
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
@@ -76,9 +77,10 @@ jobs:
 
     steps:
       - name: Checkout
-        # actions/checkout v4, pinned to an immutable commit SHA.
+        # actions/checkout v7.0.1(node24 运行时),pinned 到不可变 commit SHA。
+        # v4 跑在 Node 20 上,GitHub 已开始弃用并强制迁到 Node 24。
         # fetch-depth 0:空白检查要对 base..HEAD 的推送范围跑 git diff --check。
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
