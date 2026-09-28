@@ -3,12 +3,20 @@ import SwiftUI
 import Carbon
 import SnapAILogic
 
+/// 应用入口:只保留状态、NSApplicationDelegate 生命周期与各职责的转发入口。
+///
+/// 四个职责已拆成 coordinator / builder,单文件不再承载装配细节:
+/// - 启动装配 → `LaunchCoordinator`
+/// - 菜单栏   → `StatusMenuBuilder` / `MainMenuBuilder`(动作在 `AppDelegate+MenuActions`)
+/// - 全局热键 → `HotKeyRegistrationCoordinator`
+/// - 面板编排 → `PanelCoordinator`
+/// coordinator 只持有 weak host,装配结果写回这里的存储属性,不存在双向强引用。
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     let settings: AppSettings
-    private let launchSmokeDirectory: URL?
-    private let launchSmokeToken: String?
-    private var launchSmokeTimer: Timer?
+    /// 启动 smoke 上下文:`scripts/run-app-launch-smoke.sh` 注入,正常运行为 nil。
+    let launchSmokeDirectory: URL?
+    let launchSmokeToken: String?
     var statusItem: NSStatusItem!
     var resultVM: ResultViewModel!
     var panelController: FloatingPanelController!
@@ -19,10 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var permissionHealth: PermissionHealthController!
     var windowCoordinator: WindowCoordinator!
     var compareWindow: ModelCompareWindowController!
-    var appearanceObserver: NSObjectProtocol?
-    var frontmostAppObserver: NSObjectProtocol?
-    let hotKeyCoordinator = HotKeyCoordinator()
-    var hotKeyRegistrationFailures: [String] = []
+    /// 提交装配(取词→脱敏预览→隐私确认→启动请求),由 LaunchCoordinator 装配。
+    var submissionPipeline: SubmissionPipeline!
+
+    // MARK: - 职责 coordinator(lazy:构造需要 self)
+
+    lazy var launch: LaunchCoordinator = LaunchCoordinator(host: self)
+    lazy var hotKeys: HotKeyRegistrationCoordinator = HotKeyRegistrationCoordinator(host: self)
+    lazy var panels: PanelCoordinator = PanelCoordinator(host: self)
+
     /// 触发前的前台 App,用于「替换原文」时把焦点交还
     var previousApp: NSRunningApplication?
     var lastExternalFrontmostApp: NSRunningApplication?
@@ -33,8 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     var lastWriteBackStatusSummary: String?
     /// 文本捕获代际令牌(#bug2):每次新触发自增,旧捕获回调据此自我作废,避免过期结果弹「未检测到选中文字」。
     var captureGeneration: Int = 0
-    /// 提交装配(取词→脱敏预览→隐私确认→启动请求),触发流程的装配细节收拢于此。
-    private var submissionPipeline: SubmissionPipeline!
 
     override init() {
         settings = AppSettings.shared
@@ -50,500 +61,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         super.init()
     }
 
+    // MARK: - NSApplicationDelegate(装配细节在 LaunchCoordinator / PanelCoordinator)
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        applyActivationPolicy()
-        applyAppIcon()
-        installAppearanceObserver()
-        installFrontmostAppObserver()
-        if launchSmokeDirectory == nil {
-            installAutomationURLHandler()
-            iCloudSync.shared.pullIfNeeded(into: settings)
-        }
-        windowCoordinator = WindowCoordinator(
-            settings: settings,
-            onSettingsChange: { [weak self] in
-                self?.reloadAfterSettingsChange()
-            },
-            onPinStateChange: { [weak self] in
-                self?.installMainMenu()
-            },
-            onTryQuickInput: { [weak self] in
-                self?.toggleQuickInput()
-            }
-        )
-
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.image = statusBarImage()
-        }
-
-        resultVM = ResultViewModel(settings: settings)
-        resultVM.onReplace = { [weak self] original, replacement in
-            self?.replaceSelection(original: original, with: replacement)
-        }
-        resultVM.onAppend = { [weak self] text in self?.appendSelection(with: text) }   // #8
-        submissionPipeline = SubmissionPipeline(host: self)
-        resultVM.prepareFollowUpSubmission = { [weak self] text, action in
-            self?.submissionPipeline.prepareTextForSubmission(text,
-                                                              action: action,
-                                                              imageData: nil,
-                                                              userPromptOverride: text)
-        }
-        resultVM.prepareSourceSubmission = { [weak self] text, action in
-            self?.submissionPipeline.prepareTextForSubmission(text,
-                                                              action: action,
-                                                              imageData: nil)
-        }
-        panelController = FloatingPanelController(vm: resultVM) { [weak self] in
-            self?.showSettings(section: .model)
-        }
-
-        quickInputModel = QuickInputModel(settings: settings)
-        quickInputModel.actionID = settings.enabledActions.first?.id ?? ""
-        quickInputModel.onSubmit = { [weak self] text, action, imageData, imageMimeType in   // #3 imageData
-            self?.runQuickInput(text: text, action: action, imageData: imageData, imageMimeType: imageMimeType) ?? false
-        }
-        quickInput = QuickInputController(model: quickInputModel)
-        commandPalette = CommandPaletteController { [weak self] in
-            self?.commandPaletteItems() ?? []
-        }
-        historyWindow = HistoryWindowController(settings: settings) { [weak self] entry in
-            self?.reopenHistoryEntry(entry)
-        }
-        compareWindow = ModelCompareWindowController()
-        permissionHealth = PermissionHealthController(
-            settings: settings,
-            hotKeyFailures: { [weak self] in
-                self?.hotKeyRegistrationFailures ?? []
-            },
-            textCaptureStatus: { [weak self] in
-                self?.currentTextCaptureStatusSummary() ?? "none"
-            },
-            writeBackStatus: { [weak self] in
-                self?.currentWriteBackStatusSummary() ?? "none"
-            },
-            recentAIRequestStatus: { [weak self] in
-                self?.resultVM.requestHealthStatusText ?? "none"
-            }
-        )
-        if launchSmokeDirectory == nil {
-            installServicesProvider()
-            registerHotKeys()
-        }
-        buildMenu()
-        installMainMenu()
-
-        if completeLaunchSmokeIfNeeded() { return }
-
-        // iCloud 同步监听(#9)。远端配置变化后刷新菜单与快捷键。
-        iCloudSync.shared.startListening(into: settings) { [weak self] in
-            self?.reloadAfterSettingsChange()
-        }
-
-        // 首次启动:显示引导;否则按需提示权限
-        if !settings.onboardingDone {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.showOnboarding()
-            }
-        } else if !TextCapture.hasAccessibilityPermission() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                _ = TextCapture.hasAccessibilityPermission(prompt: true)
-            }
-        }
+        launch.didFinishLaunching()
     }
 
-    private func completeLaunchSmokeIfNeeded() -> Bool {
-        guard let directory = launchSmokeDirectory, let token = launchSmokeToken else { return false }
-        let pid = ProcessInfo.processInfo.processIdentifier
-        do {
-            try Data("ready \(pid) \(token)\n".utf8)
-                .write(to: directory.appendingPathComponent("ready"), options: .atomic)
-        } catch {
-            NSLog("SnapAI: launch smoke readiness marker failed")
-            NSApp.terminate(nil)
-            return true
-        }
-        launchSmokeTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
-            MainActor.assumeIsolated {
-                guard let self else {
-                    timer.invalidate()
-                    return
-                }
-                if FileManager.default.fileExists(atPath: directory.appendingPathComponent("stop").path) {
-                    self.launchSmokeTimer?.invalidate()
-                    self.launchSmokeTimer = nil
-                    NSApp.terminate(nil)
-                }
-            }
-        }
-        return true
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        panels.handleReopen(hasVisibleWindows: flag)
     }
 
-    // MARK: - 菜单
+    func applicationWillTerminate(_ notification: Notification) {
+        launch.willTerminate()
+    }
+
+    // MARK: - 菜单(装配见 StatusMenuBuilder / MainMenuBuilder,动作见 AppDelegate+MenuActions)
 
     func buildMenu() {
-        let menu = NSMenu()
-
-        // 动作 — 按 group 分组(#10)
-        let allActions = settings.enabledActions
-        let grouped = Dictionary(grouping: allActions) { menuGroupTitle(for: $0.group) }
-        func addActionItem(_ action: AIAction) {
-            let item = NSMenuItem(title: menuActionTitle(for: action.name),
-                                  action: #selector(triggerActionFromMenu(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = action.id
-            MenuCoordinator.configureShortcut(item, combo: action.hotKey)
-            menu.addItem(item)
-        }
-        // 无分组的动作先列
-        (grouped[""] ?? []).forEach { addActionItem($0) }
-        // 按分组名排序
-        for key in grouped.keys.sorted() where !key.isEmpty {
-            menu.addItem(.separator())
-            let header = NSMenuItem(title: key, action: nil, keyEquivalent: "")
-            header.isEnabled = false
-            menu.addItem(header)
-            (grouped[key] ?? []).forEach { addActionItem($0) }
-        }
-        menu.addItem(.separator())
-
-        let paletteItem = menu.addItem(withTitle: "命令面板",
-                                       action: #selector(openCommandPaletteFromMenu(_:)),
-                                       keyEquivalent: "k")
-        paletteItem.target = self
-        paletteItem.keyEquivalentModifierMask = [.command]
-
-        // 快捷提问面板
-        let quickItem = menu.addItem(withTitle: "快捷提问 (\(settings.quickPanelHotKey.displayString))",
-                                     action: #selector(toggleQuickInputFromMenu(_:)), keyEquivalent: "")
-        quickItem.target = self
-        MenuCoordinator.configureShortcut(quickItem, combo: settings.quickPanelHotKey)
-        menu.addItem(.separator())
-
-        if !hotKeyRegistrationFailures.isEmpty {
-            let warning = NSMenuItem(title: "快捷键注册异常", action: nil, keyEquivalent: "")
-            let sub = NSMenu()
-            for message in hotKeyRegistrationFailures.prefix(8) {
-                let item = NSMenuItem(title: message, action: nil, keyEquivalent: "")
-                item.isEnabled = false
-                sub.addItem(item)
-            }
-            warning.submenu = sub
-            menu.addItem(warning)
-            menu.addItem(.separator())
-        }
-
-        // 当前模型 + 快速切换
-        let currentTitle: String
-        if let p = settings.activeProvider, !settings.model.isEmpty {
-            let providerName = MarkdownExportSafety.metadata(p.name,
-                                                              fallback: "未命名供应商",
-                                                              maxLength: 80)
-            let modelName = MarkdownExportSafety.metadata(settings.model,
-                                                           fallback: "未命名模型",
-                                                           maxLength: 120)
-            currentTitle = "当前:\(providerName) / \(modelName)"
-        } else {
-            currentTitle = "当前:未选择模型"
-        }
-        let currentItem = NSMenuItem(title: currentTitle, action: nil, keyEquivalent: "")
-        currentItem.isEnabled = false
-        menu.addItem(currentItem)
-
-        let workModeItem = NSMenuItem(title: "工作模式", action: nil, keyEquivalent: "")
-        workModeItem.submenu = buildWorkModeMenu()
-        menu.addItem(workModeItem)
-
-        let switchItem = NSMenuItem(title: "切换模型", action: nil, keyEquivalent: "")
-        switchItem.submenu = MenuCoordinator.modelSwitchMenu(settings: settings,
-                                                             target: self,
-                                                             action: #selector(switchModel(_:)),
-                                                             settingsTarget: self,
-                                                             settingsAction: #selector(openSettingsFromMenu(_:)))
-        menu.addItem(switchItem)
-
-        // 历史
-        let historyItem = NSMenuItem(title: "历史记录", action: nil, keyEquivalent: "")
-        historyItem.submenu = buildHistoryMenu()
-        menu.addItem(historyItem)
-
-        menu.addItem(.separator())
-        let undoWriteBack = menu.addItem(withTitle: undoWriteBackMenuTitle(),
-                                         action: #selector(undoLastWriteBackFromMenu(_:)),
-                                         keyEquivalent: "")
-        undoWriteBack.target = self
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "设置…", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealthFromMenu(_:)), keyEquivalent: "").target = self
-        menu.addItem(withTitle: PermissionRecoveryCommand.title,
-                     action: #selector(copyPermissionRecoverySuggestionsFromMenu(_:)),
-                     keyEquivalent: "").target = self
-        menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "").target = self
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "退出 SnapAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusItem.menu = menu
+        StatusMenuBuilder.build(for: self)
     }
 
     func menuActionTitle(for name: String) -> String {
-        MarkdownExportSafety.metadata(name, fallback: "未命名动作", maxLength: 80)
+        StatusMenuBuilder.actionTitle(for: name)
     }
 
     func menuGroupTitle(for group: String) -> String {
-        MarkdownExportSafety.metadata(group, fallback: "", maxLength: 80)
+        StatusMenuBuilder.groupTitle(for: group)
     }
 
     func buildWorkModeMenu() -> NSMenu {
-        let sub = NSMenu()
-        let currentMode = settings.matchingWorkModePreset
-        let currentTitle = NSMenuItem(title: "当前:\(settings.workModeStatusTitle)",
-                                      action: nil,
-                                      keyEquivalent: "")
-        currentTitle.isEnabled = false
-        sub.addItem(currentTitle)
-        sub.addItem(.separator())
-        for mode in WorkModePreset.allCases {
-            let item = NSMenuItem(title: mode.title,
-                                  action: #selector(selectWorkModeFromMenu(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = mode.rawValue
-            item.state = currentMode == mode ? .on : .off
-            item.toolTip = mode.summary
-            sub.addItem(item)
-        }
-        return sub
+        StatusMenuBuilder.workModeMenu(for: self)
     }
 
     func buildHistoryMenu() -> NSMenu {
-        let sub = NSMenu()
-        let open = sub.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindowFromMenu(_:)), keyEquivalent: "")
-        open.target = self
-        sub.addItem(.separator())
-        if settings.history.isEmpty {
-            let item = NSMenuItem(title: "(暂无记录)", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            sub.addItem(item)
-            return sub
-        }
-        for entry in settings.history.prefix(5) {
-            let item = NSMenuItem(title: entry.menuTitle,
-                                  action: #selector(reopenHistory(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = entry.id
-            item.isEnabled = entry.canReopen
-            item.toolTip = entry.reopenHelpText
-            sub.addItem(item)
-        }
-        sub.addItem(.separator())
-        let clear = sub.addItem(withTitle: "清空历史", action: #selector(clearHistory), keyEquivalent: "")
-        clear.target = self
-        return sub
+        StatusMenuBuilder.historyMenu(for: self)
     }
 
     func addResultCommandItems(to menu: NSMenu) {
-        for descriptor in ResultCommandFactory.menuDescriptors() {
-            let item = menu.addItem(withTitle: descriptor.title,
-                                    action: selector(for: descriptor.action),
-                                    keyEquivalent: descriptor.keyEquivalent)
-            item.target = self
-            item.keyEquivalentModifierMask = nsModifierFlags(for: descriptor.modifiers)
-        }
-
-        let pin = menu.addItem(withTitle: ResultPinCommand.title(isPinned: resultVM.isPinned),
-                               action: #selector(togglePinResultFromMenu(_:)),
-                               keyEquivalent: ResultPinCommand.keyEquivalent)
-        pin.target = self
-        pin.keyEquivalentModifierMask = nsModifierFlags(for: ResultPinCommand.modifiers)
+        StatusMenuBuilder.addResultCommands(to: menu, for: self)
     }
 
     func selector(for action: ResultCommandAction) -> Selector {
-        switch action {
-        case .copyOutput:
-            return #selector(copyResultFromMenu(_:))
-        case .copyMarkdown:
-            return #selector(copyConversationMarkdownFromMenu(_:))
-        case .exportConversation:
-            return #selector(exportResultFromMenu(_:))
-        case .copyBriefDiagnostics:
-            return #selector(copyBriefRequestDiagnosticsFromMenu(_:))
-        case .copyDiagnostics:
-            return #selector(copyRequestDiagnosticsFromMenu(_:))
-        case .openAISettings:
-            return #selector(openAISettingsFromResultMenu(_:))
-        case .replaceOriginal:
-            return #selector(replaceResultFromMenu(_:))
-        case .appendToDocument:
-            return #selector(appendResultFromMenu(_:))
-        case .stop:
-            return #selector(stopResultFromMenu(_:))
-        case .regenerate:
-            return #selector(regenerateResultFromMenu(_:))
-        }
+        StatusMenuBuilder.selector(for: action)
     }
 
     func nsModifierFlags(for modifiers: [ResultMenuModifier]) -> NSEvent.ModifierFlags {
-        modifiers.reduce(into: NSEvent.ModifierFlags()) { flags, modifier in
-            switch modifier {
-            case .command:
-                flags.insert(.command)
-            case .option:
-                flags.insert(.option)
-            case .shift:
-                flags.insert(.shift)
-            }
-        }
-    }
-
-    @objc func switchModel(_ sender: NSMenuItem) {
-        guard let info = sender.representedObject as? [String: String],
-              let pid = info["provider"], let model = info["model"] else { return }
-        settings.activate(providerID: pid, model: model, recordManualPreference: true)
-        buildMenu()
-        installMainMenu()
-    }
-
-    @objc func selectWorkModeFromMenu(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let mode = WorkModePreset(rawValue: rawValue) else {
-            showSettings(section: .general)
-            return
-        }
-        applyWorkMode(mode)
-    }
-
-    @objc func reopenHistory(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String,
-              let entry = settings.history.first(where: { $0.id == id }) else { return }
-        reopenHistoryEntry(entry)
-    }
-
-    func reopenHistoryEntry(_ entry: HistoryEntry) {
-        // 用历史里的原文 + 同名动作重新发起
-        guard let sourceText = entry.reopenSourceText else { return }
-        let historyActionName = HistoryFilterCriteria.normalizedFacetValue(entry.actionName)
-        let action = settings.enabledActions.first {
-            HistoryFilterCriteria.normalizedFacetValue($0.name) == historyActionName
-        }
-            ?? settings.enabledActions.first
-        guard let action = action else { return }
-        previousApp = currentCaptureTargetApp()
-        resultVM.start(text: sourceText, action: action, autoReplaceEnabled: false)
-        panelController.show()
-    }
-
-    @objc func clearHistory() {
-        settings.clearHistory()
-        buildMenu()
+        StatusMenuBuilder.modifierFlags(for: modifiers)
     }
 
     func installMainMenu() {
-        let mainMenu = NSMenu()
-
-        let appMenuItem = NSMenuItem()
-        mainMenu.addItem(appMenuItem)
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "关于 SnapAI",
-                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
-                        keyEquivalent: "")
-        appMenu.addItem(.separator())
-        let prefItem = appMenu.addItem(withTitle: "设置…",
-                                       action: #selector(openSettingsFromMenu(_:)),
-                                       keyEquivalent: ",")
-        prefItem.target = self
-        let updateItem = appMenu.addItem(withTitle: "检查更新…",
-                                         action: #selector(checkForUpdatesFromMenu(_:)),
-                                         keyEquivalent: "")
-        updateItem.target = self
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "隐藏 SnapAI",
-                        action: #selector(NSApplication.hide(_:)),
-                        keyEquivalent: "h")
-        let hideOthers = appMenu.addItem(withTitle: "隐藏其他",
-                                         action: #selector(NSApplication.hideOtherApplications(_:)),
-                                         keyEquivalent: "h")
-        hideOthers.keyEquivalentModifierMask = [.command, .option]
-        appMenu.addItem(withTitle: "显示全部",
-                        action: #selector(NSApplication.unhideAllApplications(_:)),
-                        keyEquivalent: "")
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "退出 SnapAI",
-                        action: #selector(NSApplication.terminate(_:)),
-                        keyEquivalent: "q")
-        appMenuItem.submenu = appMenu
-
-        let operationMenuItem = NSMenuItem()
-        mainMenu.addItem(operationMenuItem)
-        let operationMenu = NSMenu(title: "操作")
-        let palette = operationMenu.addItem(withTitle: "命令面板",
-                                            action: #selector(openCommandPaletteFromMenu(_:)),
-                                            keyEquivalent: "k")
-        palette.target = self
-        palette.keyEquivalentModifierMask = [.command]
-        let quick = operationMenu.addItem(withTitle: "快捷提问",
-                                          action: #selector(toggleQuickInputFromMenu(_:)),
-                                          keyEquivalent: "")
-        quick.target = self
-        MenuCoordinator.configureShortcut(quick, combo: settings.quickPanelHotKey)
-        let workMode = NSMenuItem(title: "工作模式", action: nil, keyEquivalent: "")
-        workMode.submenu = buildWorkModeMenu()
-        operationMenu.addItem(workMode)
-        operationMenu.addItem(.separator())
-        for action in settings.enabledActions {
-            let item = NSMenuItem(title: action.name,
-                                  action: #selector(triggerActionFromMenu(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = action.id
-            MenuCoordinator.configureShortcut(item, combo: action.hotKey)
-            operationMenu.addItem(item)
-        }
-        operationMenu.addItem(.separator())
-        addResultCommandItems(to: operationMenu)
-        let undoWriteBack = operationMenu.addItem(withTitle: undoWriteBackMenuTitle(),
-                                                  action: #selector(undoLastWriteBackFromMenu(_:)),
-                                                  keyEquivalent: "z")
-        undoWriteBack.target = self
-        undoWriteBack.keyEquivalentModifierMask = [.command, .option]
-        operationMenu.addItem(.separator())
-        operationMenu.addItem(withTitle: "打开历史记录…", action: #selector(openHistoryWindowFromMenu(_:)), keyEquivalent: "").target = self
-        operationMenu.addItem(withTitle: "权限健康中心…", action: #selector(openPermissionHealthFromMenu(_:)), keyEquivalent: "").target = self
-        operationMenu.addItem(withTitle: PermissionRecoveryCommand.title,
-                              action: #selector(copyPermissionRecoverySuggestionsFromMenu(_:)),
-                              keyEquivalent: "").target = self
-        operationMenu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdatesFromMenu(_:)), keyEquivalent: "").target = self
-        operationMenuItem.submenu = operationMenu
-
-        let editMenuItem = NSMenuItem()
-        mainMenu.addItem(editMenuItem)
-        let editMenu = NSMenu(title: "编辑")
-        let undo = editMenu.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")
-        undo.keyEquivalentModifierMask = [.command]
-        let redo = editMenu.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "z")
-        redo.keyEquivalentModifierMask = [.command, .shift]
-        editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        editMenuItem.submenu = editMenu
-
-        let windowMenuItem = NSMenuItem()
-        mainMenu.addItem(windowMenuItem)
-        let windowMenu = NSMenu(title: "窗口")
-        windowMenu.addItem(withTitle: "最小化",
-                           action: #selector(NSWindow.performMiniaturize(_:)),
-                           keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "关闭",
-                           action: #selector(NSWindow.performClose(_:)),
-                           keyEquivalent: "w")
-        windowMenuItem.submenu = windowMenu
-        NSApp.windowsMenu = windowMenu
-
-        NSApp.mainMenu = mainMenu
+        MainMenuBuilder.install(for: self)
     }
 
-    // MARK: - Dock / 激活策略
+    // MARK: - Dock / 激活策略 / 前台 App
 
     func applyActivationPolicy() {
         NSApp.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
@@ -554,34 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.applicationIconImage = NSImage(named: name)
     }
 
-    func installAppearanceObserver() {
-        appearanceObserver = DistributedNotificationCenter.default().addObserver(
-            forName: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.applyAppIcon()
-            }
-        }
-    }
-
     var isDarkAppearance: Bool {
         NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-    }
-
-    func installFrontmostAppObserver() {
-        rememberExternalFrontmostApp(NSWorkspace.shared.frontmostApplication)
-        frontmostAppObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            Task { @MainActor [weak self] in
-                self?.rememberExternalFrontmostApp(app)
-            }
-        }
     }
 
     func rememberExternalFrontmostApp(_ app: NSRunningApplication?) {
@@ -606,40 +150,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return image
     }
 
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        guard launchSmokeDirectory == nil else { return false }
-        if !flag {
-            openSettings()
-        }
-        return true
+    // MARK: - 全局热键(注册与失败清单见 HotKeyRegistrationCoordinator)
+
+    var hotKeyRegistrationFailures: [String] {
+        hotKeys.failures
     }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        launchSmokeTimer?.invalidate()
-        settings.save()
-        RoutingMetricsStore.shared.flushPersistence()
-        if let token = launchSmokeToken {
-            settings.persistenceDefaults.removePersistentDomain(forName: "com.snapai.release-smoke.\(token)")
-            let supportDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-                .appendingPathComponent("SnapAI-LogicTests-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
-            try? FileManager.default.removeItem(at: supportDirectory)
-        }
-    }
-
-    // MARK: - 自动化 URL
-
-    // MARK: - 快捷键
 
     func registerHotKeys() {
-        hotKeyRegistrationFailures = hotKeyCoordinator.registerAll(
-            settings: settings,
-            actionHandler: { [weak self] actionID in
-                self?.triggerAction(id: actionID)
-            },
-            quickPanelHandler: { [weak self] in
-                self?.toggleQuickInput()
-            }
-        )
+        hotKeys.register()
     }
 
     func reloadAfterSettingsChange() {
@@ -651,95 +169,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         applyActivationPolicy()
     }
 
-    // MARK: - 触发流程
-
-    @objc func triggerActionFromMenu(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String else { return }
-        triggerAction(id: id)
-    }
-
-    func triggerAction(id: String) {
-        guard let action = settings.enabledActions.first(where: { $0.id == id }) else { return }
-        triggerCapturedSelection(action: action)
-    }
-
-    func triggerCapturedSelection(action: AIAction,
-                                          preferredTarget: NSRunningApplication? = nil,
-                                          forceDismissTransientUIBeforeCopy: Bool = false) {
-        submissionPipeline.triggerCapturedSelection(action: action,
-                                                    preferredTarget: preferredTarget,
-                                                    forceDismissTransientUIBeforeCopy: forceDismissTransientUIBeforeCopy)
-    }
-
-    func captureTargetApp(preferredTarget: NSRunningApplication?) -> NSRunningApplication? {
-        guard preferredTarget != nil else {
-            return currentCaptureTargetApp()
-        }
-        let frontmost = NSWorkspace.shared.frontmostApplication
-        rememberExternalFrontmostApp(frontmost)
-        return CaptureTargetResolver.resolveDeferred(serviceInvocation: preferredTarget,
-                                                     frontmost: frontmost,
-                                                     lastExternal: lastExternalFrontmostApp)
-    }
-
-    @objc func toggleQuickInputFromMenu(_ sender: Any?) {
-        toggleQuickInput()
-    }
+    // MARK: - 面板(编排见 PanelCoordinator,触发装配见 AppDelegate+Submission)
 
     func toggleQuickInput() {
-        previousApp = currentCaptureTargetApp()
-        previousSelectionSnapshot = nil
-        previousCaptureMethod = nil
-        quickInput.toggle()
+        panels.toggleQuickInput()
     }
 
-    @discardableResult
-    func runQuickInput(text: String,
-                               action: AIAction,
-                               originalText: String? = nil,
-                               imageData: Data? = nil,
-                               imageMimeType: String = "image/png",
-                               autoReplaceEnabled: Bool = false,
-                               captureMethod: TextCaptureMethod? = nil,
-                               sourceContext: SelectionSourceContext? = nil) -> Bool {
-        submissionPipeline.runQuickInput(text: text,
-                                         action: action,
-                                         originalText: originalText,
-                                         imageData: imageData,
-                                         imageMimeType: imageMimeType,
-                                         autoReplaceEnabled: autoReplaceEnabled,
-                                         captureMethod: captureMethod,
-                                         sourceContext: sourceContext)
-    }
-
-    func prepareTextForSubmission(_ text: String,
-                                          action: AIAction,
-                                          imageData: Data?,
-                                          userPromptOverride: String? = nil) -> PrivacyPreparedSubmission? {
-        submissionPipeline.prepareTextForSubmission(text,
-                                                    action: action,
-                                                    imageData: imageData,
-                                                    userPromptOverride: userPromptOverride)
-    }
-
-    func confirmPrivacyPreview(_ preview: PrivacySubmissionPreview,
-                                       requirement: PrivacyPreviewRequirement) -> Bool {
-        submissionPipeline.confirmPrivacyPreview(preview, requirement: requirement)
-    }
-
-    /// #bug2 「未检测到选中的文字」改为非模态提示:在结果窗口显示瞬时横幅,不再弹出阻塞式模态 alert。
-    /// 动作已在执行时不打扰(guard !isStreaming);快捷提问/权限中心入口由用户从状态栏菜单进入。
     func showNoSelectionNotice(action: AIAction? = nil) {
-        guard !resultVM.isStreaming else { return }
-        resultVM.showTransientNotice(TextCaptureRecoveryGuide.title)
-        panelController.show()
+        panels.showNoSelectionNotice(action: action)
     }
 
-    // MARK: - 设置窗口
-
-    @objc func openSettingsFromMenu(_ sender: Any?) {
-        openSettings()
+    func openModelCompare() {
+        panels.openModelCompare()
     }
+
+    // MARK: - 设置窗口 / 更新 / 引导
 
     func openSettings() {
         windowCoordinator.openSettings()
@@ -749,41 +193,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         windowCoordinator.showSettings(section: section)
     }
 
-    @objc func checkForUpdatesFromMenu(_ sender: Any?) {
-        checkForUpdates()
-    }
-
     func checkForUpdates() {
         UpdateCheckerApp.check()
     }
-
-    // MARK: - 双模型对照
-
-    /// 打开双模型对照:以当前结果原文为准,左侧为当前模型输出,
-    /// 右侧为首个备选路由输出(占位:当前为同一输出的差异演示,待双跑接入后替换)。
-    func openModelCompare() {
-        let routes = AIRequestRouter.candidates(settings: settings,
-                                                action: resultVM.action,
-                                                sourceText: resultVM.sourceText,
-                                                hasImage: false,
-                                                routingTextCharacterCount: max(resultVM.sourceText.count, 1_200))
-        let leftTitle = routeTitle(at: 0, routes: routes)
-        let rightTitle = routeTitle(at: 1, routes: routes)
-        let comparison = ModelCompare.compare(
-            left: .init(title: leftTitle, text: resultVM.completeText),
-            right: .init(title: rightTitle, text: resultVM.completeText))
-        compareWindow.show(comparison: comparison, sourceText: resultVM.sourceText)
-    }
-
-    private func routeTitle(at index: Int, routes: [AIRequestRoute]) -> String {
-        guard routes.indices.contains(index) else {
-            return index == 0 ? settings.modelSelectionTitle : "备选模型"
-        }
-        let route = routes[index]
-        return "\(route.providerName) / \(route.modelName)"
-    }
-
-    // MARK: - 引导页(#14)
 
     func showOnboarding() {
         windowCoordinator.showOnboarding()
