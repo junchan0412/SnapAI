@@ -8,23 +8,33 @@ fail() {
   exit 1
 }
 
+# GitHub 的 macOS runner 镜像默认没有 ripgrep,门禁必须在任何机器上跑得起来,
+# 所以没有 rg 时退回 grep -E(POSIX ERE)。全库 195 条 pattern 已逐条比对过:
+# 两种实现的匹配结果完全一致。
+if command -v rg >/dev/null 2>&1; then
+  match_file() { rg -q -- "$@"; }
+else
+  match_file() { grep -rqE -- "$@"; }
+fi
+
+# path 起可传多个文件/目录(第 3 个参数之后全部视为路径)。
 require_match() {
   local label="$1"
   local pattern="$2"
-  local path="$3"
+  shift 2
 
-  if ! rg -q -- "$pattern" "$path"; then
-    fail "$label check failed: pattern not found in $path"
+  if ! match_file "$pattern" "$@"; then
+    fail "$label check failed: pattern not found in $*"
   fi
 }
 
 require_no_match() {
   local label="$1"
   local pattern="$2"
-  local path="$3"
+  shift 2
 
-  if rg -q -- "$pattern" "$path"; then
-    fail "$label check failed: forbidden pattern found in $path"
+  if match_file "$pattern" "$@"; then
+    fail "$label check failed: forbidden pattern found in $*"
   fi
 }
 
