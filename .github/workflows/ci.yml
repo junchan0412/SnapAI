@@ -23,7 +23,10 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout v4, pinned to an immutable commit SHA.
+        # fetch-depth 0:空白检查要对 base..HEAD 的推送范围跑 git diff --check。
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
 
       - name: Toolchain
         run: |
@@ -31,7 +34,10 @@ jobs:
           swift --version
 
       - name: Whitespace Check
-        run: git diff --check
+        # 传基线提交:干净检出上直接跑 git diff --check 恒为空,等于没检查。
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/ci-whitespace-check.sh "$BASE"
 
       - name: Logic Target Boundary Check
         run: scripts/check-logic-symlinks.sh
@@ -68,7 +74,10 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout v4, pinned to an immutable commit SHA.
+        # fetch-depth 0:空白检查要对 base..HEAD 的推送范围跑 git diff --check。
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
 
       - name: Toolchain
         run: |
@@ -76,12 +85,24 @@ jobs:
           swift --version
 
       - name: Whitespace Check
-        run: git diff --check
+        # 传基线提交:干净检出上直接跑 git diff --check 恒为空,等于没检查。
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/ci-whitespace-check.sh "$BASE"
 
       - name: License Check
         run: |
           test -f LICENSE
           grep -Fq "[MIT License](LICENSE)" README.md
+
+      - name: Version Consistency
+        # 与本机 preflight 的 validate_release_version 同口径:只读、不签名、不打包。
+        run: |
+          short=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Resources/Info.plist)
+          echo "CFBundleShortVersionString=$short CFBundleVersion=$build"
+          test "$short" = "$build"
+          echo "$short" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$'
 
       - name: Audit Remediation Check
         run: scripts/run-audit-remediation-check.sh

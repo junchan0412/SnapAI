@@ -8,8 +8,12 @@ tag 写入、GitHub Release 上传的步骤都不进 CI。
 Actions → CI → Run workflow。跑 `readonly-preflight` job,覆盖本机
 `scripts/preflight-release.sh` 的可移植前缀:
 
-- `git diff --check`、LICENSE 引用检查
-- `run-audit-remediation-check.sh`、`check-logic-symlinks.sh`
+- **空白检查**:`scripts/ci-whitespace-check.sh <base>`,对 `base..HEAD` 的
+  推送/PR 范围跑 `git diff --check`。工作区永远干净,直接跑 `git diff --check`
+  恒为空,所以这里必须显式传基线提交(checkout 用 `fetch-depth: 0`);
+- **版本一致性**:`Resources/Info.plist` 的 `CFBundleShortVersionString` 与
+  `CFBundleVersion` 相同且格式合法 —— 与本机 `validate_release_version` 同口径;
+- LICENSE 引用检查、`run-audit-remediation-check.sh`、`check-logic-symlinks.sh`
 - `run-supply-chain-scan.sh`(零第三方依赖时直接通过)
 - `run-logic-tests.sh`、`run-streaming-runtime-tests.sh`、
   `run-app-runtime-tests.sh`、`run-macos-smoke-tests.sh --skip-logic`
@@ -18,6 +22,17 @@ Actions → CI → Run workflow。跑 `readonly-preflight` job,覆盖本机
 CI runner 没有稳定签名身份,因此只做 debug 构建验证可启动性,不做
 release 签名构建、不打包、不生成 SBOM、不写 tag、不创建 Release。
 checkout action 已 pin 到不可变 commit SHA(审计门禁锁定)。
+
+### 只留在本机的只读工具
+
+这些不需要私钥,但 runner 没有对应权限或屏幕,不进 Actions:
+
+- `scripts/ax-audit.sh` —— 无障碍名称走查,需要辅助功能权限
+  (见 `docs/ACCESSIBILITY_WALKTHROUGH.md`);
+- `scripts/screenshots-all.sh` —— release notes 截图,需要屏幕录制权限;
+- `scripts/measure-startup.sh`、`scripts/profile-settings-sections.sh` ——
+  性能基线,必须在同一台机器上前后对比才有意义
+  (见 `docs/STARTUP_BASELINE.md`、`docs/RUNTIME_MEMORY_BASELINE.md`)。
 
 ## 本机:签名发布(唯一写入口)
 
