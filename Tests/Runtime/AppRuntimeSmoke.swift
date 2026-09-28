@@ -392,14 +392,27 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         AXUIElementCreateApplication(NSRunningApplication.current.processIdentifier)
     }
 
+    // AX 树遍历必须是迭代 + 有界的:AppKit 偶发把已访问元素挂回子树(环),
+    // 递归版本会一路吃到栈保护页并 SIGSEGV
+    // (崩溃报告:Could not determine thread index for stack guard region)。
+    /// AX 遍历上限:正常树约 150 节点,留足余量;命中上限按「没找到」处理。
+    private static let maximumAXDepth = 64
+    private static let maximumAXNodes = 8_192
+
     private func axFind(_ element: AXUIElement, identifier: String) -> AXUIElement? {
-        var idRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(element, kAXIdentifierAttribute as CFString, &idRef)
-        if (idRef as? String) == identifier { return element }
-        var kidsRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &kidsRef)
-        for kid in (kidsRef as? [AXUIElement]) ?? [] {
-            if let found = axFind(kid, identifier: identifier) { return found }
+        var pending: [(element: AXUIElement, depth: Int)] = [(element, 0)]
+        var visited = 0
+        while let (current, depth) = pending.popLast() {
+            visited += 1
+            guard depth <= Self.maximumAXDepth, visited <= Self.maximumAXNodes else { return nil }
+            var idRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(current, kAXIdentifierAttribute as CFString, &idRef)
+            if (idRef as? String) == identifier { return current }
+            var kidsRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(current, kAXChildrenAttribute as CFString, &kidsRef)
+            for kid in (kidsRef as? [AXUIElement]) ?? [] {
+                pending.append((kid, depth + 1))
+            }
         }
         return nil
     }
@@ -427,13 +440,19 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func axContainsPopover(_ element: AXUIElement) -> Bool {
-        var roleRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
-        if (roleRef as? String) == (kAXPopoverRole as String) { return true }
-        var kidsRef: CFTypeRef?
-        AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &kidsRef)
-        for kid in (kidsRef as? [AXUIElement]) ?? [] {
-            if axContainsPopover(kid) { return true }
+        var pending: [(element: AXUIElement, depth: Int)] = [(element, 0)]
+        var visited = 0
+        while let (current, depth) = pending.popLast() {
+            visited += 1
+            guard depth <= Self.maximumAXDepth, visited <= Self.maximumAXNodes else { return false }
+            var roleRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(current, kAXRoleAttribute as CFString, &roleRef)
+            if (roleRef as? String) == (kAXPopoverRole as String) { return true }
+            var kidsRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(current, kAXChildrenAttribute as CFString, &kidsRef)
+            for kid in (kidsRef as? [AXUIElement]) ?? [] {
+                pending.append((kid, depth + 1))
+            }
         }
         return false
     }

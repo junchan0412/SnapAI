@@ -235,6 +235,11 @@ require_match "model binding uses pure helper" 'SettingsPageBinding.modelValue' 
 require_match "action binding uses pure helper" 'SettingsPageBinding.actionValue' Sources/SnapAI/ActionSettingsSection.swift
 require_no_match "inline provider keypath binding" '\?\? AIProvider\(\)\[keyPath:' Sources/SnapAI
 
+# App runtime smoke 的 AX 遍历必须有界:无界递归在 AX 树出现环时栈溢出,
+# 以 SIGSEGV(栈保护页)形式随机打断发版预检。
+require_match "bounded ax walk" 'maximumAXNodes' Tests/Runtime/AppRuntimeSmoke.swift
+require_no_match "unbounded ax recursion" 'axContainsPopover\(kid\)' Tests/Runtime/AppRuntimeSmoke.swift
+
 # 发布链路进 CI:范围空白检查、版本一致性、完整历史检出
 require_match "ci range whitespace check" 'ci-whitespace-check' .github/workflows/ci.yml
 require_match "ci version consistency" 'Version Consistency' .github/workflows/ci.yml
