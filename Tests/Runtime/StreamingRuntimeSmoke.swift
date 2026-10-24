@@ -257,7 +257,7 @@ struct StreamingRuntimeSmoke {
         let coordinator = ResultStreamingCoordinator()
         var output = ""
         var completions = 0
-        coordinator.begin(speed: .normal, onOutputChunk: { output += $0 }, onDrained: { completions += 1 })
+        coordinator.begin(speed: .normal, reduceMotion: false, onOutputChunk: { output += $0 }, onDrained: { completions += 1 })
         check(!coordinator.isPresentationScheduled, "waiting for a first token does not allocate an active timer")
         _ = coordinator.appendContentToken("<think>analysis</think>", extractsThinkTags: true)
         check(!coordinator.isPresentationScheduled, "hidden thinking does not schedule presentation")
@@ -270,7 +270,7 @@ struct StreamingRuntimeSmoke {
         await waitUntil("finish delivers completion on a later tick") { completions == 1 }
         check(!coordinator.isPresentationScheduled, "completion invalidates its timer")
         coordinator.reset()
-        coordinator.begin(speed: .normal, onOutputChunk: { _ in }, onDrained: { completions += 1 })
+        coordinator.begin(speed: .normal, reduceMotion: false, onOutputChunk: { _ in }, onDrained: { completions += 1 })
         _ = coordinator.finish()
         coordinator.stopAndDiscardPendingPresentation()
         try? await Task.sleep(nanoseconds: 60_000_000)
