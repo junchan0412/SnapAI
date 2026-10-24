@@ -27,8 +27,9 @@ checkout action 已 pin 到不可变 commit SHA(审计门禁锁定)。
 真实 Vision OCR 另有环境边界：当前 hosted runner 返回
 `TextRecognition.CRImageReaderError(9)`，CPU 重试同样失败。逻辑 runner 仅在
 `CI=true` 且出现该精确错误时明确打印 SKIP；其他错误和阈值断言仍失败。
-取消、超时、无效图片及 UI 任务隔离继续在 CI 验证。本机发布预检不设置
-`CI=true`，必须在真实设备通过中英文和空白图识别，不能用 CI 的其余 PASS 替代。
+取消、超时、无效图片及 UI 任务隔离继续在 CI 验证。本机发布预检强制
+`SNAPAI_REQUIRE_SYSTEM_OCR=1`，即使继承 `CI=true` 也必须在真实设备通过
+中英文和空白图识别，不能用 CI 的其余 PASS 替代。
 
 ### 只留在本机的只读工具
 

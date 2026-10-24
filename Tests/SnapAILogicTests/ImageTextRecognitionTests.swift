@@ -37,6 +37,7 @@ func testImageTextRecognitionDistinguishesNoTextAndTimeout() {
 
 private func systemOCRUnavailableInCI(_ outcome: SnapAIImageTextRecognition.Outcome) -> Bool {
     guard ProcessInfo.processInfo.environment["CI"] == "true",
+          ProcessInfo.processInfo.environment["SNAPAI_REQUIRE_SYSTEM_OCR"] != "1",
           outcome == .failed(.system(domain: "TextRecognition.CRImageReaderError", code: 9)) else { return false }
     print("SKIP real Vision OCR: hosted runner returns TextRecognition.CRImageReaderError(9); physical-device release checks remain required")
     return true

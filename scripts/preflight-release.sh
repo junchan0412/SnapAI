@@ -151,7 +151,7 @@ step "运行供应链扫描"
 scripts/run-supply-chain-scan.sh
 
 step "运行逻辑测试"
-scripts/run-logic-tests.sh
+SNAPAI_REQUIRE_SYSTEM_OCR=1 scripts/run-logic-tests.sh
 
 step "运行离线流式与 App 生命周期回归"
 scripts/run-streaming-runtime-tests.sh
