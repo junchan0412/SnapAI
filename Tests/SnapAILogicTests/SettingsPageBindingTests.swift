@@ -1,5 +1,7 @@
 import Foundation
+#if !SNAPAI_MANUAL_TEST_MAIN
 @testable import SnapAILogic
+#endif
 
 /// 设置页 keypath 绑定(`SettingsPageBinding`)的覆盖。
 ///

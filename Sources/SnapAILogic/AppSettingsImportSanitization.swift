@@ -151,7 +151,7 @@ extension AppSettings {
                                              fallback: "")
             guard !name.isEmpty,
                   seenNames.insert(name).inserted else { return nil }
-            return AIModelEntry(name: name, enabled: model.enabled)
+            return AIModelEntry(name: name, enabled: model.enabled, metadata: model.metadata.sanitized)
         }
     }
 

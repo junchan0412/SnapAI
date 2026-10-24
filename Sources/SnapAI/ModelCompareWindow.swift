@@ -2,23 +2,19 @@ import AppKit
 import SwiftUI
 import SnapAILogic
 
-/// 双模型对照窗口:同一输入发两个模型,并排展示输出,差异行高亮。
-///
-/// 设计约束:
-/// 1. 非模态普通窗口(可与结果浮窗并存),关闭即释放,无常驻状态。
-/// 2. 两侧各一个"复制"按钮,不做写回 —— 对照是选型工具,写回仍走结果窗口。
-/// 3. 空输出侧显示占位,不展示空表;完全一致显示中立摘要横幅。
 @MainActor
 final class ModelCompareWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var session: ModelCompareSession?
 
-    func show(comparison: ModelCompare.Comparison, sourceText: String) {
+    func show(session: ModelCompareSession) {
         if let window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = ModelCompareView(comparison: comparison, sourceText: sourceText)
+        self.session = session
+        let view = ModelCompareSessionView(session: session)
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "双模型对照"
@@ -34,13 +30,14 @@ final class ModelCompareWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        session?.close()
+        session = nil
         window = nil
     }
 }
 
 private struct ModelCompareView: View {
     let comparison: ModelCompare.Comparison
-    let sourceText: String
     @StateObject private var operationCoordinator = ResultOperationCoordinator()
 
     var body: some View {
@@ -184,5 +181,156 @@ private struct ModelCompareView: View {
         operationCoordinator.copy(text: text,
                                   successMessage: "已复制\(label)的结果",
                                   emptyMessage: "该侧没有可复制的结果。")
+    }
+}
+
+private struct ModelCompareSessionView: View {
+    @ObservedObject var session: ModelCompareSession
+    @StateObject private var operations = ResultOperationCoordinator()
+    @State private var showDifferences = false
+    @State private var showInput = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("双模型对照").font(SnapAIUI.Typography.windowTitle)
+                    Text("确认后将相同输入分别发送给两个模型，产生两次独立请求及相应费用。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Text(session.inputSummary + (session.localOnly ? " · 仅本地路线" : " · 可包含云端路线"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if session.isRunning {
+                    Button("全部停止") { session.cancelAll() }
+                } else if !session.hasStarted {
+                    Button("开始双模型生成") { session.start() }
+                        .buttonStyle(.borderedProminent).disabled(!session.canStart)
+                }
+            }
+            if let reason = session.unavailableReason {
+                Text(reason).foregroundStyle(.secondary)
+            }
+            if let error = session.preparationError {
+                Text(error).foregroundStyle(.red)
+            }
+            if session.messages.isEmpty {
+                Text("尚无可重放的请求，请先在结果窗口提交一次输入。")
+            }
+            HStack {
+                routePicker("左侧模型", selection: $session.leftRouteID)
+                routePicker("右侧模型", selection: $session.rightRouteID)
+            }
+            DisclosureGroup("发送内容预览", isExpanded: $showInput) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(session.redactionEnabled ? "文本已按当前规则脱敏；图片中的文字不会自动脱敏。" : "文本脱敏未开启。")
+                            .foregroundStyle(.secondary)
+                        ForEach(Array(session.messages.enumerated()), id: \.offset) { _, message in
+                            VStack(alignment: .leading) {
+                                Text(message.role.rawValue).font(.caption).foregroundStyle(.secondary)
+                                Text(message.content).textSelection(.enabled)
+                                if let data = message.imageData, let image = NSImage(data: data) {
+                                    Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 160)
+                                }
+                            }
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(maxHeight: 200)
+            }
+            if let comparison = session.comparison {
+                Toggle("查看行差异（最多 1,000 行）", isOn: $showDifferences)
+                if showDifferences {
+                    ModelCompareView(comparison: comparison)
+                } else {
+                    requests
+                }
+            } else {
+                requests
+            }
+            ResultOperationFeedbackHost(coordinator: operations)
+            Text("选中并复制只更新剪贴板，不会写回原文。失败或停止的输出标记为部分结果。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(minWidth: 700, minHeight: 480)
+        .background(SnapAIUI.Surface.canvas)
+    }
+
+    private func routePicker(_ title: String, selection: Binding<String>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(session.routes) { route in
+                Text("\(route.diagnosticProviderName) / \(route.diagnosticModelName)\(route.isLocalEndpoint ? "（本地）" : "（云端）")")
+                    .tag(ModelCompareSession.routeID(route))
+            }
+        }.disabled(session.hasStarted)
+    }
+
+    private var requests: some View {
+        HStack(alignment: .top, spacing: 12) {
+            requestColumn(session.left)
+            Divider()
+            requestColumn(session.right)
+        }.frame(maxHeight: .infinity)
+    }
+
+    @ViewBuilder private func requestColumn(_ request: ModelCompareRequest?) -> some View {
+        if let request {
+            ModelCompareRequestView(request: request,
+                                    selected: session.selectedRouteID == ModelCompareSession.routeID(request.route)) {
+                session.choose(request)
+                operations.copy(text: request.output,
+                                successMessage: "已选中并复制\(request.title)的结果",
+                                emptyMessage: "该侧没有可复制的结果。")
+            }
+        } else {
+            Text("选择模型后点击“开始双模型生成”")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+private struct ModelCompareRequestView: View {
+    @ObservedObject var request: ModelCompareRequest
+    let selected: Bool
+    let choose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(request.title).font(.headline).lineLimit(2)
+            if request.isRunning {
+                TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                    Text("\(request.status.rawValue) · \(request.elapsed(at: context.date), specifier: "%.1f") 秒")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("\(request.status.rawValue) · \(request.elapsed(), specifier: "%.1f") 秒")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let first = request.firstTokenMilliseconds {
+                Text("首个响应片段：\(first) ms").font(.caption).foregroundStyle(.secondary)
+            }
+            if let error = request.errorMessage { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if !request.output.isEmpty && (request.status == .failed || request.status == .cancelled) {
+                Text("部分结果").font(.caption).foregroundStyle(.orange)
+            }
+            HStack {
+                if request.isRunning { Button("停止此侧") { request.cancel() } }
+                Button(selected ? "已选中 · 再次复制" : "选中并复制", action: choose)
+                    .disabled(!request.canChoose)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if !request.thinking.isEmpty {
+                        DisclosureGroup("思考过程") {
+                            Text(request.thinking).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }
+                    Text(request.output.isEmpty ? "等待模型返回…" : request.output)
+                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

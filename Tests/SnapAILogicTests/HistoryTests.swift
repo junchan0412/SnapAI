@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
+import NaturalLanguage
 #if !SNAPAI_MANUAL_TEST_MAIN
 @testable import SnapAILogic
 #endif
@@ -605,6 +606,67 @@ func testHistoryEmbeddingSearchRecallsSemanticallySimilarEntries() {
            "embedding search rejects empty queries")
     expect(HistoryEmbeddingSearch.search(query: "年终奖", entries: [bonus], limit: 0).isEmpty,
            "embedding search rejects zero limit")
+    let afterDeletion = HistoryEmbeddingSearch.search(query: "年终奖怎么算", entries: [recipe], limit: 10)
+    expect(!afterDeletion.contains(where: { $0.id == bonus.id }),
+           "cached distances cannot recall a deleted history entry")
+    expect(HistoryEmbeddingSearch.search(query: "年终奖怎么算", entries: [recipe, bonus], limit: 10).map(\.id)
+           == recalled.map(\.id), "warm distance cache preserves semantic ranking and threshold")
+    var changed = bonus
+    changed.source = recipe.source
+    expect(HistoryEmbeddingSearch.search(query: "年终奖怎么算", entries: [changed], limit: 10).isEmpty,
+           "editing the text of an existing ID must not reuse its old semantic distance")
+    checkHistoryEmbeddingDistanceCache()
+}
+
+private func checkHistoryEmbeddingDistanceCache() {
+    let cache = HistoryEmbeddingSearch.DistanceCache(capacity: 2)
+    let key = HistoryEmbeddingSearch.DistanceKey(language: "en", revision: 1, query: "query", text: "entry text")
+    var computations = 0
+    func compute() -> Double? { computations += 1; return 0.23 }
+    _ = cache.distance(for: key, compute: compute)
+    _ = cache.distance(for: key, compute: compute)
+    expect(computations == 1, "repeating the same query, text and model reuses its distance")
+    var revised = key
+    revised.revision = 2
+    _ = cache.distance(for: revised, compute: compute)
+    var translated = key
+    translated.language = "zh-Hans"
+    _ = cache.distance(for: translated, compute: compute)
+    _ = cache.distance(for: key, compute: compute)
+    expect(computations == 4, "language and model revision isolate distances, and cache capacity evicts older entries")
+    var edited = key
+    edited.text = "edited text"
+    _ = cache.distance(for: edited, compute: compute)
+    expect(computations == 5, "cache keys include the complete projected entry text")
+    var newQuery = key
+    newQuery.query = "different query"
+    _ = cache.distance(for: newQuery, compute: compute)
+    expect(computations == 6, "a different query does not reuse an earlier query's distance")
+
+    let nilCache = HistoryEmbeddingSearch.DistanceCache(capacity: 2)
+    var missingComputations = 0
+    for _ in 0..<2 {
+        _ = nilCache.distance(for: key) { missingComputations += 1; return nil }
+    }
+    expect(missingComputations == 1, "unsupported text also has a bounded negative cache")
+    let systemCache = HistoryEmbeddingSearch.DistanceCache()
+    for language in [NLLanguage.simplifiedChinese, .english] {
+        guard let embedding = NLEmbedding.sentenceEmbedding(for: language) else { continue }
+        for pair in [("年终奖怎么算", "年终奖计算方法"), ("年终奖怎么算", "红烧肉做法"),
+                     ("How do I calculate my bonus?", "Recipe for dinner")] {
+            guard embedding.contains(pair.0), embedding.contains(pair.1) else { continue }
+            let system = embedding.distance(between: pair.0, and: pair.1)
+            guard system.isFinite else { continue }
+            let systemKey = HistoryEmbeddingSearch.DistanceKey(language: language.rawValue,
+                                                               revision: embedding.revision,
+                                                               query: pair.0,
+                                                               text: pair.1)
+            let cold = systemCache.distance(for: systemKey) { embedding.distance(between: pair.0, and: pair.1) }
+            let warm = systemCache.distance(for: systemKey) { nil }
+            expect(cold == system && warm == system,
+                   "cold and warm cached distances exactly preserve NLEmbedding.distance for \(language.rawValue)")
+        }
+    }
 }
 
 func testHistoryFilterCriteriaMatchesMultipleTermsAndFacets() {
@@ -1001,4 +1063,106 @@ func testHistoryWindowRefreshPolicyDebouncesQueriesAndRejectsStaleResults() {
     expect(!HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: 8,
                                                       latestGeneration: 9),
            "stale background search result cannot replace newer filters")
+}
+
+func testHistorySearchPhasesAndCancellation() {
+    let exact = HistoryEntry(id: "phase-exact", date: Date(timeIntervalSince1970: 3),
+                             actionName: "提问", source: "密码", output: "exact",
+                             provider: "OpenAI", model: "test")
+    let concept = HistoryEntry(id: "phase-concept", date: Date(timeIntervalSince1970: 2),
+                               actionName: "提问", source: "keychain", output: "concept",
+                               provider: "OpenAI", model: "test")
+    let semantic = HistoryEntry(id: "phase-semantic", date: Date(timeIntervalSince1970: 1),
+                                actionName: "提问", source: "semantic-marker", output: "answer",
+                                provider: "OpenAI", model: "test")
+    let entries = [exact, concept, semantic]
+    let criteria = HistoryFilterCriteria(query: "密码")
+    let distances: [(String, String) -> Double?] = [
+        { _, text in text.contains("semantic-marker") ? 0.2 : 0.5 },
+        { _, _ in 0.4 }
+    ]
+    var fastIDs: [String] = []
+    let final = HistorySearch.filteredEntries(
+        criteria: criteria, memoryEntries: entries, limit: 10,
+        searchStore: { _, _ in [exact] },
+        onFastResults: { fastIDs = $0.map(\.id) },
+        embeddingSearch: { query, candidates, limit, shouldCancel in
+            expect(fastIDs == [exact.id, concept.id], "fast phase precedes embedding computation")
+            return HistoryEmbeddingSearch.search(query: query, entries: candidates, limit: limit,
+                                                 shouldCancel: shouldCancel, distanceFunctions: distances)
+        })
+    expect(fastIDs == [exact.id, concept.id], "fast phase retains exact and concept order")
+    expect(final.map(\.id) == [exact.id, concept.id, semantic.id],
+           "final phase appends semantic recall without changing exact/concept order")
+    let singlePhase = HistorySearch.filteredEntries(
+        criteria: criteria, memoryEntries: entries, limit: 10,
+        searchStore: { _, _ in [exact] },
+        embeddingSearch: { query, candidates, limit, shouldCancel in
+            HistoryEmbeddingSearch.search(query: query, entries: candidates, limit: limit,
+                                          shouldCancel: shouldCancel, distanceFunctions: distances)
+        })
+    expect(final == singlePhase, "fast publication does not change final search semantics")
+    expect(HistoryEmbeddingSearch.search(query: "threshold", entries: entries, limit: 10,
+                                        distanceFunctions: [{ _, _ in 0.251 }]).isEmpty,
+           "staged search retains the system distance threshold")
+
+    let queue = DispatchQueue(label: "history-cancellation-fixture")
+    let enteredDistance = DispatchSemaphore(value: 0)
+    let releaseDistance = DispatchSemaphore(value: 0)
+    let finished = DispatchSemaphore(value: 0)
+    let oldProgress = Progress(totalUnitCount: 1)
+    var oldDistanceCalls = 0
+    var oldResults: [HistoryEntry] = []
+    var publications: [(generation: UInt64, ids: [String])] = []
+    queue.async {
+        oldResults = HistorySearch.filteredEntries(
+            criteria: criteria, memoryEntries: entries, limit: 10,
+            searchStore: { _, _ in [exact] }, shouldCancel: { oldProgress.isCancelled },
+            onFastResults: { publications.append((1, $0.map(\.id))) },
+            embeddingSearch: { query, candidates, limit, shouldCancel in
+                HistoryEmbeddingSearch.search(query: query, entries: candidates, limit: limit,
+                    shouldCancel: shouldCancel, distanceFunctions: [
+                        { _, _ in
+                            oldDistanceCalls += 1
+                            enteredDistance.signal()
+                            _ = releaseDistance.wait(timeout: .now() + 5)
+                            return 0.1
+                        },
+                        { _, _ in oldDistanceCalls += 1; return 0.1 }
+                    ])
+            })
+        publications.append((1, oldResults.map(\.id)))
+    }
+    expect(enteredDistance.wait(timeout: .now() + 5) == .success,
+           "controlled old query reaches its first language computation")
+    oldProgress.cancel()
+    queue.async {
+        let latest = HistorySearch.filteredEntries(
+            criteria: HistoryFilterCriteria(query: "semantic-marker"), memoryEntries: entries, limit: 10,
+            searchStore: { _, _ in [semantic] },
+            onFastResults: { publications.append((2, $0.map(\.id))) },
+            embeddingSearch: { _, _, _, _ in [] })
+        publications.append((2, latest.map(\.id)))
+        finished.signal()
+    }
+    releaseDistance.signal()
+    expect(finished.wait(timeout: .now() + 5) == .success,
+           "latest query runs after the cancelled language boundary without draining old candidates")
+    expect(oldDistanceCalls == 1, "cancellation stops subsequent languages and candidates")
+    expect(oldResults.isEmpty, "cancelled search discards partial semantic results")
+    let accepted = publications.filter {
+        HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: $0.generation, latestGeneration: 2)
+    }
+    expect(accepted.count == 2 && accepted.allSatisfy { $0.ids == [semantic.id] },
+           "queued old fast and final publications cannot replace the latest query")
+
+    var candidateCalls = 0
+    let candidateProgress = Progress(totalUnitCount: 1)
+    _ = HistoryEmbeddingSearch.search(query: "candidate", entries: entries, limit: 10,
+        shouldCancel: { candidateProgress.isCancelled }, distanceFunctions: [{ _, _ in
+            candidateCalls += 1
+            candidateProgress.cancel()
+            return 0.1
+        }])
+    expect(candidateCalls == 1, "cancellation after the final language stops the next candidate")
 }

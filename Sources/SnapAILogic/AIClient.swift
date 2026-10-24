@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一条对话消息
-package struct ChatMessage: Sendable {
+package struct ChatMessage: Sendable, Equatable {
     package enum Role: String, Sendable { case system, user, assistant }
     package var role: Role
     package var content: String
@@ -80,6 +80,7 @@ package final class AIClient {
     package static let defaultMaxTokens = 2048
     package static let defaultRequestTimeout: Double = 60
     package static let thinkingOutputTokenMargin = 1_024
+    @MainActor package private(set) var latestUsage: AIUsage?
     private let settings: AppSettings
     private let session: URLSession
     /// 流式任务句柄。deinit 与 Task 回调都会访问，因此用独立锁保护；
@@ -436,6 +437,7 @@ package final class AIClient {
                 onToken: @escaping (String) -> Void,
                 onThinking: ((String) -> Void)? = nil,
                 onComplete: @escaping (Error?) -> Void) {
+        latestUsage = nil
         // Apple 端侧模型:非流式单次 respond,一次性回吐(无 thinking)。
         if settings.activeProvider?.isAppleOnDevice == true {
             cancel()
@@ -460,6 +462,10 @@ package final class AIClient {
                                              session: session) { [weak self] delta in
                     guard let self, !Task.isCancelled,
                           self.streamGeneration == requestGeneration else { return }
+                    if let usage = delta.usage {
+                        if self.latestUsage == nil { self.latestUsage = usage }
+                        else { self.latestUsage?.merge(usage) }
+                    }
                     if !delta.content.isEmpty { onToken(delta.content) }
                     guard !Task.isCancelled,
                           self.streamGeneration == requestGeneration else { return }
@@ -550,6 +556,7 @@ package final class AIClient {
         var maxTokens: Int
         var outputTokenParameter: (key: String, value: Int)?
         var thinkingBudget: Int?
+        var includeUsage: Bool
     }
 
     @MainActor
@@ -579,7 +586,8 @@ package final class AIClient {
                                    maxTokens: Self.effectiveMaxTokens(settings: settings,
                                        minimum: thinkingBudget.map { $0 + Self.thinkingOutputTokenMargin }),
                                    outputTokenParameter: Self.openAIOutputTokenParameter(settings: settings),
-                                   thinkingBudget: thinkingBudget)
+                                   thinkingBudget: thinkingBudget,
+                                   includeUsage: settings.activeProvider?.streamUsageEnabled ?? true)
     }
 
     private static func performStream(configuration: StreamConfiguration,
@@ -595,6 +603,7 @@ package final class AIClient {
         switch configuration.apiProtocol {
         case .openAI:
             body["messages"] = messages.map(openAIMessageDict)
+            if configuration.includeUsage { body["stream_options"] = ["include_usage": true] }
             if let parameter = configuration.outputTokenParameter { body[parameter.key] = parameter.value }
         case .anthropic:
             body["messages"] = messages.filter { $0.role != .system }.map(anthropicMessageDict)
@@ -614,15 +623,32 @@ package final class AIClient {
 
         var parser = ServerSentEventParser()
         var decoder = AIStreamDecoder(apiProtocol: configuration.apiProtocol)
-        for try await byte in bytes {
+        var usageTailTimeout: Task<Void, Never>?
+        defer { usageTailTimeout?.cancel() }
+        do {
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                guard let event = try parser.append(byte) else { continue }
+                let delta = try decoder.decode(event)
+                if !delta.isEmpty { await onDelta(delta) }
+                if decoder.streamTerminated { break }
+                if decoder.isFinished {
+                    if !configuration.includeUsage || delta.usage?.isComplete == true { break }
+                    if usageTailTimeout == nil {
+                        usageTailTimeout = Task {
+                            do { try await Task.sleep(for: .seconds(2)) }
+                            catch { return }
+                            bytes.task.cancel()
+                        }
+                    }
+                }
+            }
+        } catch is URLError where decoder.isFinished {
+            // 正文已由 finish_reason 确认；尾部 usage 缺失不把完整回答降为失败。
             try Task.checkCancellation()
-            guard let event = try parser.append(byte) else { continue }
-            let delta = try decoder.decode(event)
-            if !delta.isEmpty { await onDelta(delta) }
-            if decoder.isFinished { break }
         }
         try Task.checkCancellation()
-        if !decoder.isFinished, let event = try parser.finish() {
+        if !decoder.streamTerminated, let event = try parser.finish() {
             let delta = try decoder.decode(event)
             if !delta.isEmpty { await onDelta(delta) }
         }

@@ -12,7 +12,8 @@ struct ResultCompletionMetricsRow: View {
         if metrics.characterCount > 0 || metrics.elapsed > 0 {
             HStack(spacing: 10) {
                 if metrics.elapsed > 0 {
-                    Label("耗时 \(String(format: "%.1fs", metrics.elapsed))", systemImage: "clock")
+                    Label("请求耗时 \(String(format: "%.1fs", metrics.elapsed))", systemImage: "clock")
+                        .help("请求处理耗时，不含逐字展示等待")
                 }
                 if metrics.characterCount > 0 {
                     Label("\(metrics.characterCount) 字", systemImage: "textformat")

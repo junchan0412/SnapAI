@@ -92,14 +92,16 @@ func testMarkdownPresentationBuildsBlocksAndRejectsStaleRefreshes() {
     } else {
         expect(false, "markdown presentation includes a paragraph")
     }
-    if case .bullet(let items) = presentation.blocks[2] {
-        expect(items.map { String($0.characters) } == ["项目一", "项目二"],
+    if case .list(let items) = presentation.blocks[2] {
+        expect(items.map { String($0.content.characters) } == ["项目一", "项目二"] &&
+               items.allSatisfy { $0.marker == .bullet },
                "markdown presentation groups bullet items")
     } else {
         expect(false, "markdown presentation includes a bullet list")
     }
-    if case .ordered(let items) = presentation.blocks[3] {
-        expect(items.map { String($0.characters) } == ["第一步", "第二步"],
+    if case .list(let items) = presentation.blocks[3] {
+        expect(items.map { String($0.content.characters) } == ["第一步", "第二步"] &&
+               items.map(\.marker) == [.ordered(1), .ordered(2)],
                "markdown presentation groups ordered items")
     } else {
         expect(false, "markdown presentation includes an ordered list")

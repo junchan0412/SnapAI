@@ -102,6 +102,25 @@ extension AppDelegate {
         }
     }
 
+    func runAutomationAction(actionQuery: String?,
+                             text: String,
+                             timeout: TimeInterval = 120) async throws -> String {
+        guard submissionPipeline != nil else {
+            throw SnapAIIntentError.appUnavailable("SnapAI 尚未完成启动，请稍后重试。")
+        }
+        let query = actionQuery?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectedAction = query == nil || query?.isEmpty == true
+            ? settings.enabledActions.first
+            : actionForAutomation(query: query)
+        guard let action = selectedAction else {
+            throw SnapAIIntentError.actionUnavailable
+        }
+        let execution = AutomationActionExecution(settings: settings)
+        return try await execution.run(text: text, action: action, timeout: timeout) { text, action in
+            prepareTextForSubmission(text, action: action, imageData: nil)
+        }
+    }
+
     @discardableResult
     func switchModelFromAutomation(providerQuery: String?, modelQuery: String?) -> String {
         guard let selection = AutomationModelSelection.resolve(providerQuery: providerQuery,

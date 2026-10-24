@@ -17,7 +17,13 @@ if [ -z "${pid:-}" ] || ! kill -0 "$pid" 2>/dev/null; then
   exit 1
 fi
 
-process_name=$(ps -o comm= -p "$pid" | sed 's#^.*/##')
+process_path=$(ps -o comm= -p "$pid" | sed 's/^[[:space:]]*//')
+process_name="${process_path##*/}"
+build_configuration="unknown"
+if [[ "$process_path" == */Contents/MacOS/* ]]; then
+  bundle_plist="${process_path%/Contents/MacOS/*}/Contents/Info.plist"
+  build_configuration=$(/usr/libexec/PlistBuddy -c 'Print :SnapAIBuildConfiguration' "$bundle_plist" 2>/dev/null || echo unknown)
+fi
 rss_kb=$(ps -o rss= -p "$pid" | tr -d ' ')
 cpu_percent=$(ps -o %cpu= -p "$pid" | tr -d ' ')
 elapsed=$(ps -o etime= -p "$pid" | xargs)
@@ -32,6 +38,8 @@ cat <<EOF
 
 - Label: $label
 - Process: $process_name
+- Executable: $process_path
+- Build configuration: $build_configuration
 - PID: $pid
 - Elapsed: $elapsed
 - RSS: ${rss_kb} KB

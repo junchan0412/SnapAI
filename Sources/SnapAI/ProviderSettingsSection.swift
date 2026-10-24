@@ -12,6 +12,12 @@ struct ProviderSettingsSection: View {
 
     private let labelWidth: CGFloat = 76
     @State private var pendingDeleteProvider: AIProvider?
+    private struct ModelSelection: Identifiable {
+        let providerID: String
+        let entry: AIModelEntry
+        var id: String { providerID + "::" + entry.id }
+    }
+    @State private var editingModel: ModelSelection?
 
     var body: some View {
         ScrollView {
@@ -30,6 +36,18 @@ struct ProviderSettingsSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .snapAIScrollEdge()
+        .sheet(item: $editingModel) { selection in
+            if let provider = settings.providers.first(where: { $0.id == selection.providerID }) {
+                ModelMetadataEditor(provider: provider, entry: selection.entry) { metadata in
+                    guard SettingsPageBinding.setModelValue(settings,
+                                                             providerID: provider.id,
+                                                             modelName: selection.entry.name,
+                                                             keyPath: \.metadata,
+                                                             to: metadata) else { return }
+                    commit()
+                }
+            }
+        }
         .confirmationDialog(
             "删除供应商「\(pendingDeleteProvider?.name ?? "")」",
             isPresented: Binding(get: { pendingDeleteProvider != nil },
@@ -386,6 +404,9 @@ struct ProviderSettingsSection: View {
                     .font(.caption2).foregroundStyle(.secondary)
             }
             if provider.apiProtocol == .openAI {
+                Toggle("请求 token 用量", isOn: bindingForProvider(provider.id, \.streamUsageEnabled))
+                    .font(.caption)
+                    .help("通过 stream_options 请求实际 token 用量。严格校验请求字段的 OpenAI 兼容端点若拒绝此参数，可关闭。")
                 HStack {
                     Text("输出参数").font(.caption).foregroundStyle(.secondary)
                     Picker("", selection: bindingForProvider(provider.id, \.outputTokenParameterMode)) {
@@ -470,6 +491,14 @@ struct ProviderSettingsSection: View {
                     .foregroundStyle(.green)
                     .font(.caption)
             }
+            Button {
+                editingModel = ModelSelection(providerID: provider.id, entry: entry)
+            } label: {
+                Image(systemName: entry.metadata.hasCapabilityOverrides ? "slider.horizontal.3" : "info.circle")
+            }
+            .buttonStyle(.plain)
+            .help("查看与编辑模型能力、价格和来源")
+            .accessibilityLabel("编辑模型 \(entry.name) 的能力与价格")
             Button {
                 removeModel(provider.id, entry.name)
             } label: {

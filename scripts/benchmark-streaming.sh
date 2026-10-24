@@ -16,15 +16,20 @@ if [ "$#" -eq 1 ]; then
     git show "$SNAPAI_BENCH_REF:Sources/SnapAILogic/${source_file}.swift" \
       > "$SNAPAI_BENCH_DIR/${source_file}.swift"
   done
-  swiftc -O -parse-as-library "$SNAPAI_BENCH_DIR/StreamingAccumulator.swift" \
-    "$SNAPAI_BENCH_DIR/MarkdownPresentation.swift" Tests/Performance/StreamingBenchmarks.swift \
+  baseline_sources=("$SNAPAI_BENCH_DIR/StreamingAccumulator.swift" "$SNAPAI_BENCH_DIR/MarkdownPresentation.swift")
+  if git cat-file -e "$SNAPAI_BENCH_REF:Sources/SnapAILogic/MarkdownCodeHighlighter.swift" 2>/dev/null; then
+    git show "$SNAPAI_BENCH_REF:Sources/SnapAILogic/MarkdownCodeHighlighter.swift" > "$SNAPAI_BENCH_DIR/MarkdownCodeHighlighter.swift"
+    baseline_sources+=("$SNAPAI_BENCH_DIR/MarkdownCodeHighlighter.swift")
+  fi
+  swiftc -O -parse-as-library "${baseline_sources[@]}" Tests/Performance/StreamingBenchmarks.swift \
     -o "$SNAPAI_BENCH_DIR/baseline"
   echo "Baseline $SNAPAI_BENCH_REF"
   "$SNAPAI_BENCH_DIR/baseline"
 fi
 
 swiftc -O -parse-as-library Sources/SnapAILogic/StreamingAccumulator.swift \
-  Sources/SnapAILogic/MarkdownPresentation.swift Tests/Performance/StreamingBenchmarks.swift \
+  Sources/SnapAILogic/MarkdownPresentation.swift Sources/SnapAILogic/MarkdownCodeHighlighter.swift \
+  Tests/Performance/StreamingBenchmarks.swift \
   -o "$SNAPAI_BENCH_DIR/current"
 echo "Current working tree"
 "$SNAPAI_BENCH_DIR/current"

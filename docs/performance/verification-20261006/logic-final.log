@@ -1,0 +1,45 @@
+Building for debugging...
+[1 / 1]
+[2 / 7] SnapAILogicTests-product
+[6 / 11] SnapAILogicTests-product
+/Users/qidewei/Documents/SnapAI/Tests/SnapAILogicTests/ImageTextRecognitionTests.swift:76:14: warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 74 |     let task = Task.detached {
+ 75 |         ready.signal()
+ 76 |         gate.wait()
+    |              `- warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 77 |         result.withLock { $0 = SnapAIImageTextRecognition.recognizeText(in: Data()) }
+ 78 |         finished.signal()
+
+Dispatch.DispatchSemaphore.wait:2:13: note: 'wait()' declared here
+1 | class DispatchSemaphore {
+2 | public func wait()}
+  |             `- note: 'wait()' declared here
+3 |
+[10 / 16] SnapAILogicTests-product
+[12 / 16] SnapAILogicTests-product
+Build complete! (1.91秒)
+Test Suite 'Selected tests' started at 2026-10-06 11:44:54.463.
+Test Suite 'SnapAILogicTests.xctest' started at 2026-10-06 11:44:54.465.
+Test Suite 'SnapAILogicTests' started at 2026-10-06 11:44:54.465.
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' started.
+2026-10-06 11:44:55.981 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-C9409A0A-B479-4444-94BE-DD231934FED8”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-06 11:44:55.981 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-C9409A0A-B479-4444-94BE-DD231934FED8”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-06 11:44:55.986 xctest[7377:201098] SnapAI: history store failure: history write failed: fixture stop
+2026-10-06 11:44:55.988 xctest[7377:201098] SnapAI: history store failure: history store requires a newer app version
+2026-10-06 11:44:55.993 xctest[7377:201098] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-B9B5B3C7-63F4-4ECB-8EDE-366A0DBA28D3”中，因为已存在同名文件。
+2026-10-06 11:44:55.993 xctest[7377:201098] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-B9B5B3C7-63F4-4ECB-8EDE-366A0DBA28D3”中，因为已存在同名文件。
+2026-10-06 11:44:55.995 xctest[7377:201098] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-10-06 11:44:56.014 xctest[7377:201098] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-A125492B-5E93-456C-9915-4F0C809269D7”中，因为已存在同名文件。
+2026-10-06 11:44:56.014 xctest[7377:201098] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-A125492B-5E93-456C-9915-4F0C809269D7”中，因为已存在同名文件。
+2026-10-06 11:44:56.017 xctest[7377:201098] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-A125492B-5E93-456C-9915-4F0C809269D7”中，因为已存在同名文件。
+2026-10-06 11:44:57.609 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-C131BE87-4F9E-452F-98AF-80A96C6262E2”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-06 11:44:57.609 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-C131BE87-4F9E-452F-98AF-80A96C6262E2”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-06 11:44:57.610 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-C131BE87-4F9E-452F-98AF-80A96C6262E2”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-06 11:44:57.610 xctest[7377:201098] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-C131BE87-4F9E-452F-98AF-80A96C6262E2”保存在文件夹“T”中，因为已存在同名文件。
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' passed (3.594 seconds).
+Test Suite 'SnapAILogicTests' passed at 2026-10-06 11:44:58.060.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.594 (3.595) seconds
+Test Suite 'SnapAILogicTests.xctest' passed at 2026-10-06 11:44:58.060.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.594 (3.595) seconds
+Test Suite 'Selected tests' passed at 2026-10-06 11:44:58.060.
+	 Executed 1 test, with 0 failures (0 unexpected) in 3.594 (3.597) seconds

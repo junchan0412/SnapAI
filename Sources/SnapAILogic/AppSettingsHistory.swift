@@ -38,6 +38,7 @@ extension AppSettings {
     package func clearHistory(store: HistoryStore? = nil) -> Bool {
         guard !historyNeedsMigrationRetry || loadHistoryFromLocalStoreOrMigrate() else { return false }
         let store = store ?? persistenceHistoryStore
+        guard case .success = persistenceConversationStore.deleteAll() else { return false }
         guard store.deleteAll() else { return false }
         history.removeAll()
         historyNeedsValidation = false

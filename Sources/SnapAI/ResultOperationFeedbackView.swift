@@ -2,6 +2,7 @@ import SwiftUI
 import SnapAILogic
 
 struct ResultOperationFeedbackHost: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var coordinator: ResultOperationCoordinator
 
     var body: some View {
@@ -10,7 +11,7 @@ struct ResultOperationFeedbackHost: View {
                 ResultOperationFeedbackBanner(feedback: feedback) {
                     coordinator.dismissFeedback(id: feedback.id)
                 }
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .transition(reduceMotion ? .identity : .opacity.combined(with: .move(edge: .bottom)))
                 .task(id: feedback.id) {
                     try? await Task.sleep(for: .seconds(feedback.dismissDelaySeconds))
                     guard !Task.isCancelled else { return }
@@ -18,7 +19,7 @@ struct ResultOperationFeedbackHost: View {
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.16), value: coordinator.feedback?.id)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: coordinator.feedback?.id)
     }
 }
 

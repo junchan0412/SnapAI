@@ -5,6 +5,7 @@ struct ResultSourceSection: View {
     @Binding var text: String
     @Binding var isExpanded: Bool
     let isStreaming: Bool
+    var hasImage = false
     var onResend: () -> Void
 
     private var preview: String {
@@ -24,7 +25,7 @@ struct ResultSourceSection: View {
                     .disabled(isStreaming)
                     .accessibilityLabel("编辑原文")
                 HStack {
-                    Text(isStreaming ? "生成完成后可修改原文" : "修改原文后，使用当前动作重新处理。")
+                    Text(isStreaming ? "生成完成后可修改原文" : (hasImage ? "重新处理时会保留原图片。" : "修改原文后，使用当前动作重新处理。"))
                         .font(SnapAIUI.Typography.metaText)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
@@ -32,7 +33,7 @@ struct ResultSourceSection: View {
                         Label("重新发送", systemImage: "arrow.up")
                     }
                     .controlSize(.small)
-                    .disabled(isStreaming || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isStreaming || (!hasImage && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 }
             }
             .padding(.top, 12)

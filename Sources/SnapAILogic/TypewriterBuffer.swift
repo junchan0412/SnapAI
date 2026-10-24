@@ -5,6 +5,7 @@ public struct TypewriterBuffer {
     private var chunks: [String] = []
     private var chunkIndex = 0
     private var characterIndex: String.Index?
+    public private(set) var pendingCharacterCount = 0
 
     public init() {}
 
@@ -15,6 +16,7 @@ public struct TypewriterBuffer {
     public mutating func enqueue(_ text: String) {
         guard !text.isEmpty else { return }
         chunks.append(text)
+        pendingCharacterCount += text.count
     }
 
     public mutating func dequeue(maxCharacters: Int) -> String {
@@ -29,7 +31,9 @@ public struct TypewriterBuffer {
                                   offsetBy: remaining,
                                   limitedBy: chunk.endIndex) ?? chunk.endIndex
             result.append(contentsOf: chunk[start..<end])
-            remaining -= chunk.distance(from: start, to: end)
+            let consumed = chunk.distance(from: start, to: end)
+            remaining -= consumed
+            pendingCharacterCount -= consumed
 
             if end == chunk.endIndex {
                 chunkIndex += 1
@@ -47,6 +51,7 @@ public struct TypewriterBuffer {
         chunks.removeAll(keepingCapacity: false)
         chunkIndex = 0
         characterIndex = nil
+        pendingCharacterCount = 0
     }
 
     private mutating func compactIfNeeded() {

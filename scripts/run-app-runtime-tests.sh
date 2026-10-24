@@ -43,7 +43,7 @@ swiftc -O -parse-as-library -package-name snapai \
   -I "$SNAPAI_APP_TEST_DIR" \
   -F "$SPARKLE_DIR" \
   "${SNAPAI_APP_TEST_SOURCES[@]}" \
-  Tests/Runtime/HTTPStreamFixture.swift Tests/Runtime/AppRuntimeSmoke.swift \
+  Tests/Runtime/HTTPStreamFixture.swift Tests/Runtime/ConversationRuntimeTests.swift Tests/Runtime/ModelCompareRuntimeTests.swift Tests/Runtime/AutomationActionRuntimeTests.swift Tests/Runtime/SubmissionPrivacyRuntimeTests.swift Tests/Runtime/MarkdownReadingRuntimeTests.swift Tests/Runtime/QuickInputOCRRuntimeTests.swift Tests/Runtime/AppRuntimeSmoke.swift \
   "$SNAPAI_APP_TEST_DIR/SnapAILogic.o" \
   -o "$SNAPAI_TEST_BUNDLE/Contents/MacOS/SnapAIRuntimeSmoke" \
   -framework AppKit -framework SwiftUI -framework Carbon \

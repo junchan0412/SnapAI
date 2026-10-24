@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SnapAILogic
 
@@ -27,14 +28,16 @@ final class ResultStreamingCoordinator {
     }
 
     func begin(speed: TypewriterSpeed,
+               reduceMotion: Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                onOutputChunk: @escaping (String) -> Void,
                onDrained: @escaping () -> Void) {
         stopTimer()
-        usesTypewriter = speed != .off
+        usesTypewriter = speed != .off && !reduceMotion
         guard usesTypewriter else { return }
 
         charactersPerTick = speed.charsPerTick
-        tickInterval = speed.tickInterval
+        tickInterval = max(1.0 / 60.0, speed.tickInterval)
+        charactersPerTick = max(charactersPerTick, Int((Double(speed.charsPerTick) * tickInterval / speed.tickInterval).rounded()))
         self.onOutputChunk = onOutputChunk
         self.onDrained = onDrained
         schedulePresentationIfNeeded()
@@ -69,9 +72,21 @@ final class ResultStreamingCoordinator {
 
     func finish() -> String? {
         let immediateText = lifecycle.finish(usesTypewriter: usesTypewriter)
+        if usesTypewriter {
+            let remainingTicks = max(1, Int(0.6 / tickInterval))
+            charactersPerTick = max(charactersPerTick,
+                                    (lifecycle.pendingCharacterCount + remainingTicks - 1) / remainingTicks)
+        }
         // 保持异步结束，让调用方先处理诊断或取消失败请求的 drain。
         schedulePresentationIfNeeded()
         return immediateText
+    }
+
+    @discardableResult
+    func revealImmediately() -> String {
+        stopAndDiscardPendingPresentation()
+        usesTypewriter = false
+        return completeText
     }
 
     func stopAndDiscardPendingPresentation() {

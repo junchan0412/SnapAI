@@ -2,19 +2,128 @@ import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
 
-package struct TextSelectionSnapshot {
+package struct TextWriteBackTargetSnapshot {
     fileprivate let element: AXUIElement
+    private let window: AXUIElement?
+    private let document: String?
+
+    fileprivate init(element: AXUIElement) {
+        self.element = element
+        let window = TextCapture.elementAttribute(kAXWindowAttribute as CFString, in: element)
+        self.window = window
+        self.document = TextCapture.stringAttribute(kAXDocumentAttribute as CFString,
+                                                     in: window ?? element)
+    }
+
+    package func validationFailure(targetPID: pid_t) -> TextWriteBackValidationFailure? {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
+            return .targetChanged
+        }
+        var elementPID: pid_t = 0
+        guard AXUIElementGetPid(element, &elementPID) == .success else { return .unavailable }
+        guard elementPID == targetPID else { return .targetChanged }
+        guard let focused = TextCapture.focusedElement() else { return .unavailable }
+        guard CFEqual(focused, element) else { return .targetChanged }
+        if let window {
+            guard let currentWindow = TextCapture.elementAttribute(kAXWindowAttribute as CFString,
+                                                                    in: element) else { return .unavailable }
+            guard CFEqual(window, currentWindow) else { return .targetChanged }
+        }
+        if let document {
+            guard let currentDocument = TextCapture.stringAttribute(kAXDocumentAttribute as CFString,
+                                                                      in: window ?? element) else { return .unavailable }
+            guard document == currentDocument else { return .targetChanged }
+        }
+        return nil
+    }
+}
+
+package struct TextSelectionSnapshot {
+    private let target: TextWriteBackTargetSnapshot
+    fileprivate var element: AXUIElement { target.element }
     package let selectedRange: CFRange
     package let selectedText: String
 
-    package func restoreSelection() -> Bool {
+    fileprivate init(element: AXUIElement, selectedRange: CFRange, selectedText: String) {
+        self.target = TextWriteBackTargetSnapshot(element: element)
+        self.selectedRange = selectedRange
+        self.selectedText = selectedText
+    }
+
+    package func validationFailure(original: String,
+                                   targetPID: pid_t,
+                                   requiresSelection: Bool = true) -> TextWriteBackValidationFailure? {
+        if let failure = target.validationFailure(targetPID: targetPID) { return failure }
+        let currentRange = TextCapture.rangeAttribute(kAXSelectedTextRangeAttribute as CFString,
+                                                      in: element)
+        let rangeMatches = currentRange?.location == selectedRange.location
+            && currentRange?.length == selectedRange.length
+        let currentSelectedText = TextCapture.currentSelectedText(in: element, range: currentRange)
+        if let currentSelectedText,
+           !currentSelectedText.isEmpty && currentSelectedText != original {
+            return rangeMatches ? .sourceChanged : .selectionChanged
+        }
+        guard currentRange != nil else { return .unavailable }
+        if let failure = TextWriteBackSourceValidation.selectionFailure(
+            original: original,
+            selectedText: currentSelectedText,
+            rangeMatchesSnapshot: rangeMatches,
+            requiresSelection: requiresSelection), failure != .unavailable {
+            return failure
+        }
+        let rangeText: String?
+        if let value = TextCapture.stringValue(in: element) {
+            guard let text = TextCapture.selectedSubstring(in: value, range: selectedRange) else {
+                return .sourceChanged
+            }
+            rangeText = text
+        } else {
+            rangeText = TextCapture.text(in: element, range: selectedRange)
+                ?? (rangeMatches ? currentSelectedText : nil)
+        }
+        if let failure = TextWriteBackSourceValidation.sourceFailure(
+            original: original,
+            capturedText: selectedText,
+            originalRangeText: rangeText) {
+            return failure
+        }
+        return TextWriteBackSourceValidation.selectionFailure(
+            original: original,
+            selectedText: currentSelectedText,
+            rangeMatchesSnapshot: rangeMatches,
+            requiresSelection: requiresSelection)
+    }
+
+    package func restoreSelection(original: String,
+                                  targetPID: pid_t) -> TextWriteBackValidationFailure? {
+        if let range = TextCapture.rangeAttribute(kAXSelectedTextRangeAttribute as CFString, in: element),
+           range.location == selectedRange.location, range.length == selectedRange.length {
+            return validationFailure(original: original, targetPID: targetPID)
+        }
+        if let failure = validationFailure(original: original,
+                                           targetPID: targetPID,
+                                           requiresSelection: false) {
+            return failure
+        }
         var range = selectedRange
-        guard let value = AXValueCreate(.cfRange, &range) else { return false }
-        return AXUIElementSetAttributeValue(
+        guard let value = AXValueCreate(.cfRange, &range) else { return .unavailable }
+        guard AXUIElementSetAttributeValue(
             element,
             kAXSelectedTextRangeAttribute as CFString,
             value
-        ) == .success
+        ) == .success else { return .selectionChanged }
+        return nil
+    }
+
+    package func snapshotAfterReplacement(_ text: String,
+                                          targetPID: pid_t) -> TextSelectionSnapshot? {
+        guard !text.isEmpty,
+              target.validationFailure(targetPID: targetPID) == nil else { return nil }
+        let range = CFRange(location: selectedRange.location, length: text.utf16.count)
+        guard TextCapture.text(in: element, range: range) == text else { return nil }
+        return TextSelectionSnapshot(element: element,
+                                     selectedRange: range,
+                                     selectedText: text)
     }
 }
 
@@ -224,6 +333,56 @@ package enum TextCapture {
         clearSelectionSnapshot()
     }
 
+    package static func selectionSnapshot(matching text: String,
+                                          targetApp: NSRunningApplication?) -> TextSelectionSnapshot? {
+        guard let targetApp, let element = focusedElement() else { return nil }
+        var elementPID: pid_t = 0
+        guard AXUIElementGetPid(element, &elementPID) == .success,
+              elementPID == targetApp.processIdentifier,
+              let range = selectedRange(in: element),
+              currentSelectedText(in: element, range: range) == text else { return nil }
+        return TextSelectionSnapshot(element: element,
+                                     selectedRange: range,
+                                     selectedText: text)
+    }
+
+    package static func writeBackTargetSnapshot(targetPID: pid_t) -> TextWriteBackTargetSnapshot? {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID,
+              let element = focusedElement() else { return nil }
+        var elementPID: pid_t = 0
+        guard AXUIElementGetPid(element, &elementPID) == .success,
+              elementPID == targetPID else { return nil }
+        return TextWriteBackTargetSnapshot(element: element)
+    }
+
+    package static func unanchoredReplacementValidationFailure(original: String,
+                                                                targetPID: pid_t) -> TextWriteBackValidationFailure {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID else {
+            return .targetChanged
+        }
+        guard let element = focusedElement() else { return .unavailable }
+        var elementPID: pid_t = 0
+        guard AXUIElementGetPid(element, &elementPID) == .success else { return .unavailable }
+        guard elementPID == targetPID else { return .targetChanged }
+        let range = rangeAttribute(kAXSelectedTextRangeAttribute as CFString, in: element)
+        return TextWriteBackSourceValidation.unanchoredSelectionFailure(
+            original: original, selectedText: currentSelectedText(in: element, range: range))
+    }
+
+    fileprivate static func focusedElement() -> AXUIElement? {
+        elementAttribute(kAXFocusedUIElementAttribute as CFString,
+                         in: AXUIElementCreateSystemWide())
+    }
+
+    fileprivate static func elementAttribute(_ attribute: CFString, in element: AXUIElement) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element,
+                                            attribute,
+                                            &value) == .success,
+              let value, isAXUIElementRef(value) else { return nil }
+        return value as! AXUIElement
+    }
+
     private static func captureViaAX(targetApp: NSRunningApplication? = nil) -> String? {
         let systemWide = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
@@ -383,7 +542,7 @@ package enum TextCapture {
         return nil
     }
 
-    private static func rangeAttribute(_ attribute: CFString, in element: AXUIElement) -> CFRange? {
+    fileprivate static func rangeAttribute(_ attribute: CFString, in element: AXUIElement) -> CFRange? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
               let rawValue = value,
@@ -401,13 +560,42 @@ package enum TextCapture {
         return range
     }
 
-    private static func stringValue(in element: AXUIElement) -> String? {
+    fileprivate static func stringValue(in element: AXUIElement) -> String? {
+        stringAttribute(kAXValueAttribute as CFString, in: element)
+    }
+
+    fileprivate static func stringAttribute(_ attribute: CFString, in element: AXUIElement) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element,
-                                            kAXValueAttribute as CFString,
+                                            attribute,
                                             &value) == .success else {
             return nil
         }
+        return value as? String
+    }
+
+    fileprivate static func currentSelectedText(in element: AXUIElement, range: CFRange?) -> String? {
+        var value: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element,
+                                         kAXSelectedTextAttribute as CFString,
+                                         &value) == .success,
+           let text = value as? String { return text }
+        guard let range else { return nil }
+        if range.length == 0 { return "" }
+        return text(in: element, range: range)
+    }
+
+    fileprivate static func text(in element: AXUIElement, range: CFRange) -> String? {
+        if let value = stringValue(in: element) {
+            return selectedSubstring(in: value, range: range)
+        }
+        var range = range
+        guard let rangeValue = AXValueCreate(.cfRange, &range) else { return nil }
+        var value: CFTypeRef?
+        guard AXUIElementCopyParameterizedAttributeValue(element,
+                 kAXStringForRangeParameterizedAttribute as CFString,
+                 rangeValue,
+                 &value) == .success else { return nil }
         return value as? String
     }
 
@@ -561,6 +749,10 @@ package enum TextCapture {
                                          expectedChangeCount: capturedChangeCount)
 
             if usableCapturedText(captured) != nil {
+                if let captured,
+                   let snapshot = selectionSnapshot(matching: captured, targetApp: targetApp) {
+                    snapshotQueue.sync { recentSnapshot = snapshot }
+                }
                 return (captured, nil, nil, waitAttempts)
             }
             lastFailure = .clipboardEmpty

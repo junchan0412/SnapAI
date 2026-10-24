@@ -7,11 +7,13 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let settings: AppSettings
     private let reopen: (HistoryEntry) -> Void
+    private let resume: ((ConversationSession) -> Void)?
     private let model: HistoryWindowModel
 
-    init(settings: AppSettings, reopen: @escaping (HistoryEntry) -> Void) {
+    init(settings: AppSettings, resume: ((ConversationSession) -> Void)? = nil, reopen: @escaping (HistoryEntry) -> Void) {
         self.settings = settings
         self.reopen = reopen
+        self.resume = resume
         self.model = HistoryWindowModel(settings: settings)
         super.init()
     }
@@ -22,7 +24,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let view = HistoryWindowView(settings: settings, model: model, reopen: reopen)
+        let view = HistoryWindowView(settings: settings, model: model, reopen: reopen, resume: resume)
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
         window.title = "SnapAI 历史记录"

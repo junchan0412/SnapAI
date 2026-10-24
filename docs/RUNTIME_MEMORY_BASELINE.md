@@ -2,7 +2,7 @@
 
 ## 测量入口
 
-以 release 配置构建(debug 与 release 数值不可比):
+正式应用以 Release 配置构建。Debug 预览与 Release 应用分别记录,不能混作同一基线:
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
@@ -11,22 +11,24 @@ SNAPAI_RELEASE=1 ./build.sh --release
 按场景采样:
 
 ```bash
-scripts/profile-runtime-memory.sh SnapAI settings-open     # 已启动进程的快照
-scripts/profile-runtime-memory.sh <pid> <label>            # 指定 pid
-scripts/profile-settings-sections.sh                       # 设置窗口 6 个 section 逐个起隔离进程采样
+scripts/profile-runtime-memory.sh <pid> release-settings-open  # 指定 Release 应用 pid
 ```
 
-隔离预览面(独立 UserDefaults,不碰本机设置)按 surface 起进程,再采样:
+隔离预览面使用独立 UserDefaults,由 `run-ui-preview.sh` 明确构建 Debug。
+`AppPreview` 仅编译进 Debug,当前没有 Release preview 入口:
 
 ```bash
 scripts/run-ui-preview.sh <surface> light|dark [--compact]   # surface 见 scripts/run-ui-preview.sh / AppPreview
-scripts/profile-runtime-memory.sh <pid> <label>
+scripts/profile-runtime-memory.sh <pid> debug-preview-<surface>
+scripts/profile-settings-sections.sh                       # Debug,6 个设置 section 逐个起隔离进程采样
 ```
 
 冷启动耗时不是内存,但同属性能基线,见 `docs/STARTUP_BASELINE.md`
 (`scripts/measure-startup.sh`)。
 
-脚本统一输出 RSS、CPU、physical footprint、peak footprint,以及 `CoreAnimation`、`Image IO`、`Malloc Large`、`Malloc Small` 等重点 VM region。
+快照脚本从运行进程的 bundle 读取 `SnapAIBuildConfiguration`,输出构建配置、可执行文件路径、RSS、CPU、physical footprint、peak footprint,以及 `CoreAnimation`、`Image IO`、`Malloc Large`、`Malloc Small` 等重点 VM region。旧 bundle 缺少配置字段时标为 `unknown`,不根据文件名推断 Release。
+
+下列历史预览数值按记录的脚本入口标为 Debug,本次只更正口径、没有重测这些数值。原始样本未独立记录构建字段,不得用它们证明 Release 内存变化。
 
 ## 1.6.55 基线
 
@@ -52,7 +54,7 @@ scripts/profile-runtime-memory.sh <pid> <label>
 测量方式:`scripts/profile-settings-sections.sh [等待秒]` —— 每个 section 用
 `scripts/run-ui-preview.sh <surface> light` 起一个隔离预览进程(独立 UserDefaults
 suite),静置后用 `footprint` 采样 physical footprint / peak / RSS。同一台机器、
-同一构建方式下才可对比。
+该入口使用 Debug 构建,同一构建方式下才可对比。
 
 | section | 改造前 | 改造后 | 观察 |
 | --- | ---: | ---: | --- |
@@ -97,11 +99,12 @@ suite),静置后用 `footprint` 采样 physical footprint / peak / RSS。同一�
 回落到约 76 MB 是未触及页被系统换出,不是泄漏。峰值 55 MB 出现在启动阶段。
 隔离路径不注册全局热键与 Services 提供者,这两项是瞬时装配,不改变稳态占用。
 
-## 流式输出峰值(2.0.7)
+## 流式输出峰值(2.0.7,Debug 预览)
 
 预览面 `--preview result-stream`:按 token 分片把约 3.7k 字的 Markdown 示例
-文档推进结果窗口,覆盖约 16 秒,走真实 `ResultViewModel` 输出路径
-(`isStreaming` 置位、`output` 增长、每片触发 Markdown 重渲染)。
+文档推进结果窗口,覆盖约 16 秒,直接更新 `ResultViewModel` 的演示输出状态。
+流式期间显示纯文本,结束后才在后台构建 Markdown。它没有运行 provider
+网络请求或打字机 Timer,因此不能作为真实网络流式吞吐或打字机性能基线。
 
 | 时点 | Physical footprint |
 | --- | ---: |
@@ -113,7 +116,10 @@ suite),静置后用 `footprint` 采样 physical footprint / peak / RSS。同一�
 结论:流式期间最高采到 49 MB、进程峰值 58 MB,流结束后回落到约 44 MB 并稳定 ——
 输出缓冲与 Markdown 渲染树在流结束后没有继续累积。
 
-## 更新窗口与下载阶段(2.0.7)
+## 旧更新窗口与下载阶段(2.0.7,历史记录)
+
+以下属于迁移 Sparkle 前的旧更新器,预览入口为 Debug。2.0.8 起应用内更新
+已改用 Sparkle,不再提供 `update-progress` 预览;这些数字不能代表当前更新窗口。
 
 | 场景 | Physical footprint | Peak |
 | --- | ---: | ---: |
@@ -127,17 +133,22 @@ suite),静置后用 `footprint` 采样 physical footprint / peak / RSS。同一�
 ## 仍未覆盖的场景
 
 - 快捷提问的图片附件添加/移除峰值(需要带图片的预览夹具);
-- 历史窗口大数据量(数千条)滚动峰值(需要可注入的历史夹具)。
+- 历史窗口大数据量(数千条)滚动峰值(需要可注入的历史夹具);
+- Sparkle 更新窗口与实际下载/安装阶段;
+- Release 应用的真实长文流式、打字机与 Markdown 完成切换。
 
 已覆盖:设置窗口按 section 分布、菜单栏空闲长期驻留、流式输出峰值、
-更新窗口与下载阶段、快捷提问面板(2.0.6 节)、历史窗口(2.0.6 节)。
+旧更新窗口预览、快捷提问面板(2.0.6 节)、历史窗口(2.0.6 节)。预览结果均
+只覆盖各自的 Debug 演示场景。
 
 ## 2.0.6 基线(设置窗口 Liquid Glass 收尾后)
 
-测量环境:Apple Silicon、macOS 27.2、release 配置 + 本地签名构建、
+记录环境:Apple Silicon、macOS 27.2、
 `scripts/run-ui-preview.sh <surface> light` 启动的隔离预览进程
 (`com.snapai.preview` 独立 UserDefaults suite,预览假数据 1 供应商 / 4 条历史),
 启动后静置约 10 秒再用 `scripts/profile-runtime-memory.sh <pid> <label>` 采样。
+该入口实际构建 Debug 并做 ad-hoc 签名;原文的“release 配置 + 本地签名”
+与记录命令不一致,现予更正,数值保留为历史预览样本。
 footprint 数值含 SwiftUI 渲染树与窗口材质,不同设备与系统版本下仅可同条件对比。
 
 | 场景 | Physical footprint | Peak | RSS | 观察 |
@@ -146,6 +157,6 @@ footprint 数值含 SwiftUI 渲染树与窗口材质,不同设备与系统版本
 | 快捷提问面板 | 27 MB | 27 MB | 约 105 MB | 最轻的输入面板 |
 | 历史窗口(4 条预览数据) | 40 MB | 40 MB | 约 128 MB | 双栏 + Markdown 渲染 |
 
-与 1.6.55 对比:设置窗口初次显示 48–50 MB → 50 MB,基本持平;
-关闭窗口释放 hosting controller 的生命周期策略(1.6.56 节)保持不变,
-2.0.6 未引入新的常驻分配。
+1.6.55 记录为 Release,本节来自 Debug 预览,不能据此断言内存持平或没有新增
+常驻分配。关闭窗口释放 hosting controller 的生命周期策略(1.6.56 节)
+仍可通过源码与生命周期回归独立验证。

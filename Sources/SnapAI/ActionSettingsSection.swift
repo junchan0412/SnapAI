@@ -4,6 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ActionSettingsSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var settings: AppSettings
     @ObservedObject var navigation: SettingsNavigationModel
     @ObservedObject var ui: AISettingsUI
@@ -75,7 +76,7 @@ struct ActionSettingsSection: View {
                     .accessibilityLabel(notice.message)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: actionLibraryNotice.value)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: actionLibraryNotice.value)
     }
 
     private var actionToolbar: some View {

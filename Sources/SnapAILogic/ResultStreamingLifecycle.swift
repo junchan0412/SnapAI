@@ -15,6 +15,7 @@ public struct ResultStreamingLifecycle {
 
     public var completeText: String { accumulator.outputText }
     public var thinkingText: String { accumulator.thinkingText }
+    public var pendingCharacterCount: Int { typewriterBuffer.pendingCharacterCount }
     public var needsPresentationTick: Bool {
         !typewriterBuffer.isEmpty || (streamFinished && !completionDelivered)
     }

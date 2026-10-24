@@ -1,6 +1,6 @@
 import Foundation
 
-/// 本地化字符串集中管理:主路径 UI 先行,英文完整,中文回退。
+/// 本地化字符串集中管理:覆盖部分主路径 UI,其余界面仍含中文直写文案。
 ///
 /// 设计约束:
 /// 1. 不引入 String Catalog(.xcstrings 需要 Xcode 工程,本仓库是纯 SwiftPM);

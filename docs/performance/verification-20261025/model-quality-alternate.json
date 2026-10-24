@@ -1,0 +1,92 @@
+[
+  {
+    "anonymous_id" : "B001",
+    "cumulative_tokens" : 247,
+    "elapsed_ms" : 5775,
+    "model" : "deepseek-v4",
+    "output" : "The Pilot for Project North Star was originally scheduled to begin at 09:30 (UTC+8) on October 8, 2026, and is now postponed to the same time on October 10. The budget cap is RMB 12,500, excluding tax; this is not an approved expenditure. If the supplier does not confirm in writing before 18:00 on October 7, the pilot will be canceled, not postponed again. Please keep the filename `pilot_v2-final.csv`, and do not translate “North Star” into any other project name.",
+    "provider_index" : 0,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q1a",
+    "ttft_ms" : 5766,
+    "usage" : {
+      "cachedInputTokens" : 126,
+      "inputTokens" : 128,
+      "isFinal" : true,
+      "outputTokens" : 119
+    }
+  },
+  {
+    "anonymous_id" : "B002",
+    "cumulative_tokens" : 461,
+    "elapsed_ms" : 2046,
+    "model" : "deepseek-v4",
+    "output" : "只读预览对所有 24 位审阅者开放，但只有六名编辑可以发布更改。预估上传量为 2.5 MB，而非 2.5 GB。除非 Mina 在 2026 年 10 月 9 日 16:00 UTC 之前签字批准，否则在生产环境中保持版本 1.8 不变。预览成功并不保证迁移可逆。保持标识符 `customer_id` 不变。",
+    "provider_index" : 0,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q1b",
+    "ttft_ms" : 2025,
+    "usage" : {
+      "cachedInputTokens" : 116,
+      "inputTokens" : 117,
+      "isFinal" : true,
+      "outputTokens" : 97
+    }
+  },
+  {
+    "anonymous_id" : "B003",
+    "cumulative_tokens" : 794,
+    "elapsed_ms" : 4335,
+    "model" : "deepseek-v4",
+    "output" : "数据同步目前仍为试运行，尚未全量上线。我们将于2026年10月7日14:00至15:00开展演练，仅限测试账号参与，严禁导入真实客户数据。\n\n林岚须在10月6日18:00前准备好12个测试账号；顾远负责演练当日回滚，目标5分钟内恢复（未验证）。若错误率超2%，立即停止；切勿因急于交付而跳过检查。\n\n行动项：\n1. 林岚：10月6日18:00前完成12个测试账号准备。\n2. 全员：10月6日12:00前回复是否参会。\n3. 顾远：演练当日执行回滚，错误率超2%立即终止。",
+    "provider_index" : 0,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q2",
+    "ttft_ms" : 4328,
+    "usage" : {
+      "cachedInputTokens" : 172,
+      "inputTokens" : 175,
+      "isFinal" : true,
+      "outputTokens" : 158
+    }
+  },
+  {
+    "anonymous_id" : "B004",
+    "cumulative_tokens" : 2000,
+    "elapsed_ms" : 4115,
+    "model" : "deepseek-v4",
+    "output" : "## 结论\n北极星v2一次完成率（74%）高于v1（65%），差异9个百分点；未证明因果。\n\n## 指标\n| 项目 | v1 | v2 |\n|---|---|---|\n| 一次完成 | 52\/80 (65%) | 74\/100 (74%) |\n| 网络P50\/P95 | 2.8s\/7.2s | 2.3s\/6.5s |\n\n## 后续行动\n- 林岚：10\/6 18:00前补齐截图样本。\n- 顾远：10\/8 18:00前完成多端取词记录。\n- 陈遥：10\/9 12:00前核对240元单据。\n- 注意：80%一次完成率及P95<6秒为未验证目标；10月全面上线传闻非决议。",
+    "provider_index" : 0,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q3",
+    "ttft_ms" : 4084,
+    "usage" : {
+      "cachedInputTokens" : 1008,
+      "inputTokens" : 1019,
+      "isFinal" : true,
+      "outputTokens" : 187
+    }
+  },
+  {
+    "anonymous_id" : "B005",
+    "cumulative_tokens" : 3803,
+    "elapsed_ms" : 17876,
+    "model" : "deepseek-v4",
+    "output" : "\n\n## 函数行为说明\n\n该函数遍历字典列表，筛选出**有唯一 `id`**、**`active` 为 `True`** 且**`score` 不小于 `minimum`**（默认 10）的记录，返回其 `id` 列表。同一 `id` 只保留第一次满足条件的记录，`id` 为 `None` 的记录被忽略。\n\n## 调用结果\n\n| 调用 | 结果 |\n|------|------|\n| `eligible_ids(rows)` | `[\"a\", \"c\"]` |\n| `eligible_ids(rows, minimum=13)` | `[\"c\"]` |\n| `eligible_ids([{\"id\": \"z\", \"active\": True, \"score\": \"N\/A\"}])` | 抛出 `TypeError`（字符串与整数比较） |\n\n## 要点说明\n\n1. **短路判断**：`key is None or key in seen` 中若 `key is None` 已为 `True`，则 `key in seen` 不会被求值；`row.get(\"active\", False) and row.get(\"score\", 0) >= minimum` 中若 `active` 为 `False`，则后面的分数比较不会被执行，从而避免对 `\"N\/A\"` 等非法值进行数值比较，但在第三个调用中 `active` 为 `True`，短路未触发，导致 `TypeError`。\n\n2. **可变参数是否会被修改**：函数只读取 `rows` 中的元素，不修改原列表或其内部字典；`minimum` 是整型不可变参数。因此传入的可变参数 `rows` 不会被函数修改。",
+    "provider_index" : 0,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q4",
+    "ttft_ms" : 17841,
+    "usage" : {
+      "cachedInputTokens" : 272,
+      "inputTokens" : 276,
+      "isFinal" : true,
+      "outputTokens" : 1527
+    }
+  }
+]

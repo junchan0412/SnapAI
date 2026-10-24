@@ -3,17 +3,39 @@ import Foundation
 public enum MarkdownPresentationBlock: Equatable {
     case heading(level: Int, content: AttributedString)
     case paragraph(AttributedString)
-    case bullet([AttributedString])
-    case ordered([AttributedString])
+    case list([MarkdownListItem])
     case quote(AttributedString)
     case code(String, language: String?)
+    case table(MarkdownTable)
+}
+
+public struct MarkdownListItem: Equatable {
+    public enum Marker: Equatable {
+        case bullet
+        case ordered(Int)
+        case task(completed: Bool)
+    }
+
+    public var marker: Marker
+    public var depth: Int
+    public var content: AttributedString
+}
+
+public struct MarkdownTable: Equatable {
+    public enum Alignment: Equatable { case leading, center, trailing }
+    public var headers: [AttributedString]
+    public var alignments: [Alignment]
+    public var rows: [[AttributedString]]
 }
 
 public struct MarkdownPresentation: Equatable {
     public var blocks: [MarkdownPresentationBlock]
+    public var codeHighlights: [Int: [MarkdownCodeToken]]
 
-    public init(blocks: [MarkdownPresentationBlock] = []) {
+    public init(blocks: [MarkdownPresentationBlock] = [],
+                codeHighlights: [Int: [MarkdownCodeToken]] = [:]) {
         self.blocks = blocks
+        self.codeHighlights = codeHighlights
     }
 }
 
@@ -26,18 +48,46 @@ public enum MarkdownPresentationRefreshPolicy {
     }
 }
 
+public struct MarkdownReadingPosition: Equatable {
+    public let fraction: Double
+
+    public init?(viewportTop: Double, contentTop: Double, contentHeight: Double) {
+        guard contentHeight > 0, viewportTop >= contentTop,
+              viewportTop <= contentTop + contentHeight else { return nil }
+        fraction = (viewportTop - contentTop) / contentHeight
+    }
+
+    public func restoredTop(contentTop: Double, contentHeight: Double,
+                            maximumScrollTop: Double) -> Double {
+        min(maximumScrollTop, max(0, contentTop + fraction * contentHeight))
+    }
+}
+
 public enum MarkdownPresentationBuilder {
     public static func build(_ text: String) -> MarkdownPresentation {
-        MarkdownPresentation(blocks: parse(text).map(presentationBlock))
+        let blocks = parse(text).map(presentationBlock)
+        var highlights: [Int: [MarkdownCodeToken]] = [:]
+        for (index, block) in blocks.enumerated() {
+            if case .code(let code, let language) = block {
+                highlights[index] = MarkdownCodeHighlighter.tokens(code, language: language)
+            }
+        }
+        return MarkdownPresentation(blocks: blocks, codeHighlights: highlights)
     }
 
     private enum RawBlock {
         case heading(level: Int, content: String)
         case paragraph(String)
-        case bullet([String])
-        case ordered([String])
+        case list([RawListItem])
         case quote(String)
         case code(String, language: String?)
+        case table(headers: [String], alignments: [MarkdownTable.Alignment], rows: [[String]])
+    }
+
+    private struct RawListItem {
+        var marker: MarkdownListItem.Marker
+        var depth: Int
+        var content: String
     }
 
     private static func presentationBlock(_ block: RawBlock) -> MarkdownPresentationBlock {
@@ -46,14 +96,16 @@ public enum MarkdownPresentationBuilder {
             return .heading(level: level, content: inline(content))
         case .paragraph(let content):
             return .paragraph(inline(content))
-        case .bullet(let items):
-            return .bullet(items.map(inline))
-        case .ordered(let items):
-            return .ordered(items.map(inline))
+        case .list(let items):
+            return .list(items.map { MarkdownListItem(marker: $0.marker, depth: $0.depth,
+                                                     content: inline($0.content)) })
         case .quote(let content):
             return .quote(inline(content))
         case .code(let code, let language):
             return .code(code, language: language)
+        case .table(let headers, let alignments, let rows):
+            return .table(MarkdownTable(headers: headers.map(inline), alignments: alignments,
+                                        rows: rows.map { $0.map(inline) }))
         }
     }
 
@@ -116,6 +168,22 @@ public enum MarkdownPresentationBuilder {
                 continue
             }
 
+            if index + 1 < lines.count,
+               let headers = tableCells(trimmed),
+               let alignments = tableAlignments(lines[index + 1]),
+               headers.count == alignments.count {
+                flushParagraph()
+                index += 2
+                var rows: [[String]] = []
+                while index < lines.count, let cells = tableCells(lines[index]) {
+                    rows.append(Array((cells + Array(repeating: "", count: headers.count))
+                        .prefix(headers.count)))
+                    index += 1
+                }
+                blocks.append(.table(headers: headers, alignments: alignments, rows: rows))
+                continue
+            }
+
             if trimmed.hasPrefix(">") {
                 flushParagraph()
                 var quoteLines: [String] = []
@@ -129,32 +197,27 @@ public enum MarkdownPresentationBuilder {
                 continue
             }
 
-            if isBullet(trimmed) {
+            if listMarker(line) != nil {
                 flushParagraph()
-                var items: [String] = []
-                while index < lines.count,
-                      isBullet(lines[index].trimmingCharacters(in: .whitespaces)) {
-                    let value = lines[index].trimmingCharacters(in: .whitespaces)
-                    items.append(String(value.dropFirst()).trimmingCharacters(in: .whitespaces))
-                    index += 1
-                }
-                blocks.append(.bullet(items))
-                continue
-            }
-
-            if isOrdered(trimmed) {
-                flushParagraph()
-                var items: [String] = []
-                while index < lines.count,
-                      isOrdered(lines[index].trimmingCharacters(in: .whitespaces)) {
-                    let value = lines[index].trimmingCharacters(in: .whitespaces)
-                    if let dot = value.firstIndex(of: ".") {
-                        items.append(String(value[value.index(after: dot)...])
-                            .trimmingCharacters(in: .whitespaces))
+                var items: [RawListItem] = []
+                var indents: [Int] = []
+                while index < lines.count {
+                    if let item = listMarker(lines[index]) {
+                        while let last = indents.last, last > item.indent { indents.removeLast() }
+                        if indents.last != item.indent { indents.append(item.indent) }
+                        items.append(RawListItem(marker: item.marker, depth: indents.count - 1,
+                                                 content: item.content))
+                    } else if !items.isEmpty,
+                              !lines[index].trimmingCharacters(in: .whitespaces).isEmpty,
+                              indentation(lines[index]) > (indents.last ?? 0) {
+                        items[items.count - 1].content += "\n" + lines[index]
+                            .trimmingCharacters(in: .whitespaces)
+                    } else {
+                        break
                     }
                     index += 1
                 }
-                blocks.append(.ordered(items))
+                blocks.append(.list(items))
                 continue
             }
 
@@ -186,18 +249,71 @@ public enum MarkdownPresentationBuilder {
         return (level, rest.trimmingCharacters(in: .whitespaces))
     }
 
-    private static func isBullet(_ line: String) -> Bool {
-        let prefix = line.prefix(2)
-        return prefix == "- " || prefix == "* " || prefix == "+ "
+    private static func indentation(_ line: String) -> Int {
+        line.prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
     }
 
-    private static func isOrdered(_ line: String) -> Bool {
-        guard let first = line.first, first.isASCII, first.isNumber else { return false }
-        guard let dot = line.firstIndex(of: ".") else { return false }
-        let number = line[..<dot]
-        guard number.count <= 9, number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
-        let after = line.index(after: dot)
-        return after < line.endIndex && line[after] == " "
+    private static func listMarker(_ line: String)
+        -> (indent: Int, marker: MarkdownListItem.Marker, content: String)? {
+        let value = line.trimmingCharacters(in: .whitespaces)
+        let marker: MarkdownListItem.Marker
+        let content: String
+        if ["- ", "* ", "+ ", "-\t", "*\t", "+\t"].contains(String(value.prefix(2))) {
+            marker = .bullet
+            content = String(value.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        } else {
+            let digits = value.prefix { $0.isASCII && $0.isNumber }
+            guard !digits.isEmpty, digits.count <= 9, let number = Int(digits) else { return nil }
+            let suffix = value.dropFirst(digits.count)
+            guard let delimiter = suffix.first, delimiter == "." || delimiter == ")",
+                  suffix.dropFirst().first == " " || suffix.dropFirst().first == "\t" else { return nil }
+            marker = .ordered(number)
+            content = String(suffix.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        }
+        if marker == .bullet, content.count >= 3,
+           ["[ ]", "[x]", "[X]"].contains(String(content.prefix(3))),
+           content.count == 3 || content.dropFirst(3).first?.isWhitespace == true {
+            return (indentation(line), .task(completed: content.prefix(3) != "[ ]"),
+                    content.dropFirst(3).trimmingCharacters(in: .whitespaces))
+        }
+        return (indentation(line), marker, content)
+    }
+
+    private static func tableCells(_ line: String) -> [String]? {
+        let value = line.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty else { return nil }
+        var cells: [String] = []
+        var cell = ""
+        var escaped = false
+        var separators = 0
+        for character in value {
+            if character == "|", !escaped {
+                cells.append(cell.trimmingCharacters(in: .whitespaces))
+                cell = ""
+                separators += 1
+            } else {
+                cell.append(character)
+            }
+            escaped = character == "\\" && !escaped
+        }
+        guard separators > 0 else { return nil }
+        cells.append(cell.trimmingCharacters(in: .whitespaces))
+        if value.hasPrefix("|") { cells.removeFirst() }
+        if value.hasSuffix("|"), cells.last == "" { cells.removeLast() }
+        return cells.isEmpty ? nil : cells
+    }
+
+    private static func tableAlignments(_ line: String) -> [MarkdownTable.Alignment]? {
+        guard let cells = tableCells(line) else { return nil }
+        var alignments: [MarkdownTable.Alignment] = []
+        for cell in cells {
+            var middle = cell[...]
+            if middle.first == ":" { middle = middle.dropFirst() }
+            if middle.last == ":" { middle = middle.dropLast() }
+            guard middle.count >= 3, middle.allSatisfy({ $0 == "-" }) else { return nil }
+            alignments.append(cell.hasSuffix(":") ? (cell.hasPrefix(":") ? .center : .trailing) : .leading)
+        }
+        return alignments
     }
 
     private static func parseFence(_ line: String) -> (marker: Character, length: Int, info: String)? {

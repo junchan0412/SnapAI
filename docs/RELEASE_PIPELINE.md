@@ -31,8 +31,8 @@ checkout action 已 pin 到不可变 commit SHA(审计门禁锁定)。
 - `scripts/ax-audit.sh` —— 无障碍名称走查,需要辅助功能权限
   (见 `docs/ACCESSIBILITY_WALKTHROUGH.md`);
 - `scripts/screenshots-all.sh` —— release notes 截图,需要屏幕录制权限;
-- `scripts/measure-startup.sh`、`scripts/profile-settings-sections.sh` ——
-  性能基线,必须在同一台机器上前后对比才有意义
+- `scripts/measure-startup.sh` 测 Release 启动,`scripts/profile-settings-sections.sh`
+  测 Debug 隔离预览;必须在同一台机器、同一构建配置下前后对比
   (见 `docs/STARTUP_BASELINE.md`、`docs/RUNTIME_MEMORY_BASELINE.md`)。
 
 ## 更新通道:Sparkle
@@ -82,13 +82,15 @@ feed、签名、下载、版本号都能自动化校验,但**窗口有没有弹�
 
 ```bash
 # 1. 云端先绿:Actions 手动触发 CI,通过后再继续
-# 2. 本机全量预检(含签名/打包/可安装性验证)
+# 2. 先提交已验收的代码与版本说明，再跑本机全量预检
+#    SBOM 会记录当前 HEAD；预检后如有新提交，必须重新打包，使 SBOM 对应发布 tag。
 export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"
 scripts/preflight-release.sh
-# 3. 提交 + tag + 推送
-git commit && git tag -a vX.Y.Z -m "SnapAI X.Y.Z:..." && git push origin main vX.Y.Z
-# 4. GitHub Release(附 zip / manifest / 签名 / SBOM)
+# 3. tag + 推送（工作区干净，SBOM 的 git.commit 等于当前 HEAD）
+git tag -a vX.Y.Z -m "SnapAI X.Y.Z:..." && git push origin main vX.Y.Z
+# 4. GitHub Release(附 zip / appcast / manifest / 签名 / SBOM)
 gh release create vX.Y.Z dist/SnapAI-vX.Y.Z.zip \
+  dist/appcast.xml \
   dist/snapai-manifest-vX.Y.Z.json dist/snapai-manifest-vX.Y.Z.json.sig \
   dist/snapai-sbom-vX.Y.Z.json --title "SnapAI X.Y.Z" --notes-file docs/RELEASE_NOTES_X.Y.Z.md
 ```

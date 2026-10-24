@@ -68,9 +68,9 @@ struct ResultOutputDisplay: View {
         case .markdown:
             MarkdownView(text: state.text,
                          onPresentationReady: onMarkdownReady,
-                         onCopyCode: onCopyCode)
+                         onCopyCode: onCopyCode,
+                         bottomAnchorID: "output")
                 .equatable()
-                .id("output")
                 .transition(.opacity)
         case .empty:
             EmptyView()
@@ -115,7 +115,7 @@ struct ResultActionsToolbar: View {
             .controlSize(.small)
             .keyboardShortcut(.return, modifiers: [.command])
             .help(ResultCommandFactory.helpText(for: .replaceOriginal, in: state))
-            .disabled(!ResultCommandFactory.isEnabled(.replaceOriginal, in: state))
+            .disabled(vm.restoredConversation || !ResultCommandFactory.isEnabled(.replaceOriginal, in: state))
 
             Menu {
                 menuButton(.copyMarkdown, action: vm.copyConversationMarkdown,
@@ -140,7 +140,15 @@ struct ResultActionsToolbar: View {
             .help("更多操作:复制完整结果、追加到文档、导出对话")
             .accessibilityLabel("更多结果操作")
 
-            if vm.isStreaming {
+            if vm.isPresenting {
+                Button(action: vm.revealFullOutput) {
+                    Image(systemName: "forward.end.fill")
+                }
+                .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
+                .help("立即显示全文")
+                .accessibilityLabel("立即显示全文")
+                .keyboardShortcut(.cancelAction)
+            } else if vm.isGenerating {
                 commandButton(.stop,
                               action: vm.cancel,
                               shortcut: .cancelAction,
@@ -186,13 +194,13 @@ struct ResultActionsToolbar: View {
             }
         }
         .keyboardShortcut(KeyEquivalent(Character(keyEquivalent)), modifiers: modifiers)
-        .disabled(!ResultCommandFactory.isEnabled(command, in: state))
+        .disabled((command == .appendToDocument && vm.restoredConversation) || !ResultCommandFactory.isEnabled(command, in: state))
     }
 
     private var commandState: ResultCommandState {
         ResultCommandState(resultText: outputState.text,
                                   diagnosticsText: vm.requestDiagnosticText,
-                                  isStreaming: vm.isStreaming,
+                                  isStreaming: vm.isGenerating,
                                   sourceText: vm.sourceText,
                                   protectsContentExport: vm.contentExportProtectionEnabled,
                                   recoveryCode: vm.errorRecoveryCode)

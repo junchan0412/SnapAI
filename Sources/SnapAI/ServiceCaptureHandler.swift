@@ -26,7 +26,8 @@ extension AppDelegate {
             return
         }
         previousApp = serviceInvocationTarget
-        previousSelectionSnapshot = nil
+        previousSelectionSnapshot = TextCapture.selectionSnapshot(matching: text,
+                                                                   targetApp: serviceInvocationTarget)
         previousCaptureMethod = .service
         recordTextCaptureOutcome(TextCaptureOutcome(text: text,
                                                     method: .service,

@@ -2,7 +2,8 @@ import Foundation
 
 extension AppSettings {
     package static func load(defaults: UserDefaults = .standard,
-                     historyStore: HistoryStore = .shared) -> AppSettings {
+                     historyStore: HistoryStore = .shared,
+                     conversationStore: ConversationStore = .shared) -> AppSettings {
         let data = defaults.data(forKey: Self.storeKey)
         let decoded = data.flatMap { try? JSONDecoder().decode(AppSettings.self, from: $0) }
         let settings = decoded ?? AppSettings()
@@ -11,6 +12,7 @@ extension AppSettings {
         }
         settings.persistenceDefaults = defaults
         settings.persistenceHistoryStore = historyStore
+        settings.persistenceConversationStore = conversationStore
         settings.lastSavedSettingsData = data
         if data != nil {
             settings.loadKeysFromLocalSecretStore()
@@ -73,6 +75,15 @@ extension AppSettings {
         if historyLimitNeedsPersistence {
             guard historyStore.prune(limit: historyLimit) else { return false }
             historyLimitNeedsPersistence = false
+        }
+
+        let conversationPolicy = "\(historyLimit):\(historyContentStorage.rawValue)"
+        if lastConversationPolicy != conversationPolicy {
+            let result = historyContentStorage == .full
+                ? persistenceConversationStore.prune(limit: historyLimit)
+                : persistenceConversationStore.deleteAll()
+            guard case .success = result else { return false }
+            lastConversationPolicy = conversationPolicy
         }
 
         do {

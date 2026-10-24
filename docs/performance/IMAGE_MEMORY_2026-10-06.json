@@ -1,0 +1,347 @@
+{
+  "metadata": {
+    "started_at_utc": "2026-10-06T04:54:42.525113+00:00",
+    "commit": "89ea7d7c0f3a48830293c59b201c8f89ada486f5",
+    "working_tree_dirty": true,
+    "source_sha256": {
+      "Sources/SnapAILogic/ImageTextRecognition.swift": "34a01602899253ce06dbae37d4830fd25f369a6a636d55897baf5ca3bcad6d72",
+      "Tests/Performance/ImageMemoryBenchmarks.swift": "91f7b97d3e8d1812408bf1fc3a04471ec8c17a061831a6d894279f6ee7f9f993"
+    },
+    "binary_sha256": "66b019bcb27d7af6dd0cd18137b37cf91638a87aa2c27a9f4b712b3bc9a5bfd6",
+    "fixture_sha256": "b2dc0edb6989e8a90e12dcef25c57716a489213c206d177296923334cddba7a9",
+    "fixture_path": "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125441/large-image.png",
+    "build_configuration": "standalone release-optimized swiftc -O; not App bundle",
+    "build_command": [
+      "swiftc",
+      "-O",
+      "-parse-as-library",
+      "-package-name",
+      "SnapAI",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125441/ImageTextRecognition.swift",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125441/ImageMemoryBenchmarks.swift",
+      "-o",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125441/image-memory-benchmark",
+      "-framework",
+      "Vision",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "CoreText",
+      "-framework",
+      "ImageIO"
+    ],
+    "swift_version": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.2.0",
+    "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.2\nBuildVersion:\t\t26B5101f",
+    "hardware_model": "Mac16,10",
+    "cpu": "Apple M4",
+    "memory_bytes": 17179869184,
+    "architecture": "arm64",
+    "fixture_generation": "separate process; 6000x4000 white PNG with twelve Helvetica English text rows; no user files",
+    "finished_at_utc": "2026-10-06T04:55:14.892307+00:00"
+  },
+  "dimensions": [
+    6000,
+    4000
+  ],
+  "iterations": 6,
+  "peak_definition": "Mach task_vm_info ledger_phys_footprint_peak is process lifetime high-water mark, not stage-specific peak",
+  "release_definition": "local Data/CGImage/OCR result references and autorelease pool released; system framework caches remain possible; no forced allocator purge",
+  "samples": [
+    {
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 1802696,
+        "physical_footprint_bytes": 1769928
+      },
+      "stage": "baseline"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 2605512,
+        "physical_footprint_bytes": 2605512
+      },
+      "milliseconds": 0.10762499914562795,
+      "stage": "read"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 99664496,
+        "physical_footprint_bytes": 3654256
+      },
+      "milliseconds": 35.48524999860092,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 311542768,
+        "physical_footprint_bytes": 74892248
+      },
+      "milliseconds": 24977.927708332572,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 311542768,
+        "physical_footprint_bytes": 74892248
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 311542768,
+        "physical_footprint_bytes": 74433496
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 311542768,
+        "physical_footprint_bytes": 75023320
+      },
+      "milliseconds": 1.7292916654696455,
+      "stage": "read"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 311542768,
+        "physical_footprint_bytes": 75088928
+      },
+      "milliseconds": 48.71074999937264,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345425000,
+        "physical_footprint_bytes": 125879256
+      },
+      "milliseconds": 174.26100000011502,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345425000,
+        "physical_footprint_bytes": 125879256
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345425000,
+        "physical_footprint_bytes": 125420504
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345425000,
+        "physical_footprint_bytes": 125420504
+      },
+      "milliseconds": 0.6780000003345776,
+      "stage": "read"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345425000,
+        "physical_footprint_bytes": 125486112
+      },
+      "milliseconds": 69.807124998988,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345801832,
+        "physical_footprint_bytes": 126108632
+      },
+      "milliseconds": 168.66704166750424,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345801832,
+        "physical_footprint_bytes": 126108632
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345801832,
+        "physical_footprint_bytes": 125649880
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345801832,
+        "physical_footprint_bytes": 125649880
+      },
+      "milliseconds": 0.7051666671031853,
+      "stage": "read"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 345801832,
+        "physical_footprint_bytes": 125699104
+      },
+      "milliseconds": 58.74620833310473,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346162280,
+        "physical_footprint_bytes": 126452696
+      },
+      "milliseconds": 174.7280416675494,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346162280,
+        "physical_footprint_bytes": 126452696
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346162280,
+        "physical_footprint_bytes": 125993944
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346162280,
+        "physical_footprint_bytes": 125993944
+      },
+      "milliseconds": 0.7487500006391201,
+      "stage": "read"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346162280,
+        "physical_footprint_bytes": 126043168
+      },
+      "milliseconds": 65.24274999901536,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346260584,
+        "physical_footprint_bytes": 126551000
+      },
+      "milliseconds": 165.6577499998093,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346260584,
+        "physical_footprint_bytes": 126551000
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346260584,
+        "physical_footprint_bytes": 126092248
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346260584,
+        "physical_footprint_bytes": 126092248
+      },
+      "milliseconds": 0.7006666673987638,
+      "stage": "read"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346260584,
+        "physical_footprint_bytes": 126174240
+      },
+      "milliseconds": 62.48629166657338,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": false,
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346735720,
+        "physical_footprint_bytes": 127009752
+      },
+      "milliseconds": 164.6925833338173,
+      "outcome": "recognized",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346735720,
+        "physical_footprint_bytes": 127009752
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 346735720,
+        "physical_footprint_bytes": 126551000
+      },
+      "stage": "released_after_1s"
+    }
+  ],
+  "scope": "isolated synchronous production Data-to-Vision OCR; separate forced ImageIO decode probe; no window, QuickInput model, attachment optimization, SwiftUI deletion, or cloud request"
+}

@@ -34,6 +34,74 @@ public enum TextWriteBackPayload {
   }
 }
 
+package enum TextWriteBackValidationFailure: String, Error, Equatable {
+  case sourceChanged = "source-changed"
+  case selectionChanged = "selection-changed"
+  case targetChanged = "target-changed"
+  case unavailable = "validation-unavailable"
+  case pasteboardChanged = "pasteboard-changed"
+
+  package var recoveryMessage: String {
+    switch self {
+    case .sourceChanged:
+      return "原文在取词后已变化，已取消本次替换。请重新选取最新原文，生成结果后再次确认。"
+    case .selectionChanged:
+      return "原应用的选区已变化，已取消本次替换。请重新选取原文后再试，或确认目标位置后手动粘贴结果。"
+    case .targetChanged:
+      return "当前焦点已离开原来的编辑区，已取消本次替换。请回到原文重新选取后再试。"
+    case .unavailable:
+      return "当前应用未提供足够的选区信息，无法核验原文和写入位置。请回到原应用核对最新原文，重新选中目标内容后再确认替换，或手动粘贴结果。"
+    case .pasteboardChanged:
+      return "准备写入时剪贴板已被更新，已取消本次写回并保留新的剪贴板内容。请核对目标位置后重新复制结果并粘贴。"
+    }
+  }
+}
+
+package enum TextWriteBackSourceValidation {
+  package static func pasteboardFailure(expectedChangeCount: Int,
+                                        currentChangeCount: Int) -> TextWriteBackValidationFailure? {
+    expectedChangeCount == currentChangeCount ? nil : .pasteboardChanged
+  }
+  package static func sourceFailure(
+    original: String,
+    capturedText: String,
+    originalRangeText: String?
+  ) -> TextWriteBackValidationFailure? {
+    guard !original.isEmpty, original == capturedText else { return .sourceChanged }
+    guard let originalRangeText else { return .unavailable }
+    return originalRangeText == original ? nil : .sourceChanged
+  }
+
+  package static func requiresBlocking(
+    _ failure: TextWriteBackValidationFailure?,
+    allowsUnverifiedReplacement: Bool
+  ) -> Bool {
+    guard let failure else { return false }
+    return failure != .unavailable || !allowsUnverifiedReplacement
+  }
+
+  package static func unanchoredSelectionFailure(
+    original: String,
+    selectedText: String?
+  ) -> TextWriteBackValidationFailure {
+    if let selectedText, selectedText != original { return .selectionChanged }
+    return .unavailable
+  }
+
+  package static func selectionFailure(
+    original: String,
+    selectedText: String?,
+    rangeMatchesSnapshot: Bool,
+    requiresSelection: Bool
+  ) -> TextWriteBackValidationFailure? {
+    guard let selectedText else { return .unavailable }
+    if selectedText.isEmpty {
+      return requiresSelection ? .selectionChanged : nil
+    }
+    return selectedText == original && rangeMatchesSnapshot ? nil : .selectionChanged
+  }
+}
+
 public enum TextWriteBackUndoState: Equatable {
   case available
   case expired

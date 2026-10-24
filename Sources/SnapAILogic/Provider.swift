@@ -4,12 +4,22 @@ import Foundation
 package struct AIModelEntry: Codable, Identifiable, Equatable {
     package var name: String
     package var enabled: Bool
+    package var metadata: ModelMetadataOverrides
     package var id: String { name }
 
     package init(name: String,
-                 enabled: Bool = true) {
+                 enabled: Bool = true,
+                 metadata: ModelMetadataOverrides = ModelMetadataOverrides()) {
         self.name = name
         self.enabled = enabled
+        self.metadata = metadata.sanitized
+    }
+
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        enabled = (try? container.decode(Bool.self, forKey: .enabled)) ?? true
+        metadata = ((try? container.decode(ModelMetadataOverrides.self, forKey: .metadata)) ?? ModelMetadataOverrides()).sanitized
     }
 }
 
@@ -57,6 +67,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
     package var temperature: Double? = nil
     package var maxTokens: Int? = nil
     package var outputTokenParameterMode: OutputTokenParameterMode = .maxTokens
+    package var streamUsageEnabled: Bool = true
     package var requestTimeout: Double? = nil   // #13 nil = 默认 60s
 
     /// 已启用的模型名(用于菜单栏快速切换)
@@ -100,7 +111,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
 
     // apiKey 不参与编解码,改由本地加密密钥存储管理
     package enum CodingKeys: String, CodingKey {
-        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, requestTimeout
+        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, streamUsageEnabled, requestTimeout
     }
 
     package init(id: String = UUID().uuidString,
@@ -113,6 +124,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
          temperature: Double? = nil,
          maxTokens: Int? = nil,
          outputTokenParameterMode: OutputTokenParameterMode = .maxTokens,
+         streamUsageEnabled: Bool = true,
          requestTimeout: Double? = nil) {
         self.id = id
         self.name = name
@@ -124,6 +136,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.outputTokenParameterMode = outputTokenParameterMode
+        self.streamUsageEnabled = streamUsageEnabled
         self.requestTimeout = requestTimeout
     }
 
@@ -139,6 +152,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         temperature = try? c.decode(Double.self, forKey: .temperature)
         maxTokens = try? c.decode(Int.self, forKey: .maxTokens)
         outputTokenParameterMode = (try? c.decode(OutputTokenParameterMode.self, forKey: .outputTokenParameterMode)) ?? .maxTokens
+        streamUsageEnabled = (try? c.decode(Bool.self, forKey: .streamUsageEnabled)) ?? true
         requestTimeout = try? c.decode(Double.self, forKey: .requestTimeout)
     }
 
@@ -153,6 +167,7 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         try c.encodeIfPresent(temperature, forKey: .temperature)
         try c.encodeIfPresent(maxTokens, forKey: .maxTokens)
         try c.encode(outputTokenParameterMode, forKey: .outputTokenParameterMode)
+        try c.encode(streamUsageEnabled, forKey: .streamUsageEnabled)
         try c.encodeIfPresent(requestTimeout, forKey: .requestTimeout)
     }
 

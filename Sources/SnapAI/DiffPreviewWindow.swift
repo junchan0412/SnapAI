@@ -124,7 +124,7 @@ private struct DiffPreviewView: View {
 
     private var columnHeader: some View {
         HStack(spacing: 0) {
-            Text("当前原文")
+            Text("捕获时原文")
                 .padding(.leading, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Divider()

@@ -95,6 +95,7 @@ extension AppDelegate {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if let selector = menuItem.action,
            let action = resultCommandAction(for: selector) {
+            if resultVM.restoredConversation && (action == .replaceOriginal || action == .appendToDocument) { return false }
             let state = resultCommandState
             menuItem.title = ResultCommandFactory.menuTitle(for: action, in: state)
             menuItem.toolTip = ResultCommandFactory.menuToolTip(for: action, in: state)
@@ -114,7 +115,7 @@ extension AppDelegate {
     var resultCommandState: ResultCommandState {
         ResultCommandState(resultText: resultVM.completeText,
                            diagnosticsText: resultVM.requestDiagnosticText,
-                           isStreaming: resultVM.isStreaming,
+                           isStreaming: resultVM.isGenerating,
                            sourceText: resultVM.sourceText,
                            protectsContentExport: resultVM.contentExportProtectionEnabled,
                            recoveryCode: resultVM.errorRecoveryCode)

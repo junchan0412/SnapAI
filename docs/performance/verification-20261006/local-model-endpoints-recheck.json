@@ -1,0 +1,16 @@
+[
+  {
+    "service": "Ollama",
+    "endpoint": "http://127.0.0.1:11434/api/tags",
+    "checked_at": "2026-10-06T05:03:40.192858+00:00",
+    "reachable": false,
+    "error_type": "URLError"
+  },
+  {
+    "service": "LM Studio",
+    "endpoint": "http://127.0.0.1:1234/v1/models",
+    "checked_at": "2026-10-06T05:03:40.195695+00:00",
+    "reachable": false,
+    "error_type": "URLError"
+  }
+]

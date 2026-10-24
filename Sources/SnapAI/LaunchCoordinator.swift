@@ -92,16 +92,15 @@ final class LaunchCoordinator {
         }
         host.resultVM.onAppend = { [weak host] text in host?.appendSelection(with: text) }   // #8
         host.submissionPipeline = SubmissionPipeline(host: host)
-        host.resultVM.prepareFollowUpSubmission = { [weak host] text, action in
+        host.resultVM.prepareFollowUpSubmission = { [weak host] text, action, messageBuilder in
             host?.submissionPipeline.prepareTextForSubmission(text,
                                                               action: action,
-                                                              imageData: nil,
-                                                              userPromptOverride: text)
+                                                              messageBuilder: messageBuilder)
         }
-        host.resultVM.prepareSourceSubmission = { [weak host] text, action in
+        host.resultVM.prepareSourceSubmission = { [weak host] text, action, messageBuilder in
             host?.submissionPipeline.prepareTextForSubmission(text,
                                                               action: action,
-                                                              imageData: nil)
+                                                              messageBuilder: messageBuilder)
         }
         host.panelController = FloatingPanelController(vm: host.resultVM) { [weak host] in
             host?.showSettings(section: .model)
@@ -116,13 +115,22 @@ final class LaunchCoordinator {
             host?.runQuickInput(text: text,
                                 action: action,
                                 imageData: imageData,
-                                imageMimeType: imageMimeType) ?? false
+                                imageMimeType: imageMimeType,
+                                retainedImageData: host?.quickInputModel.imageData,
+                                retainedImageMimeType: host?.quickInputModel.imageMimeType ?? imageMimeType) ?? false
         }
         host.quickInput = QuickInputController(model: host.quickInputModel)
         host.commandPalette = CommandPaletteController { [weak host] in
             host?.commandPaletteItems() ?? []
         }
-        host.historyWindow = HistoryWindowController(settings: host.settings) { [weak host] entry in
+        host.historyWindow = HistoryWindowController(settings: host.settings, resume: { [weak host] session in
+            guard let host, !host.resultVM.isGenerating else { return }
+            host.previousApp = nil
+            host.previousSelectionSnapshot = nil
+            host.previousCaptureMethod = nil
+            host.resultVM.restoreConversation(session)
+            host.panelController.show()
+        }) { [weak host] entry in
             host?.reopenHistoryEntry(entry)
         }
         host.compareWindow = ModelCompareWindowController()

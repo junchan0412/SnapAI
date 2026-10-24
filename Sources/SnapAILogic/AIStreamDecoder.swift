@@ -105,13 +105,15 @@ package struct ServerSentEventParser {
 package struct AIStreamDelta: Equatable {
     package var content = ""
     package var thinking = ""
+    package var usage: AIUsage?
 
-    package var isEmpty: Bool { content.isEmpty && thinking.isEmpty }
+    package var isEmpty: Bool { content.isEmpty && thinking.isEmpty && usage == nil }
 }
 
 package struct AIStreamDecoder {
     package let apiProtocol: APIProtocol
     package private(set) var isFinished = false
+    package private(set) var streamTerminated = false
     private var hasContent = false
     private var stopReason: String?
 
@@ -120,7 +122,7 @@ package struct AIStreamDecoder {
     }
 
     package mutating func decode(_ event: ServerSentEvent) throws -> AIStreamDelta {
-        guard !isFinished else { return AIStreamDelta() }
+        guard !streamTerminated else { return AIStreamDelta() }
         let payload = event.data.trimmingCharacters(in: .whitespacesAndNewlines)
         if payload.isEmpty { return AIStreamDelta() }
         if event.name == "ping" { return AIStreamDelta() }
@@ -129,6 +131,7 @@ package struct AIStreamDecoder {
         }
         if apiProtocol == .openAI, payload == "[DONE]" {
             isFinished = true
+            streamTerminated = true
             return AIStreamDelta()
         }
         guard let data = payload.data(using: .utf8),
@@ -136,18 +139,28 @@ package struct AIStreamDecoder {
             throw AIStreamDecodingError.invalidEvent
         }
 
-        let delta: AIStreamDelta
+        var delta: AIStreamDelta
         switch apiProtocol {
         case .openAI:
             if let message = AIClient.openAIStreamErrorMessage(from: json) {
                 throw AIClient.AIError.streamError(message)
             }
-            delta = decodeOpenAI(json)
+            let wasFinished = isFinished
+            delta = wasFinished ? AIStreamDelta() : decodeOpenAI(json)
+            if let usage = json["usage"] as? [String: Any] {
+                delta.usage = AIUsage.parse(usage, apiProtocol: .openAI)
+                delta.usage?.isFinal = isFinished || (json["choices"] as? [[String: Any]])?.isEmpty == true
+            }
         case .anthropic:
             if let message = AIClient.anthropicStreamErrorMessage(from: json) {
                 throw AIClient.AIError.streamError(message)
             }
             delta = decodeAnthropic(json, eventName: event.name)
+            if let usage = (json["usage"] as? [String: Any])
+                ?? ((json["message"] as? [String: Any])?["usage"] as? [String: Any]) {
+                delta.usage = AIUsage.parse(usage, apiProtocol: .anthropic)
+                delta.usage?.isFinal = stopReason != nil
+            }
         }
         if !hasContent, !delta.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             hasContent = true
@@ -197,6 +210,7 @@ package struct AIStreamDecoder {
             }
         case "message_stop":
             isFinished = true
+            streamTerminated = true
         default:
             break
         }

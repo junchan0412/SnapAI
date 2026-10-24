@@ -32,8 +32,10 @@ struct StreamingRuntimeSmoke {
         Task { @MainActor in
             await testClientCancellationAndRestart()
             await testClientConfigurationAndFailureDelivery()
+            await testUsageDeliveryAndCompatibility()
             await testStreamIdleGapWithinRequestTimeout()
             await testPresentationScheduling()
+            await testPresentationAccessibilityAndCatchUp()
             await testMarkdownCoalescing()
             if failures.isEmpty {
                 print("Streaming runtime smoke passed: cancellation, restart, request snapshot, slow-gap timeout probe, partial failure, idle timers, Markdown coalescing")
@@ -152,6 +154,76 @@ struct StreamingRuntimeSmoke {
               "the last token is delivered before a token-limit failure")
     }
 
+    @MainActor private static func testUsageDeliveryAndCompatibility() async {
+        let (client, settings, session) = fixtureClient()
+        defer { client.cancel(); session.invalidateAndCancel() }
+        let stream = "data: {\"choices\":[{\"delta\":{\"content\":\"complete\"},\"finish_reason\":\"stop\"}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}\n\ndata: [DONE]\n\n"
+        for enabled in [true, false] {
+            settings.providers[0].streamUsageEnabled = enabled
+            StreamFixtureProtocol.store.reset([(200, stream)])
+            var complete = false
+            var output = ""
+            client.stream(messages: [ChatMessage(role: .user, content: "usage fixture")], onToken: { output += $0 }) { error in
+                check(error == nil && (enabled
+                      ? client.latestUsage?.inputTokens == 12 && client.latestUsage?.outputTokens == 3
+                      : client.latestUsage == nil),
+                      "usage is collected before completion only when tail collection is enabled")
+                complete = true
+            }
+            await waitUntil("usage stream completes") { complete }
+            check(output == "complete", "usage-only events do not append text")
+            let body = StreamFixtureProtocol.store.requests().first?.body ?? Data()
+            let json = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any]
+            check((json?["stream_options"] != nil) == enabled, "usage request options honor the provider compatibility switch")
+        }
+        for enabled in [true, false] {
+            settings.providers[0].streamUsageEnabled = enabled
+            StreamFixtureProtocol.store.resetPlans([StreamFixturePlan(chunks: [
+                (0, "data: {\"choices\":[{\"delta\":{\"content\":\"finished\"},\"finish_reason\":\"stop\"}]}\n\n"),
+                (5, ": keep-alive\n\n")
+            ])])
+            let start = Date()
+            var completed = false
+            client.stream(messages: [ChatMessage(role: .user, content: "finish-only fixture")], onToken: { _ in }) { error in
+                check(error == nil, "confirmed output survives a server that keeps the usage tail open")
+                completed = true
+            }
+            await waitUntil("finish-only request completes within its usage-tail bound") { completed }
+            check(Date().timeIntervalSince(start) < (enabled ? 2.9 : 0.5),
+                  "disabled usage completes immediately; enabled usage waits at most two seconds")
+        }
+        StreamFixtureProtocol.store.reset([(200, "data: {\"choices\":[{\"delta\":{\"content\":\"plain\"}}]}\n\ndata: [DONE]\n\n")])
+        var finished = false
+        client.stream(messages: [ChatMessage(role: .user, content: "no usage")], onToken: { _ in }) { error in
+            check(error == nil && client.latestUsage == nil, "new streams do not inherit old usage")
+            finished = true
+        }
+        await waitUntil("usage-less stream completes") { finished }
+        settings.providers[0].apiProtocol = .anthropic
+        let start = "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":0}}}\n\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"answer\"}}\n\n"
+        let end = "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":12}}\n\ndata: {\"type\":\"message_stop\"}\n\n"
+        for cancel in [false, true] {
+            StreamFixtureProtocol.store.resetPlans([StreamFixturePlan(chunks: [(0, start), (0.1, end)])])
+            var sawText = false
+            var done = false
+            client.stream(messages: [ChatMessage(role: .user, content: "Anthropic usage")], onToken: { _ in
+                check(client.latestUsage?.isComplete == false, "message_start usage remains provisional during generation")
+                sawText = true
+                if cancel { client.cancel() }
+            }) { error in
+                check(!cancel && error == nil && client.latestUsage?.isComplete == true && client.latestUsage?.outputTokens == 12,
+                      "final Anthropic message_delta completes usage before completion")
+                done = true
+            }
+            await waitUntil("Anthropic stream delivers text or completes") { cancel ? sawText : done }
+            if cancel {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                check(!done && client.latestUsage?.isComplete == false,
+                      "cancelled Anthropic output does not invent a final output count")
+            }
+        }
+    }
+
     @MainActor private static func testStreamIdleGapWithinRequestTimeout() async {
         // 实验：chunk 间隔（7s）超过 request.timeoutInterval（5s，最小可配值）时，
         // 流式请求是否会被 URLSession 按空闲超时杀死。若被杀死，说明长思考/慢 token
@@ -225,5 +297,36 @@ struct StreamingRuntimeSmoke {
         check(published == ["latest"] && model.presentation(for: "latest") != nil,
               "returning to the cached presentation cancels pending stale publication")
         print("Markdown coalescing: 502 refreshes, 2 builds, 1 publication; idle typewriter: 0 active timers")
+    }
+
+    @MainActor private static func testPresentationAccessibilityAndCatchUp() async {
+        let coordinator = ResultStreamingCoordinator()
+        coordinator.begin(speed: .slow, reduceMotion: true,
+                          onOutputChunk: { _ in check(false, "reduced motion bypasses queued output") },
+                          onDrained: {})
+        check(coordinator.appendContentToken("即时显示", extractsThinkTags: false) == "即时显示",
+              "reduced motion immediately reveals tokens at any configured speed")
+        check(!coordinator.isPresentationScheduled, "reduced motion creates no timer")
+        coordinator.reset()
+        var output = ""
+        var completions = 0
+        coordinator.begin(speed: .slow, reduceMotion: false,
+                          onOutputChunk: { output += $0 }, onDrained: { completions += 1 })
+        let response = String(repeating: "字👩🏽‍💻", count: 5_000)
+        _ = coordinator.appendContentToken(response, extractsThinkTags: false)
+        _ = coordinator.finish()
+        let began = Date()
+        await waitUntil("a completed long reply catches up instead of waiting minutes") { completions == 1 }
+        check(output == response && Date().timeIntervalSince(began) < 2,
+              "catch-up preserves Unicode and finishes within a bounded presentation interval")
+        coordinator.reset()
+        coordinator.begin(speed: .slow, reduceMotion: false, onOutputChunk: { _ in }, onDrained: { completions += 1 })
+        _ = coordinator.appendContentToken("first", extractsThinkTags: false)
+        check(coordinator.revealImmediately() == "first", "manual reveal returns accumulated content")
+        check(coordinator.appendContentToken(" next", extractsThinkTags: false) == " next",
+              "tokens after manual reveal remain immediate")
+        _ = coordinator.finish()
+        check(!coordinator.isPresentationScheduled && coordinator.completeText == "first next",
+              "manual reveal leaves no timer or lost content")
     }
 }

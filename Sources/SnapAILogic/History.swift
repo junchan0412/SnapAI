@@ -458,7 +458,13 @@ package enum HistorySearch {
     package static func filteredEntries(criteria: HistoryFilterCriteria,
                                 memoryEntries: [HistoryEntry],
                                 limit: Int,
-                                searchStore: (String, Int) -> [HistoryEntry]) -> [HistoryEntry] {
+                                searchStore: (String, Int) -> [HistoryEntry],
+                                shouldCancel: @escaping () -> Bool = { false },
+                                onFastResults: (([HistoryEntry]) -> Void)? = nil,
+                                embeddingSearch: (String, [HistoryEntry], Int, () -> Bool) -> [HistoryEntry] = {
+                                    HistoryEmbeddingSearch.search(query: $0, entries: $1, limit: $2, shouldCancel: $3)
+                                }) -> [HistoryEntry] {
+        guard !shouldCancel() else { return [] }
         let query = criteria.query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             return criteria.apply(to: memoryEntries)
@@ -490,13 +496,15 @@ package enum HistorySearch {
             append(entry)
         }
 
+        guard !shouldCancel() else { return [] }
+        onFastResults?(candidates.filter { criteria.matchesFacets($0) })
+        guard !shouldCancel() else { return [] }
         // 最后一路:系统语义向量召回(FTS 与概念表都未命中的高确信候选)。
-        for entry in HistoryEmbeddingSearch.search(query: query,
-                                                   entries: memoryEntries,
-                                                   limit: storeLimit) {
+        for entry in embeddingSearch(query, memoryEntries, storeLimit, shouldCancel) {
             append(entry)
         }
 
+        guard !shouldCancel() else { return [] }
         return candidates.filter { criteria.matchesFacets($0) }
     }
 }

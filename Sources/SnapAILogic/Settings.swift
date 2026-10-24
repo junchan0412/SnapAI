@@ -97,7 +97,7 @@ package final class AppSettings: ObservableObject, Codable {
     @Published package var redactionRules: [PrivacyRedactionRule] = PrivacyRedactionRule.defaults()
     @Published package var contextProfiles: [ContextProfile] = ContextProfile.defaults()
     @Published package var activeContextProfileID: String = ""
-    @Published package var imageOCREnabled: Bool = true // 图片本地 OCR:纯文本截图转文字发送
+    @Published package var imageOCREnabled: Bool = true // 自动本地识别文字，保留附件并由用户选择发送模式
 
     // 历史 / 引导 / 窗口尺寸
     @Published package var history: [HistoryEntry] = [] {
@@ -455,6 +455,8 @@ package final class AppSettings: ObservableObject, Codable {
     package var historyNeedsMigrationRetry = false
     package var persistenceDefaults: UserDefaults = .standard
     package var persistenceHistoryStore: HistoryStore = .shared
+    package var persistenceConversationStore: ConversationStore = .shared
+    package var lastConversationPolicy: String?
     package var lastSavedSettingsData: Data?
 
     package static let iCloudDeviceIDDefaultsKey = "SnapAI.iCloud.deviceID"

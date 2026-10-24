@@ -1,0 +1,10 @@
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+Prepared: /Users/qidewei/Documents/SnapAI/.build/cross-app-runtime-v2/SnapAICrossAppRuntime

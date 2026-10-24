@@ -39,6 +39,7 @@ final class HistoryWindowModel: ObservableObject {
     private var sourceRevision: UInt64 = 0
     private var refreshGeneration: UInt64 = 0
     private var refreshWorkItem: DispatchWorkItem?
+    private var activeSearch: Progress?
     private var isComputing = false
     private var readyGeneration: UInt64?
     private var facetRevision: UInt64?
@@ -86,6 +87,7 @@ final class HistoryWindowModel: ObservableObject {
     }
 
     deinit {
+        activeSearch?.cancel()
         refreshWorkItem?.cancel()
     }
 
@@ -122,6 +124,7 @@ final class HistoryWindowModel: ObservableObject {
     }
 
     private func scheduleRefresh(delay: TimeInterval) {
+        activeSearch?.cancel()
         refreshGeneration &+= 1
         let generation = refreshGeneration
         refreshWorkItem?.cancel()
@@ -153,6 +156,8 @@ final class HistoryWindowModel: ObservableObject {
         let entries = sourceEntries
         let limit = sourceLimit
         let revision = sourceRevision
+        let searchProgress = Progress(totalUnitCount: 1)
+        activeSearch = searchProgress
         refreshQueue.async { [weak self] in
             guard let self else { return }
             if self.facetRevision != revision {
@@ -161,15 +166,34 @@ final class HistoryWindowModel: ObservableObject {
                                      HistoryFilterCriteria.facetValues(entries.flatMap(\.displayTags)))
                 self.facetRevision = revision
             }
+            let facets = self.cachedFacets
+            let filtered = HistorySearch.filteredEntries(
+                criteria: criteria,
+                memoryEntries: entries,
+                limit: limit,
+                searchStore: self.historyStore.search,
+                shouldCancel: { searchProgress.isCancelled },
+                onFastResults: { [weak self] filtered in
+                    let presentation = Self.makePresentation(criteria: criteria,
+                                                             entries: entries,
+                                                             filtered: filtered,
+                                                             facets: facets)
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, !searchProgress.isCancelled,
+                              HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: generation,
+                                                                       latestGeneration: self.refreshGeneration) else { return }
+                        self.presentation = presentation
+                    }
+                })
             let presentation = Self.makePresentation(criteria: criteria,
                                                       entries: entries,
-                                                      limit: limit,
-                                                      facets: self.cachedFacets,
-                                                      store: self.historyStore)
+                                                      filtered: filtered,
+                                                      facets: facets)
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.isComputing = false
-                if HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: generation,
+                self.activeSearch = nil
+                if !searchProgress.isCancelled, HistoryWindowRefreshPolicy.shouldPublish(requestGeneration: generation,
                                                            latestGeneration: self.refreshGeneration) {
                     self.presentation = presentation
                     self.isRefreshing = false
@@ -184,13 +208,8 @@ final class HistoryWindowModel: ObservableObject {
 
     private static func makePresentation(criteria: HistoryFilterCriteria,
                                          entries: [HistoryEntry],
-                                         limit: Int,
-                                         facets: (actions: [String], models: [String], tags: [String]),
-                                         store: HistoryStore) -> HistoryWindowPresentation {
-        let filtered = HistorySearch.filteredEntries(criteria: criteria,
-                                                      memoryEntries: entries,
-                                                      limit: limit,
-                                                      searchStore: store.search)
+                                         filtered: [HistoryEntry],
+                                         facets: (actions: [String], models: [String], tags: [String])) -> HistoryWindowPresentation {
         return HistoryWindowPresentation(
             criteria: criteria,
             entries: filtered,

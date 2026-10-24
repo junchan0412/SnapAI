@@ -9,6 +9,7 @@ final class StreamFixtureStore: @unchecked Sendable {
     struct Observation {
         var url: String
         var authorization: String?
+        var body: Data
     }
 
     private let lock = NSLock()
@@ -27,10 +28,22 @@ final class StreamFixtureStore: @unchecked Sendable {
     }
 
     func response(for request: URLRequest) -> StreamFixturePlan {
+        var body = request.httpBody ?? Data()
+        if body.isEmpty, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4_096)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                body.append(contentsOf: buffer.prefix(count))
+            }
+        }
         lock.lock()
         defer { lock.unlock() }
         observations.append(Observation(url: request.url?.absoluteString ?? "",
-                                        authorization: request.value(forHTTPHeaderField: "Authorization")))
+                                        authorization: request.value(forHTTPHeaderField: "Authorization"),
+                                        body: body))
         return plans.isEmpty ? StreamFixturePlan(status: 500, chunks: [(0, "Unexpected fixture request")]) : plans.removeFirst()
     }
 

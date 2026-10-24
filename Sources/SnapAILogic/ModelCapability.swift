@@ -1,5 +1,67 @@
 import Foundation
 
+package struct ModelMetadataOverrides: Codable, Equatable {
+    package var supportsVision: Bool?
+    package var supportsReasoning: Bool?
+    package var contextTokens: Int?
+    package var inputUSDPerMillionTokens: Double?
+    package var outputUSDPerMillionTokens: Double?
+    package var capabilitySource: String?
+    package var pricingSource: String?
+
+    package init(supportsVision: Bool? = nil,
+                 supportsReasoning: Bool? = nil,
+                 contextTokens: Int? = nil,
+                 inputUSDPerMillionTokens: Double? = nil,
+                 outputUSDPerMillionTokens: Double? = nil,
+                 capabilitySource: String? = nil,
+                 pricingSource: String? = nil) {
+        self.supportsVision = supportsVision
+        self.supportsReasoning = supportsReasoning
+        self.contextTokens = contextTokens
+        self.inputUSDPerMillionTokens = inputUSDPerMillionTokens
+        self.outputUSDPerMillionTokens = outputUSDPerMillionTokens
+        self.capabilitySource = capabilitySource
+        self.pricingSource = pricingSource
+    }
+
+    package var sanitized: Self {
+        var copy = self
+        copy.contextTokens = contextTokens.flatMap { (1...100_000_000).contains($0) ? $0 : nil }
+        copy.inputUSDPerMillionTokens = Self.validPrice(inputUSDPerMillionTokens)
+        copy.outputUSDPerMillionTokens = Self.validPrice(outputUSDPerMillionTokens)
+        copy.capabilitySource = Self.sourceText(capabilitySource)
+        copy.pricingSource = Self.sourceText(pricingSource)
+        return copy
+    }
+
+    package var hasCapabilityOverrides: Bool {
+        supportsVision != nil || supportsReasoning != nil || contextTokens != nil
+    }
+
+    private static func validPrice(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, (0...1_000_000).contains(value) else { return nil }
+        return value
+    }
+
+    private static func sourceText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let text = String(value.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
+        return text.isEmpty ? nil : text
+    }
+}
+
+package struct ModelPricing: Equatable {
+    package var inputUSDPerMillionTokens: Double
+    package var outputUSDPerMillionTokens: Double
+    package var source: String
+
+    package func estimatedCost(inputTokens: Int, outputTokens: Int) -> Double {
+        Double(max(0, inputTokens)) / 1_000_000 * inputUSDPerMillionTokens
+            + Double(max(0, outputTokens)) / 1_000_000 * outputUSDPerMillionTokens
+    }
+}
+
 package struct ModelCapability: Equatable {
     package var supportsVision: Bool
     package var supportsReasoning: Bool
@@ -14,6 +76,32 @@ package struct ModelCapability: Equatable {
 }
 
 package enum ModelCapabilityRegistry {
+    package static func capability(for modelName: String, provider: AIProvider) -> ModelCapability {
+        var result = capability(for: modelName, providerName: provider.name)
+        guard !provider.isAppleOnDevice,
+              let metadata = provider.models.first(where: { $0.name == modelName })?.metadata.sanitized else {
+            return result
+        }
+        if let value = metadata.supportsVision { result.supportsVision = value }
+        if let value = metadata.supportsReasoning { result.supportsReasoning = value }
+        if let value = metadata.contextTokens { result.contextTokens = value }
+        return result
+    }
+
+    package static func pricing(providerID: String, modelName: String, settings: AppSettings) -> ModelPricing? {
+        guard let provider = settings.providers.first(where: { $0.id == providerID }),
+              let entry = provider.models.first(where: { $0.name == modelName }) else { return nil }
+        if provider.isAppleOnDevice {
+            return ModelPricing(inputUSDPerMillionTokens: 0, outputUSDPerMillionTokens: 0, source: "Apple 本机模型（无 API 费用）")
+        }
+        let metadata = entry.metadata.sanitized
+        guard let input = metadata.inputUSDPerMillionTokens,
+              let output = metadata.outputUSDPerMillionTokens else { return nil }
+        return ModelPricing(inputUSDPerMillionTokens: input,
+                            outputUSDPerMillionTokens: output,
+                            source: metadata.pricingSource ?? "手工配置（未填写来源）")
+    }
+
     package static func capability(for modelName: String, providerName: String = "") -> ModelCapability {
         // Apple 端侧模型:画像固定(无视觉/短上下文/快速省钱),不走启发式猜测。
         if providerName == AppleOnDeviceModel.providerName

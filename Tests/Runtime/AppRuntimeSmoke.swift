@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 import SnapAILogic
+import SwiftUI
 
 private final class EscapeRecorder: NSView {
     private(set) var escapeCount = 0
@@ -15,6 +16,7 @@ private final class EscapeRecorder: NSView {
 private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
     private var failures: [String] = []
     private var suites: [String] = []
+    private var windowDiagnostics: [String] = []
     private let fixtureRoot: URL
     private let resultURL: URL
 
@@ -29,6 +31,14 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await testReplacingActiveRequest()
             await testReplacingDrainingRequest()
+            await testCompletedGenerationPresentation()
+            await testImageResubmission()
+            failures.append(contentsOf: await runConversationRuntimeTests())
+            failures.append(contentsOf: await runModelCompareRuntimeTests())
+            failures.append(contentsOf: await runAutomationActionRuntimeTests())
+            failures.append(contentsOf: await runSubmissionPrivacyRuntimeTests())
+            failures.append(contentsOf: await runMarkdownReadingRuntimeTests())
+            failures.append(contentsOf: await runQuickInputOCRRuntimeTests())
             await testCancellationAndErrors()
             await testUnavailableReplacement()
             await testHistorySaveFailureAndDisabledHistory()
@@ -124,12 +134,78 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         await waitUntil("the old response enters the typewriter drain") {
             vm.completeText == old && vm.requestDiagnostics?.attempts.last?.status == .succeeded
         }
-        check(vm.isStreaming && settings.history.isEmpty, "history waits for presentation completion")
+        check(vm.isPresenting && !vm.isGenerating && settings.history.map(\.output) == [old],
+              "network completion persists the full response before presentation finishes")
         vm.start(text: "new source", action: action(), autoReplaceEnabled: true)
         await waitUntil("a new response replaces the previous drain") { !vm.isStreaming && vm.output == "新" }
         try? await Task.sleep(nanoseconds: 100_000_000)
-        check(settings.history.map(\.output) == ["新"] && replacements == ["新"],
-              "an old drain cannot complete, save or write back after a new request begins")
+        check(settings.history.map(\.output) == ["新", old] && replacements == ["新"],
+              "a completed response stays saved but its old drain cannot write back after replacement")
+        check(settings.actionUsageCounts[action().name] == 2,
+              "both completed network requests count once, independently of presentation")
+    }
+
+    private func testCompletedGenerationPresentation() async {
+        for closes in [false, true] {
+            let settings = settings("completed-drain-\(closes)")
+            settings.typewriterSpeed = .slow
+            let vm = ResultViewModel(settings: settings)
+            var replacements = 0
+            vm.onReplace = { _, _ in replacements += 1 }
+            let response = String(repeating: "完整回答👩🏽‍💻", count: 500)
+            StreamFixtureProtocol.store.reset([(200, content(response))])
+            vm.start(text: "source", action: action(), autoReplaceEnabled: true)
+            await waitUntil("network completion precedes presentation completion") {
+                !vm.isGenerating && vm.completeText == response
+            }
+            check(vm.isPresenting, "a large response remains in presentation after generation")
+            let elapsed = vm.elapsed
+            check(vm.requestStartedAt != nil && vm.firstTokenAt != nil && vm.networkCompletedAt != nil &&
+                  vm.presentationCompletedAt == nil && vm.markdownReadyAt == nil,
+                  "request, first token and network completion are independent from presentation")
+            check(settings.history.first?.output == response && settings.actionUsageCounts[action().name] == 1,
+                  "success usage and history are committed at network completion")
+            if closes { vm.cancel() } else { vm.revealFullOutput() }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            check(!vm.isStreaming && vm.output == response && vm.incompleteResultReason == nil,
+                  "skipping or closing a completed response preserves its complete status")
+            check(settings.history.count == 1 && settings.history.first?.displayTags.contains("部分结果") == false,
+                  "presentation completion neither duplicates history nor tags full output as partial")
+            check(vm.elapsed == elapsed && settings.actionUsageCounts[action().name] == 1,
+                  "presentation does not change request timing or double-count success")
+            vm.markMarkdownReady()
+            if let start = vm.requestStartedAt, let first = vm.firstTokenAt,
+               let network = vm.networkCompletedAt, let presentation = vm.presentationCompletedAt,
+               let markdown = vm.markdownReadyAt {
+                check(start <= first && first <= network && network <= presentation && presentation <= markdown,
+                      "all five lifecycle timing points remain ordered")
+            } else { check(false, "completion records all five timing points") }
+            check(replacements == (closes ? 0 : 1),
+                  "closing suppresses deferred write-back; reveal follows the existing explicit action policy once")
+        }
+    }
+
+    private func testImageResubmission() async {
+        let settings = settings("image-resubmission")
+        let vm = ResultViewModel(settings: settings)
+        let imageData = Data([0x01, 0x02, 0x03])
+        vm.start(text: "image question", action: action(), imageData: imageData, imageMimeType: "image/jpeg")
+        vm.cancel()
+        for operation in [0, 1, 2] {
+            switch operation {
+            case 0: vm.resendEdited()
+            case 1: vm.changeLanguage(.english)
+            default: vm.switchAction(action(thinking: true))
+            }
+            let message = vm.comparisonMessages.last
+            check(message?.imageData == imageData && message?.imageMimeType == "image/jpeg",
+                  "edited source, language and action changes retain the original image attachment")
+            vm.cancel()
+        }
+        vm.start(text: "new text-only question", action: action())
+        check(vm.comparisonMessages.allSatisfy { $0.imageData == nil },
+              "a new text-only request does not inherit an old image")
+        vm.cancel()
     }
 
     private func testCancellationAndErrors() async {
@@ -264,10 +340,10 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
             let settings = settings(name)
             settings.panelWidth = width
             settings.panelHeight = height
-            let controller = FloatingPanelController(vm: ResultViewModel(settings: settings))
-            let existing = Set(NSApp.windows.map(\.windowNumber))
+            let vm = ResultViewModel(settings: settings)
+            let controller = FloatingPanelController(vm: vm)
             controller.show()
-            guard let window = NSApp.windows.first(where: { !existing.contains($0.windowNumber) && $0 is FloatingPanel }) else {
+            guard let window = NSApp.windows.first(where: { ($0.contentView as? NSHostingView<ResultView>)?.rootView.vm === vm }) else {
                 failures.append("saved panel dimensions create a visible result window")
                 continue
             }
@@ -278,6 +354,7 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
                   "opening a result window does not rewrite saved custom dimensions")
             controller.hide()
             await waitUntil("the size-test window closes") { !window.isVisible }
+            if window.isVisible { recordWindowDiagnostic(name, window: window, vm: vm) }
         }
     }
 
@@ -300,6 +377,14 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         check(window.isVisible && window.contentViewController != nil,
               "a released settings hosting tree can be recreated in the same window")
         window.close()
+        await waitUntil("settings closes before lifecycle cycles") { window.contentViewController == nil }
+        for cycle in 1...30 {
+            coordinator.openSettings()
+            check(window.isVisible && window.contentViewController != nil,
+                  "settings lifecycle cycle \(cycle) recreates content")
+            window.close()
+            await waitUntil("settings lifecycle cycle \(cycle) releases hosting") { window.contentViewController == nil }
+        }
         try? await Task.sleep(nanoseconds: 40_000_000)
     }
 
@@ -308,9 +393,8 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         let vm = ResultViewModel(settings: settings)
         vm.isPinned = true
         let result = FloatingPanelController(vm: vm)
-        let previous = Set(NSApp.windows.map(\.windowNumber))
         result.show()
-        guard let resultWindow = NSApp.windows.first(where: { !previous.contains($0.windowNumber) && $0 is FloatingPanel }) else {
+        guard let resultWindow = NSApp.windows.first(where: { ($0.contentView as? NSHostingView<ResultView>)?.rootView.vm === vm }) else {
             failures.append("the real result controller creates its panel")
             return
         }
@@ -328,10 +412,14 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
         await waitUntil("Escape in the result panel unpins it") { !vm.isPinned }
         NSApp.activate(ignoringOtherApps: true)
         await waitUntil("the unpinned result window is active before opening details") { NSApp.isActive && resultWindow.isKeyWindow }
+        if !NSApp.isActive || !resultWindow.isKeyWindow {
+            recordWindowDiagnostic("escape-active", window: resultWindow, vm: vm)
+        }
         await waitUntil("the real result details button appears in the accessibility tree") {
             self.axElement(identifier: "SnapAI.Result.RequestDetails") != nil
         }
         guard let detailsButton = axElement(identifier: "SnapAI.Result.RequestDetails") else {
+            recordWindowDiagnostic("escape-details", window: resultWindow, vm: vm)
             failures.append("the visible result window exposes its real details button")
             result.hide()
             other.close()
@@ -462,14 +550,19 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
             window.childWindows?.contains(where: { $0.isVisible }) == true
     }
 
+    private func recordWindowDiagnostic(_ name: String, window: NSWindow, vm: ResultViewModel) {
+        let matches = (window.contentView as? NSHostingView<ResultView>)?.rootView.vm === vm
+        windowDiagnostics.append("DIAG: \(name) visible=\(window.isVisible) alpha=\(window.alphaValue) occluded=\(!window.occlusionState.contains(.visible)) key=\(window.isKeyWindow) active=\(NSApp.isActive) hostVM=\(matches)\n")
+    }
+
     private func finish() async {
         NSApp.windows.forEach { $0.orderOut(nil) }
         RoutingMetricsStore.shared.flushPersistence()
         for suite in suites { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         UserDefaults.standard.removePersistentDomain(forName: "com.snapai.runtime-tests")
         let status = failures.isEmpty ? "PASS" : "FAIL"
-        let summary = status + " App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, panel/window races, unpinned popover Escape\n"
-        try? (summary + failures.map { "FAIL: \($0)\n" }.joined()).write(to: resultURL, atomically: true, encoding: .utf8)
+        let summary = status + " App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, 30 settings lifecycle cycles, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape\n"
+        try? (summary + failures.map { "FAIL: \($0)\n" }.joined() + windowDiagnostics.joined()).write(to: resultURL, atomically: true, encoding: .utf8)
         URLProtocol.unregisterClass(StreamFixtureProtocol.self)
         exit(failures.isEmpty ? 0 : 1)
     }

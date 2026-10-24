@@ -13,15 +13,18 @@ import Carbon.HIToolbox
 /// - 成功捕获 / 清除后短暂显示 ✓ / 已清除,给出明确的结果反馈。
 struct HotKeyRecorder: NSViewRepresentable {
     @Binding var combo: HotKeyCombo
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeNSView(context: Context) -> RecorderButton {
         let v = RecorderButton()
+        v.reduceMotion = reduceMotion
         v.onCapture = { combo = $0 }
         v.combo = combo
         return v
     }
 
     func updateNSView(_ nsView: RecorderButton, context: Context) {
+        nsView.reduceMotion = reduceMotion
         // 仅在外部值变化时同步,避免覆盖进行中的瞬时反馈状态。
         if nsView.combo != combo {
             nsView.combo = combo
@@ -32,6 +35,11 @@ struct HotKeyRecorder: NSViewRepresentable {
     final class RecorderButton: NSButton {
         var combo: HotKeyCombo = .askDefault
         var onCapture: ((HotKeyCombo) -> Void)?
+        var reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            didSet {
+                if oldValue != reduceMotion { updatePulseAnimation() }
+            }
+        }
         private var recording = false
 
         /// 瞬时反馈状态(成功/清除/拒绝),到期后回到 idle。
@@ -236,7 +244,17 @@ struct HotKeyRecorder: NSViewRepresentable {
             layer?.addSublayer(pulse)
             pulseLayer = pulse
             updatePulsePath()
+            updatePulseAnimation()
+        }
 
+        private func updatePulseAnimation() {
+            guard let pulse = pulseLayer else { return }
+            pulse.removeAnimation(forKey: "hotkeyPulse")
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            pulse.opacity = 0.7
+            CATransaction.commit()
+            guard !reduceMotion else { return }
             let anim = CABasicAnimation(keyPath: "opacity")
             anim.fromValue = 0.45
             anim.toValue = 1.0

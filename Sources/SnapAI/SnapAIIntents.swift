@@ -2,18 +2,20 @@ import AppIntents
 import AppKit
 import SnapAILogic
 
-/// 快捷指令入口:把最常用的 3 条自动化路径暴露给 Shortcuts。
-///
-/// 设计约束:
-/// 1. Intent 层只做参数装配 + 找到 AppDelegate 后转交 `runAutomationCommand`,
-///    不复制任何业务逻辑——27 条命令的解析与执行仍唯一归属 AutomationURLCommand。
-/// 2. 返回值为用户可读文案(Shortcuts 可继续拼接),失败时抛可读错误而非静默。
-/// 3. App 需在运行(菜单栏常驻即满足);未运行则由系统按常规方式启动后执行。
+enum SnapAIIntentOutputFormat: String, AppEnum {
+    case text
+    case json
+
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "返回格式")
+    static var caseDisplayRepresentations: [Self: DisplayRepresentation] = [
+        .text: "AI 正文", .json: "JSON（含错误信息）"
+    ]
+}
 
 /// 用指定动作处理一段文本(默认取剪贴板)。
 struct SnapAIRunActionIntent: AppIntent {
     static var title: LocalizedStringResource = "用 SnapAI 处理文本"
-    static var description = IntentDescription("用指定的 SnapAI 动作处理文本,默认读取剪贴板。")
+    static var description = IntentDescription("用指定的 SnapAI 动作处理文本并等待 AI 正文，可供下一步使用。默认读取剪贴板。")
     static var openAppWhenRun: Bool = true
 
     @Parameter(title: "文本", description: "留空则读取剪贴板。")
@@ -22,31 +24,47 @@ struct SnapAIRunActionIntent: AppIntent {
     @Parameter(title: "动作", description: "留空则使用第一个启用的动作。")
     var action: String?
 
+    @Parameter(title: "返回格式", default: .text)
+    var outputFormat: SnapAIIntentOutputFormat
+
+    @Parameter(title: "等待秒数", description: "隐私确认后等待生成完成的最长时间，范围 1–600 秒。", default: 120)
+    var timeoutSeconds: Int
+
     static var parameterSummary: some ParameterSummary {
-        Summary("用\(\.$action)处理\(\.$text)")
+        Summary("用\(\.$action)处理\(\.$text)") {
+            \.$outputFormat
+            \.$timeoutSeconds
+        }
     }
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        let input = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved: String
-        if !input.isEmpty {
-            resolved = input
-        } else if let clip = NSPasteboard.general.string(forType: .string)?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
-            resolved = clip
-        } else {
-            throw SnapAIIntentError.emptyInput("剪贴板为空,请传入文本。")
+        do {
+            try Task.checkCancellation()
+            let input = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let resolved: String
+            if !input.isEmpty {
+                resolved = input
+            } else if let clip = NSPasteboard.general.string(forType: .string)?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                resolved = clip
+            } else {
+                throw SnapAIIntentError.emptyInput("剪贴板为空,请传入文本。")
+            }
+            guard let delegate = NSApp.delegate as? AppDelegate else {
+                throw SnapAIIntentError.appUnavailable("SnapAI 未在运行。")
+            }
+            let output = try await delegate.runAutomationAction(
+                actionQuery: action?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                text: resolved,
+                timeout: TimeInterval(min(600, max(1, timeoutSeconds)))
+            )
+            return .result(value: outputFormat == .json ? try AutomationActionResult(text: output).json() : output)
+        } catch {
+            let failure = SnapAIIntentError.normalized(error)
+            guard outputFormat == .json else { throw failure }
+            return .result(value: try AutomationActionResult(error: failure).json())
         }
-        let appDelegate = await MainActor.run { NSApp.delegate as? AppDelegate }
-        guard let delegate = appDelegate else {
-            throw SnapAIIntentError.appUnavailable("SnapAI 未在运行。")
-        }
-        await MainActor.run {
-            delegate.runAutomationCommand(.run(actionQuery: action?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-                                              text: resolved,
-                                              options: .empty))
-        }
-        return .result(value: "已提交 SnapAI 处理:\(resolved.prefix(60))")
     }
 }
 
@@ -96,18 +114,6 @@ struct SnapAISwitchModelIntent: AppIntent {
                                                modelQuery: modelQuery)
         }
         return .result(value: outcome)
-    }
-}
-
-enum SnapAIIntentError: LocalizedError {
-    case emptyInput(String)
-    case appUnavailable(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .emptyInput(let message): return message
-        case .appUnavailable(let message): return message
-        }
     }
 }
 

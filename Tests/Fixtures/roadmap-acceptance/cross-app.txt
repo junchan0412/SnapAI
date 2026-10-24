@@ -1,0 +1,5 @@
+SNAPAI-AX-FIXTURE-v1
+会议由2026年10月8日09:30改为10月10日09:30（UTC+8）。
+预算上限为12,500元，不含税；尚未批准支出。
+请保留 customer_id 和 pilot_v2-final.csv。
+END-OF-FIXTURE

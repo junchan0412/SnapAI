@@ -4,7 +4,7 @@
 # 若全量构建,各 section footprint 应基本相同;若按需构建,数值随内容变化。
 #
 # 用法:scripts/profile-settings-sections.sh [等待秒数]
-# 输出:每行一个 section 的 physical footprint / peak / RSS。
+# 输出:Debug 隔离预览,每行一个 section 的 physical footprint / peak / RSS。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,6 +17,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+echo "Build configuration: debug (run-ui-preview.sh)"
 printf '%-20s %-12s %-12s %s\n' "section" "footprint" "peak" "RSS"
 for section in "${sections[@]}"; do
   scripts/run-ui-preview.sh "$section" light >/dev/null 2>&1

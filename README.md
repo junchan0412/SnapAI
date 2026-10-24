@@ -1,6 +1,6 @@
 # SnapAI
 
-SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
+SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在支持取词的应用中选中文字,用全局快捷键提问、翻译、润色、总结或解释代码;也可以直接打开快捷提问面板输入文本、粘贴图片或截图。
 
 ![SnapAI 2.0 结果工作区](docs/screenshots/snapai-result-light.png)
 
@@ -25,9 +25,11 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在任意应用中选中�
 >
 > 2.0.5：AI 设置页拆分——“AI 模型”（当前模型、路由策略）与“AI 供应商”（连接、Key、模型列表）独立成页；Anthropic 配置修复（Key 空白自动忽略、协议专属端点提示、就绪状态行）；命令面板、自动化深链与旧别名保持兼容。详见 [2.0.5 Release Notes](docs/RELEASE_NOTES_2.0.5.md)。
 >
+> 2.1.0：保留原图与 OCR 三模式、截图裁剪、Markdown 表格和代码阅读、真正双模型对照、Shortcuts 正文返回、用量统计，以及本机会话恢复、分支和可撤销摘要压缩。详见 [2.1.0 Release Notes](docs/RELEASE_NOTES_2.1.0.md)。
+>
 > 2.0.8：更新通道迁移到 Sparkle（appcast + EdDSA 签名 + 标准更新窗口，自签名即可、无需公证）；补上 App Intents 元数据，Shortcuts 首次能列出并执行 SnapAI；引入第一个第三方依赖 Sparkle 并接入真实供应链扫描。详见 [2.0.8 Release Notes](docs/RELEASE_NOTES_2.0.8.md)。
 
-> 2.0.7：Shortcuts（App Intents）、用量看板、历史语义搜索、截图 OCR、Apple 端侧模型、双模型对照、英文本地化；配套 AppDelegate 拆分、冷启动与内存基线、无障碍走查（16 个界面 0 处无名称控件）、发布链路进 CI。详见 [2.0.7 Release Notes](docs/RELEASE_NOTES_2.0.7.md)。
+> 2.0.7：Shortcuts（App Intents）、用量看板、历史语义搜索、截图 OCR、Apple 端侧模型、双模型对照入口、部分主路径英文本地化；配套 AppDelegate 拆分、冷启动与内存基线、无障碍名称走查、发布链路进 CI。名称走查不等于完整无障碍验收，英文界面也仍有中文文案。详见 [2.0.7 Release Notes](docs/RELEASE_NOTES_2.0.7.md)。
 
 > 2.0.6：设置窗口 Liquid Glass 收尾——侧栏 behind-window 毛玻璃（桌面透过来）+ 详情区不透明兜底；删除 `snapAISurface` / `Surface.chrome` 死代码与最后一处卡片内结构性分隔线。详见 [2.0.6 Release Notes](docs/RELEASE_NOTES_2.0.6.md)。
 
@@ -73,7 +75,7 @@ SnapAI 当前没有 Apple Developer ID,也没有 Apple notarization。浏览器�
 
 `xattr -cr /Applications/SnapAI.app` 会递归清除应用 bundle 上的 quarantine 等扩展属性。它只解决 Gatekeeper 隔离问题,不会替代辅助功能权限或屏幕录制权限。
 
-应用内自动更新会在替换后自动执行 `xattr -cr`,所以这个命令主要用于首次手动安装或手动覆盖安装。
+应用内更新由 Sparkle 处理。上述命令仅用于受信任安装包的首次手动安装或手动覆盖安装排障。
 
 ## 默认快捷键
 
@@ -96,12 +98,36 @@ SnapAI 当前没有 Apple Developer ID,也没有 Apple notarization。浏览器�
 
 ## 基本使用
 
-1. 在任意应用中选中文字。
+1. 在网页或编辑器中选中文字；兼容性取决于目标应用的 AX 和复制行为。
 2. 按默认快捷键,例如 `Option + A` 提问或 `Option + P` 润色。
 3. 在结果面板中复制结果、替换原文、追加到文档、导出对话或继续追问。
 4. 不想先选中文字时,按 `Option + Space` 打开快捷提问面板。
 
 润色等默认替换动作不会直接静默覆盖原文。SnapAI 会先显示差异预览,你确认后才写回目标应用。
+
+### 双模型对照
+
+从当前结果打开双模型对照,先确认两个模型及将发送的对话和附件,再开始两路独立请求。
+两侧分别显示流式回答、首字时间、耗时和错误,可单独停止;完成后查看文本差异,
+选择一侧并复制。隐私与本地模式限制仍然生效。对照结果暂不自动写回、保存历史,
+也不会替换主结果会话。
+
+### 截图、阅读、自动化与会话增强
+
+- 截图可选择区域、窗口或主屏幕，发送前可裁剪；OCR 自动检测中英文并区分识别失败原因，默认保留原图，明确选择“原图 / OCR 文字 / 图文一起”。重试、换动作和换语言保留附件；发送前预览包含完整会话和图片，实际发送使用批准的消息快照。
+- 网络完成后即可继续提问；“立即显示全文”跳过剩余逐字展示，完整回答不会误标为部分结果。打字机与自定义反馈遵守 Reduce Motion。
+- Markdown 支持表格、长代码横向滚动与基础高亮、原始列表编号和嵌套；用户停止跟随后，完成排版尽量恢复正文相对阅读位置。
+- 供应商模型行可覆盖视觉、推理、上下文窗口和 USD 单价，填写来源；缺失值继续使用标明来源的推断。
+- Shortcuts 默认返回 AI 正文，也可选择 JSON 接收结果或稳定错误码，支持超时与取消。配置与错误格式见 [App Intents](docs/APP_INTENTS.md)。
+- 使用统计区分 API 返回的 token、手工单价估算费用和缺失用量，提供 TTFT、按日统计及月预算提醒。预算不是强制限额；严格兼容端点可关闭“请求 token 用量”；开启时正文确认完成后最多等2秒收集尾部usage。
+
+- 会话仅在允许保存完整历史时保存在本机 SQLite；恢复全部轮次和原图不自动发送请求。可从已保存回复创建分支，手工确认摘要后压缩后续请求上下文并随时撤销。OCR-only 原图不会因恢复而上传。恢复会话不绑定旧文档，需复制结果或重新取词后写回。历史窗口的“恢复会话”入口可跨重启继续。
+
+以上能力由 2.1.0 提供；模型输出质量、低版本系统和完整辅助功能人工验收的限制见发布说明。实施状态与验收证据见 [路线清单](docs/IMPLEMENTATION_TRACKER_2026-10-02.md)、[固定任务与跨应用验收](docs/ROADMAP_ACCEPTANCE_2026-10-04.md)和[性能记录](docs/ROADMAP_PERFORMANCE_2026-10-04.md)。
+
+### 界面语言
+
+当前只有部分主路径接入英文资源,设置与诊断等位置仍有中文直写文案;尚不属于完整双语界面。
 
 ## 跨应用取词与写回
 
@@ -113,7 +139,7 @@ SnapAI 的主链路是:
 4. 复制兜底前会快照用户剪贴板;如果剪贴板过大或格式过多,会取消自动兜底,避免破坏剪贴板。
 5. 复制兜底最多重试 3 次,并尝试解析 `.string`、`public.utf8-plain-text`、UTF-16、RTF、HTML 和部分旧式 pasteboard 文本类型。
 6. 捕获成功后,SnapAI 会显示结果面板,并保留原应用作为写回目标。
-7. 替换时优先恢复 AX 选区;如果文本来自剪贴板或服务菜单捕获,则信任目标应用保留的原选区并直接粘贴。
+7. 替换前核对捕获时的源文、选区和目标身份；已知内容或目标变化时拒绝写回。剪贴板或服务菜单捕获无法完整核验时，需要再次明确确认；粘贴前也会检查剪贴板是否被其他操作改动，避免覆盖新内容。
 8. 写回过程中会保护用户剪贴板,写回失败时会复制结果并给出诊断建议。
 
 1.6.8 移除了旧版“按原文字符数发送 `Shift + Left`”的重选方式。这个旧策略在长文本、多行、Emoji、输入法、网页编辑器或部分 Electron 应用中容易选错范围,导致替换变成追加。
@@ -196,13 +222,14 @@ snapai://update
 
 菜单中选择“检查更新”。发现新版本后,SnapAI 会:
 
-1. 用 macOS `URLSession` 请求 GitHub Releases,不依赖终端、`curl` 或 `gh`。
-2. 下载 release zip、`snapai-manifest-vX.X.X.json` 和 `.sig` 签名文件。
-3. 用应用内置公钥验证 manifest 签名。
-4. 校验 zip SHA256、bundle id、designated requirement 和证书指纹。
-5. 解压新版本并校验 `SnapAI.app`。
-6. 启动独立 updater helper 替换当前应用。
-7. 替换后执行 `xattr -cr` 并重新打开 SnapAI。
+1. 由 Sparkle 读取 GitHub Release 附件中的 `appcast.xml`。
+2. 在 Sparkle 标准窗口中展示版本和发布说明,按用户操作下载更新包。
+3. 使用内置 `SUPublicEDKey` 验证更新包的 EdDSA 签名,并检查应用代码签名连续性。
+4. 由 Sparkle 完成安装和重新启动。
+
+自动检查默认关闭。每次发布都需附带 `appcast.xml`;签名 manifest 和 SBOM 继续
+随包发布,用于人工校验与供应链检查,不参与当前应用内安装流程。旧 updater helper
+的下载、替换与 `xattr` 行为不再代表 2.0.8 起的更新通道。
 
 若安装目录不可写,建议把应用移动到 `~/Applications` 后再更新。
 
@@ -215,7 +242,7 @@ SnapAI 的推荐发布方式是:
 1. 保持 `CFBundleIdentifier` 不变。
 2. 使用长期固定的自签名 Code Signing 证书。
 3. 每个 release 都使用同一个证书签名。
-4. 继续使用签名 manifest 校验更新包。
+4. 保持 Sparkle EdDSA 密钥稳定,签名并回验 appcast 中的更新包;另外发布签名 manifest 供独立核验。
 5. API Key 不再依赖 macOS Keychain,改由本机 Application Support 中的本地加密密钥存储保护。
 
 本仓库提供本机自签名证书脚本:
@@ -313,6 +340,10 @@ scripts/run-ui-preview.sh result dark
 scripts/run-ui-preview.sh history light
 ```
 
+该脚本明确构建 Debug 并在 bundle 中记录配置。内存快照使用
+`scripts/profile-runtime-memory.sh <pid> <label>`,输出中会附带构建配置;
+预览不包含真实 provider 网络请求,不能与 Release 应用的性能数据混用。
+
 本地构建 `.app`:
 
 ```bash
@@ -331,14 +362,16 @@ Codex 桌面环境可直接使用项目 Run action;其统一入口也可以手�
 scripts/preflight-release.sh --require-clean
 ```
 
-生成 release zip、manifest 和 SBOM:
+生成 release zip、Sparkle appcast、签名 manifest 和 SBOM:
 
 ```bash
 SNAPAI_RELEASE=1 ./build.sh --release
-SNAPAI_RELEASE=1 scripts/package-release.sh 2.0.0
+SNAPAI_RELEASE=1 scripts/package-release.sh X.Y.Z
 ```
 
-正式 release 需要 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥:
+将 `X.Y.Z` 换成 `Resources/Info.plist` 中的版本。正式 release 需要
+`SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥,以及已配置的 Sparkle EdDSA
+私钥;完整步骤见 [发布流程](docs/RELEASE_PIPELINE.md):
 
 ```bash
 export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"

@@ -4,10 +4,31 @@ import Foundation
 ///
 /// 设计约束:
 /// 1. 纯值类型 + 纯函数,可测试;不持有 ViewModel、不碰网络。
-/// 2. 输入是两段已完成文本(调用方各自用 ResultViewModel 跑完后传入),
+/// 2. 输入是两段已完成文本(调用方各自独立请求后传入),
 ///    本类型只负责"配对展示":行对齐、差异统计、胜负无关的中立摘要。
 /// 3. 复用 TextDiff 的行级 diff,不另起 diff 算法。
 package struct ModelCompare {
+    package static func eligibleRoutes(settings: AppSettings,
+                                       action: AIAction,
+                                       messages: [ChatMessage],
+                                       routingMetrics: RoutingMetricsTable = .empty) -> [AIRequestRoute] {
+        let payload = AIRequestPayloadDiagnostic.make(messages: messages,
+                                                      explicitHasImage: messages.contains { $0.imageData != nil })
+        return AIRequestRouter.candidates(settings: settings,
+                                          action: action,
+                                          sourceText: messages.last(where: { $0.role == .user })?.content ?? "",
+                                          hasImage: messages.contains { $0.imageData != nil },
+                                          routingTextCharacterCount: payload.textCharacterCount,
+                                          routingMetrics: routingMetrics).filter { route in
+            guard let provider = settings.providers.first(where: { $0.id == route.providerID }),
+                  AIRequestRouter.isProviderRequestReady(provider),
+                  !settings.prefersLocalModelRoutes || route.isLocalEndpoint else { return false }
+            let issues = payload.candidateHardIssueSummary(routes: [route],
+                                                           hasImage: messages.contains { $0.imageData != nil })
+            return issues == "all-ok" || issues == "none"
+        }
+    }
+
     package struct Side: Equatable {
         package var title: String
         package var text: String

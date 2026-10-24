@@ -1,0 +1,88 @@
+[
+  {
+    "anonymous_id" : "A001",
+    "cumulative_tokens" : 340,
+    "elapsed_ms" : 10562,
+    "model" : "agnes-3.0-flash",
+    "output" : "The pilot for Project Polaris was originally scheduled to begin on October 8, 2026, at 09:30 (UTC+8), but has now been postponed to October 10 at the same time. The budget cap is 12,500 RMB, exclusive of tax; this is not an approved expenditure. If the supplier does not confirm in writing by 18:00 on October 7, the pilot will be cancelled, not postponed again. Please keep the filename `pilot_v2-final.csv` and do not translate \"Polaris\" into any other project name.",
+    "provider_index" : 2,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q1a",
+    "ttft_ms" : 4724,
+    "usage" : {
+      "inputTokens" : 208,
+      "isFinal" : true,
+      "outputTokens" : 132
+    }
+  },
+  {
+    "anonymous_id" : "A002",
+    "cumulative_tokens" : 618,
+    "elapsed_ms" : 7373,
+    "model" : "agnes-3.0-flash",
+    "output" : "只读预览可供全部24位审阅者使用，但仅六位编辑可以发布更改。预计上传大小为2.5 MB，而非2.5 GB。除非Mina在2026年10月9日16:00 UTC之前签署同意，否则保留版本1.8在生产环境中。预览成功并不保证迁移是可逆的。保持标识符`customer_id`不变。",
+    "provider_index" : 2,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q1b",
+    "ttft_ms" : 5992,
+    "usage" : {
+      "inputTokens" : 192,
+      "isFinal" : true,
+      "outputTokens" : 86
+    }
+  },
+  {
+    "anonymous_id" : "A003",
+    "cumulative_tokens" : 1011,
+    "elapsed_ms" : 8435,
+    "model" : "agnes-3.0-flash",
+    "output" : "数据同步处试运行。10月7日14-15时演练，限测试账号，禁入真实数据。林岚10月6日18时前备12账号；顾远当日负责回滚，5分钟为目标未验证。错率超2%即停。10月6日12时前回复出席。\n\n1. 林岚10.6 18:00前备12测试账号\n2. 顾远10.7演练负责5分钟目标回滚\n3. 全员10.6 12:00前确认出席",
+    "provider_index" : 2,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q2",
+    "ttft_ms" : 6045,
+    "usage" : {
+      "inputTokens" : 259,
+      "isFinal" : true,
+      "outputTokens" : 134
+    }
+  },
+  {
+    "anonymous_id" : "A004",
+    "cumulative_tokens" : 2531,
+    "elapsed_ms" : 13288,
+    "model" : "agnes-3.0-flash",
+    "output" : "**结论**\nv2一次完成率74%（74\/100），v1为65%（52\/80），差9个百分点。因无随机分组且难度未匹配，差异可能由版本外因素致，非因果证明。v2网络P50 2.3s（n=50），v1为2.8s（n=40）。8台设备中6台支持辅助读取，2台需复制兜底，未验证跨应用及富文本恢复。\n\n**指标**\n| 指标 | v1 | v2 | 备注 |\n| :--- | :--- | :--- | :--- |\n| 一次完成 | 65% (52\/80) | 74% (74\/100) | 事实 |\n| 网络P50 | 2.8s (n=40) | 2.3s (n=50) | 事实 |\n| 网络P95 | 7.2s | 6.5s | 事实 |\n| 已确认支出 | 1,860元 | - | 预算上限2,500元 |\n\n**后续行动**\n1. 林岚：10月6日18:00前补齐截图图例验收样本。\n2. 顾远：10月8日18:00前完成多应用取词写回记录。\n3. 陈遥：10月9日12:00前核对240元单据。\n*注：80%完成率与P95<6s为未验证目标，非承诺。*",
+    "provider_index" : 2,
+    "round" : 1,
+    "status" : "success",
+    "task" : "Q3",
+    "ttft_ms" : 8311,
+    "usage" : {
+      "inputTokens" : 1149,
+      "isFinal" : true,
+      "outputTokens" : 371
+    }
+  },
+  {
+    "anonymous_id" : "A005",
+    "cumulative_tokens" : 3902,
+    "elapsed_ms" : 82838,
+    "error" : "输出已达到模型的 token 上限，当前为部分结果。可提高输出上限后重试。",
+    "model" : "agnes-3.0-flash",
+    "output" : "### 函数行为解释\n\n该函数 `eligible_ids` 遍历输入列表 `rows` 中的每一行字典，筛选出符合条件的 ID 并返回一个去重后的列表。具体逻辑如下：\n1.  提取每行的 `id` 字段。如果 `id` 缺失（值为 `None`）或该 `id` 已经处理过（存在于 `seen` 集合中），则跳过该行。\n2.  检查该行是否满足两个条件：\n    *   `active` 字段为 `True`（默认 `False`）。\n    *   `score` 字段的值大于或等于参数 `minimum`（默认 10）。\n3.  若同时满足上述条件，将 `id` 加入 `seen` 集合（用于后续去重）并追加到 `result` 列表中。\n4.  若任一条件不满足，`id` 不会被加入 `seen` 集合，因此后续相同 `id` 的行仍有机会被评估。\n\n### 三个调用的结果\n\n| 调用语句 | 返回值 | 过程简述 |\n| :--- | :--- | :--- |\n| `eligible_ids(rows)` | `['c']` | `\"a\"` 第一次 `score=8` 不满足，未加入 `seen`；第二次 `\"a\"` `score=12` 满足，但此时 `\"a\"` 尚未加入 `seen`，故加入。`\"b\"` `active` 为 `False` 跳过。`\"c\"` 第一次 `score=10` 满足，加入。后续 `\"c\"` 和缺失 `id` 的行均被跳过或无效。*(注：根据代码逻辑，第一个 \"a\" 不满足条件所以没进 seen，第二个 \"a\" 满足条件进 result 和 seen。第一个 \"c\" 满足条件进 result 和 seen。最终结果应为 `['a', 'c']`。请允许我重新推演：1. Row a (score 8): active T, score 8 < 10. Fails. Not in seen. 2. Row a (score 12): active T, score 12 >= 10. Passes. seen={a}, res=[a]. 3. Row b: active F. Skip. 4. Row c (score 10): active T, score 10 >= 10. Passes. seen={a,c}, res=[a,c]. 5. Row c (score 99): id 'c' in seen. Skip. 6. Row no id: key None. Skip. Result: ['a', 'c'])* |\n| `eligible_ids(rows, minimum=13)` | `[]` | 1. Row a (8): 8<13 Fail. 2. Row a (12): 12<13 Fail. 3. Row b: Fail. 4. Row c (10): 10<13 Fail. 5. Row c (99): id 'c' not in seen (because previous c failed), active T, 99>=13 Pass. seen={c}, res=[c]. 6. No id: Skip. Result: `['c']` |\n| `eligible_ids([{\"id\": \"z\", \"active\": True, \"score\": \"N\/A\"}])` | `['z']` | 1. Row z: active T. score \"N\/A\" is a string. In Python 3, comparing string and int (`\"N\/A\" >= 10`) raises `TypeError`. **Wait**, the function does `row.get(\"score\", 0) >= minimum`. If `minimum` is int 10 and score is str, it crashes. However, if we assume the environment handles this or `minimum` is not provided... The prompt asks for results. Let's look closer. `row.get(\"score\", 0)` returns `\"N\/A\"`. `\"N\/A\" >= 10` -> `TypeError: '>=' not supported between instances of 'str' and 'int'`. <br> **Correction\/Assumption**: Usually, in such questions, if a type error occurs, the \"result\" is an error. But if we must list a return value, perhaps the comparison doesn't crash? No, it crashes in Py3. <br> Let's re-read carefully. Does the question imply successful execution? \"列出下方三个调用的结果\". If it crashes, the result is an exception. <br> *Alternative interpretation*: Is `\"N\/A\"` truthy? No, it's a string. The check is `",
+    "provider_index" : 2,
+    "round" : 1,
+    "status" : "failed",
+    "task" : "Q4",
+    "ttft_ms" : 31992,
+    "usage" : {
+      "inputTokens" : 371,
+      "isFinal" : true,
+      "outputTokens" : 1000
+    }
+  }
+]

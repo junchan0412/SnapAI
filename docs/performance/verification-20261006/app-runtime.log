@@ -1,0 +1,26 @@
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+Tests/Runtime/QuickInputOCRRuntimeTests.swift:50:18: warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 48 |             return .recognized(.init(text: "Previous image recognized text", confidence: 1))
+ 49 |         })
+ 50 |         weak var weakModel = model
+    |                  `- warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 51 |         var publishedText: [String] = []
+ 52 |         let observation = model!.$imageInput.sink { input in
+
+[#VariableNeverMutated]: <https://docs.swift.org/compiler/documentation/diagnostics/variable-never-mutated>
+[#WeakMutability]: <https://docs.swift.org/compiler/documentation/diagnostics/weak-mutability>
+FAIL App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, 30 settings lifecycle cycles, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape
+FAIL: the size-test window closes
+FAIL: the size-test window closes
+FAIL: the unpinned result window is active before opening details
+FAIL: the real result details button appears in the accessibility tree
+FAIL: the visible result window exposes its real details button
+2026-10-06 10:40:29.062 SnapAIRuntimeSmoke[6140:162362] SnapAI: history store failure: The file “history-failure-blocker” couldn’t be saved in the folder “fixtures” because a file with the same name already exists.

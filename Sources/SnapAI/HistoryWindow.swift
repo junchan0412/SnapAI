@@ -6,6 +6,8 @@ struct HistoryWindowView: View {
     let settings: AppSettings
     @ObservedObject var model: HistoryWindowModel
     var reopen: (HistoryEntry) -> Void
+    var resume: ((ConversationSession) -> Void)? = nil
+    @State private var showConversationLibrary = false
     @StateObject var operationCoordinator = ResultOperationCoordinator()
     @FocusState private var focusedTagID: String?
     @FocusState private var searchFocused: Bool
@@ -45,6 +47,9 @@ struct HistoryWindowView: View {
             }
         }
         .onDisappear { commitTagDrafts(except: nil) }
+        .sheet(isPresented: $showConversationLibrary) {
+            ConversationLibraryView(settings: settings, restore: { resume?($0) })
+        }
         .background {
             Button("搜索历史记录") { searchFocused = true }
                 .keyboardShortcut("f", modifiers: .command)
@@ -88,8 +93,14 @@ struct HistoryWindowView: View {
                 Text("\(presentation.entries.count) 条")
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
-                if model.isRefreshing { ProgressView().controlSize(.small) }
+                if model.isRefreshing {
+                    ProgressView().controlSize(.small)
+                    Text("正在搜索…").font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
+                if resume != nil {
+                    Button("恢复会话…") { showConversationLibrary = true }
+                }
                 Menu {
                     Button("复制筛选结果", systemImage: "doc.on.doc", action: copyFilteredHistory)
                     Button("导出筛选结果…", systemImage: "square.and.arrow.down") {

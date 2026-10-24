@@ -1,0 +1,15 @@
+[
+  {
+    "elapsed_ms" : 9378,
+    "model" : "agnes-3.0-flash",
+    "output" : "SNAPAI-ACCEPTANCE-OK",
+    "provider_index" : 2,
+    "status" : "success",
+    "ttft_ms" : 9344,
+    "usage" : {
+      "inputTokens" : 85,
+      "isFinal" : true,
+      "outputTokens" : 9
+    }
+  }
+]

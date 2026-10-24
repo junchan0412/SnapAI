@@ -251,6 +251,7 @@ func testAIRequestDiagnosticsSummary() {
                                            sourceCharacterCount: 128,
                                            hasImage: false,
                                            fallbackEnabled: true,
+                                           prefersLocalRoutes: true,
                                            routingPreference: .quality,
                                            candidateCount: 2,
                                            actionPipeline: ActionPipelineDiagnostic(
@@ -308,8 +309,8 @@ func testAIRequestDiagnosticsSummary() {
            "reports action pipeline privacy policy")
     expect(summary.contains("Pipeline Output: replace-confirmation"), "reports action pipeline output policy")
     expect(summary.contains("Pipeline Model: auto-route-local-first"), "reports action pipeline model policy")
-    expect(summary.contains("Cloud Fallback Review: confirmation-required; local=1; cloud=1"),
-           "reports cloud fallback review when privacy local-first routing has cloud candidates")
+    expect(summary.contains("Cloud Fallback Review: not-needed; local=1; cloud=1"),
+           "manual routing does not infer privacy authorization from pipeline display text")
     expect(summary.contains("Fallback Enabled: yes"), "reports fallback state")
     expect(summary.contains("Auto Route Enabled: no"), "reports auto routing state")
     expect(summary.contains("Routing Preference: 最佳质量"), "reports routing preference")
@@ -2334,6 +2335,7 @@ func testAIRouterPrefersLocalModelRoutesInPrivacyMode() {
                                            hasImage: false,
                                            fallbackEnabled: settings.fallbackEnabled,
                                            autoRouteEnabled: settings.autoRouteEnabled,
+                                           prefersLocalRoutes: settings.prefersLocalModelRoutes,
                                            routingPreference: settings.routingPreference,
                                            candidateCount: privacyRoutes.count,
                                            actionPipeline: pipeline,
@@ -2344,6 +2346,22 @@ func testAIRouterPrefersLocalModelRoutesInPrivacyMode() {
                                                          to: privacyRoutes.dropFirst().first { !$0.isLocalEndpoint }),
            "privacy mode blocks silent fallback from local to cloud")
 
+    local.models = [AIModelEntry(name: "llama3.2")]
+    settings.providers = [cloud, local]
+    var learnedCloudPreference = RoutingMetricsTable.empty
+    for _ in 0..<10 {
+        learnedCloudPreference.recordSuccess(route: privacyRoutes[1], elapsedMilliseconds: 100,
+                                            firstTokenMilliseconds: 10)
+        learnedCloudPreference.recordManualPreference(providerID: cloud.id, modelName: "gpt-4o-mini")
+    }
+    let learnedRoutes = AIRequestRouter.candidates(settings: settings,
+                                                   action: AIAction.defaults()[0],
+                                                   sourceText: "short",
+                                                   hasImage: false,
+                                                   routingMetrics: learnedCloudPreference)
+    expect(learnedRoutes.first?.providerID == local.id,
+           "local-first privacy order cannot be outweighed by cloud speed, model hints or learned preference")
+
     settings.autoRouteEnabled = false
     settings.fallbackEnabled = true
     let manualRoutes = AIRequestRouter.candidates(settings: settings,
@@ -2352,6 +2370,44 @@ func testAIRouterPrefersLocalModelRoutesInPrivacyMode() {
                                                   hasImage: false)
     expect(manualRoutes.first?.providerID == cloud.id,
            "manual routing still honors the explicitly selected cloud model")
+}
+
+func testCloudRouteConfirmationUsesRequestPolicy() {
+    let local = AIRequestRoute(providerID: "local", providerName: "Local", modelName: "local-chat",
+                               reason: "本地隐私优先", isLocalEndpoint: true)
+    let cloud = AIRequestRoute(providerID: "cloud", providerName: "Cloud", modelName: "cloud-chat",
+                               reason: "云端备用模型")
+    var diagnostics = AIRequestDiagnostics(actionName: "提问", sourceCharacterCount: 1,
+                                           hasImage: false, fallbackEnabled: true,
+                                           autoRouteEnabled: true, prefersLocalRoutes: true,
+                                           routingPreference: .balanced, candidateCount: 2,
+                                           actionPipeline: ActionPipelineDiagnostic(inputPolicy: "text",
+                                               privacyPolicy: "preview", outputPolicy: "result-panel",
+                                               modelPolicy: "action-override"),
+                                           candidateRoutes: [local, cloud])
+    expect(diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: false),
+           "action overrides cannot bypass the request's local-first cloud confirmation")
+    expect(diagnostics.requiresCloudFallbackConfirmation(from: local, to: cloud),
+           "local failure needs cloud confirmation even when the action binds a model")
+    expect(!diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: true),
+           "local requests remain permitted")
+    diagnostics.fallbackEnabled = false
+    expect(diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: false),
+           "preflight skips cannot bypass cloud confirmation when fallback is disabled")
+    diagnostics.autoRouteEnabled = false
+    expect(!diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: false),
+           "manual fixed cloud selection remains an explicit route choice")
+    diagnostics.autoRouteEnabled = true
+    diagnostics.prefersLocalRoutes = false
+    diagnostics.actionPipeline.modelPolicy = "auto-route-local-first"
+    expect(!diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: false),
+           "diagnostic display text cannot impose or grant routing authorization")
+    diagnostics.prefersLocalRoutes = true
+    diagnostics.candidateRoutes = [cloud]
+    expect(diagnostics.requiresCloudRouteConfirmation(isLocalEndpoint: false),
+           "local-first privacy mode requires confirmation even when only cloud candidates remain")
+    expect(diagnostics.cloudFallbackReviewSummary == "confirmation-required; local=0; cloud=1",
+           "cloud-only privacy candidates report the same confirmation requirement")
 }
 
 func testAIRouterUsesStableConfiguredOrderForEqualScores() {

@@ -60,4 +60,5 @@ smoke 的隔离持久化步骤),又不会改写本机设置或触发 iCloud 同�
 
 - 每次改动启动路径(新增窗口、新增观察者、新增权限检查)后复测并更新本表;
 - 采样脚本会打印原始行,保留原始行便于回溯;
-- 与 `docs/RUNTIME_MEMORY_BASELINE.md` 一样,只在 release 构建上测量。
+- 本文启动基线只测 Release;`docs/RUNTIME_MEMORY_BASELINE.md` 中的 Debug 预览
+  单独标注,不能与 Release 数据混用。

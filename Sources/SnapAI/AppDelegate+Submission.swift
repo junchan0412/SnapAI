@@ -34,6 +34,8 @@ extension AppDelegate {
                        originalText: String? = nil,
                        imageData: Data? = nil,
                        imageMimeType: String = "image/png",
+                       retainedImageData: Data? = nil,
+                       retainedImageMimeType: String = "image/png",
                        autoReplaceEnabled: Bool = false,
                        captureMethod: TextCaptureMethod? = nil,
                        sourceContext: SelectionSourceContext? = nil) -> Bool {
@@ -42,6 +44,8 @@ extension AppDelegate {
                                          originalText: originalText,
                                          imageData: imageData,
                                          imageMimeType: imageMimeType,
+                                         retainedImageData: retainedImageData,
+                                         retainedImageMimeType: retainedImageMimeType,
                                          autoReplaceEnabled: autoReplaceEnabled,
                                          captureMethod: captureMethod,
                                          sourceContext: sourceContext)

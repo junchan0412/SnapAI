@@ -98,6 +98,7 @@ final class ResultRequestPreparationCoordinator {
             hasImage: requestHasImage,
             fallbackEnabled: settings.fallbackEnabled,
             autoRouteEnabled: settings.autoRouteEnabled,
+            prefersLocalRoutes: settings.prefersLocalModelRoutes,
             routingPreference: settings.routingPreference,
             candidateCount: routes.count,
             actionPipeline: actionPipeline,

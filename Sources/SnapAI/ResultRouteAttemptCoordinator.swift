@@ -61,6 +61,17 @@ final class ResultRouteAttemptCoordinator {
                                 message: "路由到的模型不可用,请检查供应商和模型设置。")
         }
 
+        if updatedDiagnostics.requiresCloudRouteConfirmation(
+            isLocalEndpoint: scopedSettings.activeProvider?.isLocalEndpoint == true
+        ) {
+            let message = "本地模型无法处理此请求；发送到云端前需要确认。请关闭自动路由并手动选择云端模型后重试。"
+            updatedDiagnostics.mark(route: route,
+                                    status: .failed,
+                                    message: message,
+                                    fallbackDecision: AIRequestFallbackDecision(reason: .cloudFallbackRequiresConfirmation))
+            return .unavailable(diagnostics: updatedDiagnostics, message: message)
+        }
+
         return .ready(ResultRunnableRouteAttempt(index: index,
                                                  route: route,
                                                  diagnostics: updatedDiagnostics,

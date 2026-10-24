@@ -1,0 +1,12 @@
+/Users/qidewei/Documents/SnapAI/.build/window-latency-identity-20261006-1/source/Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+/Users/qidewei/Documents/SnapAI/.build/window-latency-identity-20261006-1/SnapAIWindowLatency.app: replacing existing signature
+swift-driver version: 1.168.6 Prepared /Users/qidewei/Documents/SnapAI/.build/window-latency-identity-20261006-1
+Run serially on an unlocked desktop: SNAPAI_WINDOW_BENCH_SAMPLES=30 scripts/benchmark-window-latency.sh --run /Users/qidewei/Documents/SnapAI/.build/window-latency-identity-20261006-1 OUTPUT.json

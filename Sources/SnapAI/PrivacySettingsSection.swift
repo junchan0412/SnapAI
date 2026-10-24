@@ -29,8 +29,8 @@ struct PrivacySettingsSection: View {
             )
             compactDivider
             toggleRow(
-                title: "图片本地 OCR",
-                description: "截图/粘贴图片后先在本机识别文字,纯文本图转文字发送,图片不出本机。",
+                title: "自动识别图片文字",
+                description: "添加图片后自动在本机识别文字，保留原图。发送时可选择原图、OCR 文字或图文一起。",
                 isOn: Binding(
                     get: { settings.imageOCREnabled },
                     set: { settings.imageOCREnabled = $0; commit() }

@@ -41,16 +41,19 @@ final class SubmissionPipeline {
             host.recordTextCaptureOutcome(outcome)
             host.previousSelectionSnapshot = TextCapture.recentSelectionSnapshot(matching: text)
             host.previousCaptureMethod = outcome.method
+            let sourceContext = SelectionSourceContext.make(appName: host.previousApp?.localizedName)
             guard let prepared = self.prepareTextForSubmission(text,
                                                                action: action,
-                                                               imageData: nil) else { return }
+                                                               imageData: nil,
+                                                               sourceContext: sourceContext) else { return }
             host.resultVM.start(text: prepared.text,
                                 originalText: text,
                                 action: action,
                                 submissionPrivacy: prepared.diagnostic,
                                 autoReplaceEnabled: AutomationWriteBackPolicy.capturedSelection(action: action).autoReplaceEnabled,
                                 captureMethod: outcome.method,
-                                sourceContext: SelectionSourceContext.make(appName: host.previousApp?.localizedName))
+                                sourceContext: sourceContext,
+                                preparedMessages: prepared.messages)
             host.panelController.show()
         }
     }
@@ -62,50 +65,59 @@ final class SubmissionPipeline {
                        originalText: String? = nil,
                        imageData: Data? = nil,
                        imageMimeType: String = "image/png",
+                       retainedImageData: Data? = nil,
+                       retainedImageMimeType: String = "image/png",
                        autoReplaceEnabled: Bool = false,
                        captureMethod: TextCaptureMethod? = nil,
                        sourceContext: SelectionSourceContext? = nil) -> Bool {
         guard let host else { return false }
         guard let prepared = prepareTextForSubmission(text,
                                                       action: action,
-                                                      imageData: imageData) else { return false }
+                                                      imageData: imageData,
+                                                      imageMimeType: imageMimeType,
+                                                      sourceContext: sourceContext) else { return false }
         host.quickInput.hide()
         host.resultVM.start(text: prepared.text,
                             originalText: originalText,
                             action: action,
                             imageData: imageData,
                             imageMimeType: imageMimeType,
+                            retainedImageData: retainedImageData,
+                            retainedImageMimeType: retainedImageMimeType,
                             submissionPrivacy: prepared.diagnostic,
                             autoReplaceEnabled: autoReplaceEnabled,
                             captureMethod: captureMethod,
-                            sourceContext: sourceContext)
+                            sourceContext: sourceContext,
+                            preparedMessages: prepared.messages)
         host.panelController.show()
         return true
     }
 
     func prepareTextForSubmission(_ text: String,
                                   action: AIAction,
-                                  imageData: Data?,
-                                  userPromptOverride: String? = nil) -> PrivacyPreparedSubmission? {
+                                  imageData: Data? = nil,
+                                  userPromptOverride: String? = nil,
+                                  imageMimeType: String = "image/png",
+                                  sourceContext: SelectionSourceContext? = nil,
+                                  messageBuilder: ((String) -> [ChatMessage])? = nil) -> PrivacyPreparedSubmission? {
         guard let host else { return nil }
         let settings = host.settings
-        let redactionPreview = settings.redactionEnabled
-            ? PrivacyFilter.preview(text: text, rules: settings.redactionRules)
-            : PrivacyRedactionPreview(output: text, reports: [])
-        let processedOverride = userPromptOverride.map { _ in redactionPreview.output }
-        let preview = PrivacySubmissionPreview(action: action,
-                                               originalText: text,
-                                               redactionPreview: redactionPreview,
-                                               systemPrompt: settings.effectiveSystemPrompt,
-                                               redactionEnabled: settings.redactionEnabled,
-                                               hasImage: imageData != nil,
-                                               historyContentStorage: settings.historyContentStorage,
-                                               userPromptOverride: processedOverride)
+        let preview = PrivacySubmissionPreview.prepare(text: text, action: action, settings: settings) { sourceText in
+            if let messageBuilder { return messageBuilder(sourceText) }
+            var messages = RequestSession.initialMessages(settings: settings,
+                                                          action: action,
+                                                          targetLanguage: action.targetLanguage,
+                                                          sourceText: sourceText,
+                                                          imageData: imageData,
+                                                          imageMimeType: imageMimeType,
+                                                          sourceContext: sourceContext).messages
+            if userPromptOverride != nil, let index = messages.lastIndex(where: { $0.role == .user }) {
+                messages[index].content = sourceText
+            }
+            return messages
+        }
         let previewRequirement = preview.previewRequirement(userPreferenceEnabled: settings.privacyPreviewEnabled)
-        let prepared = PrivacyPreparedSubmission(
-            text: preview.processedText,
-            diagnostic: preview.diagnostic(previewRequirement: previewRequirement)
-        )
+        let prepared = preview.preparedSubmission(userPreferenceEnabled: settings.privacyPreviewEnabled)
         guard previewRequirement.isRequired else { return prepared }
         return confirmPrivacyPreview(preview, requirement: previewRequirement) ? prepared : nil
     }

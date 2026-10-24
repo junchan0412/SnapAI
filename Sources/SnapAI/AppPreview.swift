@@ -1,4 +1,4 @@
-#if DEBUG
+#if DEBUG || SNAPAI_PREVIEW
 import AppKit
 import SwiftUI
 import SnapAILogic
@@ -13,6 +13,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
     private var quickInput: QuickInputController?
     private var commands: CommandPaletteController?
     private var health: PermissionHealthController?
+    private let previewDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("SnapAI-Preview-\(UUID().uuidString)")
+    private let previewStartedAt = ProcessInfo.processInfo.systemUptime
 
     nonisolated override init() { super.init() }
 
@@ -22,6 +24,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
             return
         }
         settings.persistenceDefaults = defaults
+        settings.persistenceHistoryStore = HistoryStore(url: previewDirectory.appendingPathComponent("history.sqlite"))
+        settings.persistenceConversationStore = ConversationStore(url: previewDirectory.appendingPathComponent("conversations.sqlite"))
         NSApp.setActivationPolicy(.regular)
         installPreviewMenu()
         let arguments = ProcessInfo.processInfo.arguments
@@ -30,6 +34,7 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         let surface = arguments.drop(while: { $0 != "--preview" }).dropFirst().first ?? "settings"
         settings.providers = [AIProvider(id: "preview-provider", name: "OpenAI", baseURL: "http://127.0.0.1:9/v1",
                                          apiKey: "preview-only", models: [AIModelEntry(name: "gpt-4.1")])]
+        settings.secretStoreCache = ["preview-provider": "preview-only"]
         settings.activeProviderID = "preview-provider"
         settings.activeModel = "gpt-4.1"
         settings.typewriterSpeed = .off
@@ -43,6 +48,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         switch surface {
         case "result": showResult()
         case "result-stream": showResult(streaming: true)
+        case "result-long-10000", "result-long-40000", "result-long-100000":
+            showResult(characterCount: Int(surface.split(separator: "-").last ?? "10000"))
         case "quick": showQuickInput()
         case "history", "empty-history": showHistory()
         case "commands": showCommands()
@@ -65,7 +72,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         if arguments.contains("--compact"), let window = NSApp.keyWindow {
             let size: NSSize
             switch surface {
-            case "result": size = NSSize(width: 480, height: 480)
+            case "result", "result-stream", "result-long-10000", "result-long-40000", "result-long-100000":
+                size = NSSize(width: 480, height: 480)
             case "quick": size = NSSize(width: 480, height: 300)
             case "commands": size = NSSize(width: 520, height: 360)
             case "history", "empty-history": size = NSSize(width: 800, height: 540)
@@ -78,6 +86,7 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         UserDefaults.standard.removePersistentDomain(forName: defaultsSuite)
+        try? FileManager.default.removeItem(at: previewDirectory)
     }
 
     private func installPreviewMenu() {
@@ -100,7 +109,8 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = menu
     }
 
-    private func showResult(streaming: Bool = false) {
+    private func showResult(streaming: Bool = false, characterCount: Int? = nil) {
+        let document = characterCount.map(Self.longOutput) ?? Self.output
         let vm = ResultViewModel(settings: settings)
         vm.action = settings.enabledActions.first { $0.name == AIAction.summarizeName } ?? AIAction()
         vm.sourceText = Self.source
@@ -108,34 +118,87 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         vm.activeModelName = "gpt-4.1"
         result = FloatingPanelController(vm: vm, onOpenAISettings: { [weak self] in self?.windows?.openSettings() })
         result?.show()
+        logPreviewEvent("window-presented", characters: document.count)
         if streaming {
             startStreamingDemo(vm)
         } else {
-            _ = vm.streamingCoordinator.appendContentToken(Self.output, extractsThinkTags: false)
-            vm.output = Self.output
-            vm.completionCoordinator.state.replace(with: ResultCompletionMetrics(elapsed: 1.84, characterCount: Self.output.count))
+            _ = vm.streamingCoordinator.appendContentToken(document, extractsThinkTags: false)
+            vm.output = document
+            vm.conversationSession = ConversationSession(action: vm.action, sourceText: Self.source,
+                messages: [ConversationMessage(ChatMessage(role: .user, content: Self.source)),
+                           ConversationMessage(ChatMessage(role: .assistant, content: document),
+                                               providerName: vm.activeProviderName, modelName: vm.activeModelName)])
+            vm.completionCoordinator.state.replace(with: ResultCompletionMetrics(elapsed: 0, characterCount: document.count))
+            logPreviewEvent("fixture-published", characters: document.count)
         }
     }
 
     /// 流式采样面(`--preview result-stream`):按 token 分片把示例文档推进结果窗口,
-    /// 覆盖约 16 秒,供脚本在流式期间采样 footprint(见 docs/RUNTIME_MEMORY_BASELINE.md)。
-    /// 走的是真实 ResultViewModel 输出路径:isStreaming 置位、output 增长、每片触发 Markdown 重渲染。
+    /// 供脚本在流式期间采样 footprint(见 docs/RUNTIME_MEMORY_BASELINE.md)。
+    /// 直接向结果状态追加演示文本:流式期间显示纯文本,完成后才后台构建 Markdown。
+    /// 此入口不经过 provider 网络请求或打字机调度,用于 UI 布局与内存采样。
     private func startStreamingDemo(_ vm: ResultViewModel) {
         let document = String(repeating: Self.output + "\n\n", count: 16)
-        vm.isStreaming = true
+        vm.setPreviewStreaming(true)
+        logPreviewEvent("demo-stream-start", characters: document.count)
         Task { @MainActor in
             var index = document.startIndex
-            while index < document.endIndex {
+            while index < document.endIndex && vm.isGenerating && !Task.isCancelled {
                 let end = document.index(index, offsetBy: 60, limitedBy: document.endIndex) ?? document.endIndex
                 let chunk = String(document[index..<end])
                 _ = vm.streamingCoordinator.appendContentToken(chunk, extractsThinkTags: false)
                 vm.output += chunk
+                if index == document.startIndex { logPreviewEvent("demo-first-chunk", characters: chunk.count) }
                 index = end
                 try? await Task.sleep(nanoseconds: 250_000_000)
             }
+            guard index == document.endIndex else {
+                logPreviewEvent("demo-stream-cancelled", characters: vm.output.count)
+                return
+            }
             _ = vm.streamingCoordinator.finish()
-            vm.isStreaming = false
+            vm.setPreviewStreaming(false)
+            logPreviewEvent("demo-stream-finish", characters: document.count)
         }
+    }
+
+    private func logPreviewEvent(_ event: String, characters: Int) {
+        let elapsed = ProcessInfo.processInfo.systemUptime - previewStartedAt
+        let build = Bundle.main.object(forInfoDictionaryKey: "SnapAIBuildConfiguration") as? String ?? "preview"
+        fputs("SnapAI Preview: event=\(event), elapsed=\(String(format: "%.3f", elapsed))s, characters=\(characters), build=\(build), source=fixture, network=no\n", stderr)
+    }
+
+    static func longOutput(characterCount: Int) -> String {
+        let code = (0..<24).map { index in
+            "let sample\(index) = [\"request_id\": \"fixture-\(index)\", \"status\": \"ready\", \"description\": \"" +
+            String(repeating: "long_code_line_", count: 12) + "\"]"
+        }.joined(separator: "\n")
+        let block = """
+        ## 固定阅读任务 · Markdown 混合内容
+
+        这是一份固定文本 fixture，用于检查长文阅读、表格、代码滚动和最终布局。It does not send a model request or measure network latency.
+
+        | 检查项 | 输入规模 | 预期行为 |
+        | :--- | ---: | :--- |
+        | 中文与 English | 10k / 40k / 100k 字符 | 格式与信息完整 |
+        | 表格 | 三列 | 对齐可读 |
+        | 长代码 | 24 行 | 横向滚动，不撑宽窗口 |
+
+        - **阅读位置**：滚动到中段后保持当前段落。
+        - **布局完成**：检查正文、表格和代码之间的间距。
+        - [ ] 记录内存与主线程采样，不将一次采样解释为稳定帧率。
+
+        > 所有文字来自本地 fixture，没有真实模型输出、token 用量或费用。
+
+        ```swift
+        \(code)
+        ```
+
+        """ + "\n\n"
+        let target = max(0, characterCount)
+        let copies = target / block.count
+        let body = String(repeating: block, count: copies)
+        return body + String(repeating: "文", count: target - body.count)
     }
 
     private func showHistory() {
@@ -146,6 +209,12 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
     private func showQuickInput() {
         let model = QuickInputModel(settings: settings)
         model.actionID = settings.enabledActions.first?.id ?? ""
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--image-fixture"), arguments.indices.contains(index + 1),
+           let image = NSImage(contentsOfFile: arguments[index + 1]),
+           let payload = image.snapAIOptimizedData() {
+            model.attachImage(payload)
+        }
         model.onSubmit = { [weak self] _, _, _, _ in
             guard let self else { return false }
             self.quickInput?.hide()

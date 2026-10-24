@@ -25,30 +25,91 @@ extension AppDelegate {
           reason: writeBackTargetUnavailableReason())
         return
       }
-      panelController.hide()
-      TextEditTransaction(
+      performReplacement(
+        original: original,
+        replacement: replacement,
         targetApp: writeBackTarget,
-        selectionSnapshot: previousSelectionSnapshot,
-        assumeSelectionIsPreserved: previousCaptureMethod == .clipboard
-          || previousCaptureMethod == .service
-      )
-      .replace(original: original, with: replacement) { [weak self] in
-        self?.recordWriteBack(
-          targetApp: writeBackTarget,
-          original: original,
-          replacement: replacement)
-      } failure: { [weak self] snapshot in
-        self?.handleUnsafePasteboardWriteBack(
-          operation: .replace,
-          originalCharacterCount: original.count,
-          payloadCharacterCount: replacement.count,
-          snapshot: snapshot)
-      }
+        selectionSnapshot: previousSelectionSnapshot)
     case .copy:
       NSPasteboard.general.clearContents()
       NSPasteboard.general.setString(replacement, forType: .string)
     case .cancel:
       break
+    }
+  }
+
+  private func performReplacement(
+    original: String,
+    replacement: String,
+    targetApp: NSRunningApplication,
+    selectionSnapshot: TextSelectionSnapshot?,
+    allowsUnverifiedReplacement: Bool = false,
+    confirmedTargetSnapshot: TextWriteBackTargetSnapshot? = nil
+  ) {
+    panelController.hide()
+    TextEditTransaction(
+      targetApp: targetApp,
+      selectionSnapshot: selectionSnapshot,
+      allowsUnverifiedReplacement: allowsUnverifiedReplacement,
+      confirmedTargetSnapshot: confirmedTargetSnapshot
+    )
+    .replace(original: original, with: replacement) { [weak self] in
+      self?.recordWriteBack(
+        targetApp: targetApp,
+        original: original,
+        replacement: replacement,
+        selectionSnapshot: selectionSnapshot?.snapshotAfterReplacement(
+          replacement, targetPID: targetApp.processIdentifier),
+        sourceWasVerified: !allowsUnverifiedReplacement)
+    } failure: { [weak self] snapshot in
+      self?.handleUnsafePasteboardWriteBack(
+        operation: .replace,
+        originalCharacterCount: original.count,
+        payloadCharacterCount: replacement.count,
+        snapshot: snapshot)
+    } validationFailure: { [weak self] reason in
+      guard let self else { return }
+      if reason == .unavailable, !allowsUnverifiedReplacement {
+        let confirmationTarget = TextCapture.writeBackTargetSnapshot(targetPID: targetApp.processIdentifier)
+        let alert = NSAlert()
+        alert.messageText = "无法核验原文，请重新选取并确认"
+        let targetName = targetApp.localizedName ?? "原应用"
+        alert.informativeText = "当前控件未提供足够的选区信息。请切回「\(targetName)」核对最新原文并重新选中要替换的内容，再回到此提示确认。\n\n继续后将向该应用当前选区粘贴；SnapAI 无法保证它仍是首次取词的位置，也无法核验原文是否已变化。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "复制结果")
+        alert.addButton(withTitle: "已重新选取，继续替换")
+        alert.addButton(withTitle: "取消")
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertSecondButtonReturn:
+          self.performReplacement(original: original,
+                                  replacement: replacement,
+                                  targetApp: targetApp,
+                                  selectionSnapshot: selectionSnapshot,
+                                  allowsUnverifiedReplacement: true,
+                                  confirmedTargetSnapshot: confirmationTarget)
+        case .alertFirstButtonReturn:
+          self.copyWriteBackFallback(text: replacement,
+                                     operation: .replace,
+                                     originalCharacterCount: original.count,
+                                     title: "结果已复制",
+                                     reason: reason.recoveryMessage)
+        default:
+          self.lastWriteBackStatusSummary = "state=cancelled, sourceValidation=unavailable"
+        }
+        return
+      }
+      if reason == .pasteboardChanged {
+        self.lastWriteBackStatusSummary = "state=blocked, reason=\(reason.rawValue), copiedToPasteboard=no"
+        self.presentWriteBackNotice(title: "已取消自动写回", message: reason.recoveryMessage)
+        return
+      }
+      self.copyWriteBackFallback(
+        text: replacement,
+        operation: .replace,
+        originalCharacterCount: original.count,
+        title: "已取消自动替换",
+        reason: reason.recoveryMessage)
     }
   }
 
@@ -76,6 +137,18 @@ extension AppDelegate {
         originalCharacterCount: 0,
         payloadCharacterCount: insertedText.count,
         snapshot: snapshot)
+    } validationFailure: { [weak self] reason in
+      if reason == .pasteboardChanged {
+        self?.lastWriteBackStatusSummary = "state=blocked, reason=\(reason.rawValue), copiedToPasteboard=no"
+        self?.presentWriteBackNotice(title: "已取消自动写回", message: reason.recoveryMessage)
+        return
+      }
+      self?.copyWriteBackFallback(
+        text: text,
+        operation: .append,
+        originalCharacterCount: 0,
+        title: "已取消自动追加",
+        reason: "写入前未能保持原应用的焦点。请回到目标编辑区后手动粘贴。 reason=\(reason.rawValue)")
     }
   }
 
@@ -184,13 +257,17 @@ extension AppDelegate {
     targetApp: NSRunningApplication?,
     operation: TextWriteBackOperation = .replace,
     original: String,
-    replacement: String
+    replacement: String,
+    selectionSnapshot: TextSelectionSnapshot? = nil,
+    sourceWasVerified: Bool = true
   ) {
     lastWriteBackRecord = TextWriteBackRecord(
       targetApp: targetApp,
       operation: operation,
       originalText: original,
-      replacementText: replacement)
+      replacementText: replacement,
+      selectionSnapshot: selectionSnapshot,
+      sourceWasVerified: sourceWasVerified)
     lastWriteBackStatusSummary = lastWriteBackRecord?.diagnosticSummary
     buildMenu()
     installMainMenu()
@@ -269,7 +346,7 @@ extension AppDelegate {
         message: diagnostic.noticeMessage)
       return
     }
-    TextEditTransaction(targetApp: target)
+    TextEditTransaction(targetApp: target, selectionSnapshot: record.selectionSnapshot)
       .replace(original: record.replacementText, with: record.originalText) { [weak self] in
         self?.lastWriteBackStatusSummary =
           "state=undo-completed, operation=\(record.operation.diagnosticName)"
@@ -277,6 +354,11 @@ extension AppDelegate {
         self?.handleUnsafePasteboardUndo(
           record: record,
           snapshot: snapshot)
+      } validationFailure: { [weak self] reason in
+        self?.lastWriteBackStatusSummary = "state=undo-blocked, reason=\(reason.rawValue)"
+        self?.presentWriteBackNotice(
+          title: "已取消自动撤销写回",
+          message: "\(reason.recoveryMessage)\n\n请在原应用使用系统撤销，或从历史记录中找回替换前内容。")
       }
   }
 

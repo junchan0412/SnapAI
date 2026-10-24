@@ -1,6 +1,7 @@
 AIClient.swift
 AIRequestRouter.swift
 AIStreamDecoder.swift
+AIUsage.swift
 Action.swift
 ActionCommand.swift
 ActionPipeline.swift
@@ -17,6 +18,8 @@ CommandIdentifier.swift
 CommandPaletteMatcher.swift
 ContextProfile.swift
 ConversationExport.swift
+ConversationSession.swift
+ConversationStore.swift
 Diagnostics.swift
 DisplayBehaviorCommand.swift
 FallbackRunner.swift
@@ -31,11 +34,13 @@ HistoryWindowRefreshPolicy.swift
 HotKeyCoordinator.swift
 HotKeyManager.swift
 HotKeyUtilities.swift
+ImageCrop.swift
 ImageTextRecognition.swift
 InstallLogCommand.swift
 LocalModelHealth.swift
 LocalSecretStore.swift
 LoginItem.swift
+MarkdownCodeHighlighter.swift
 MarkdownExportSafety.swift
 MarkdownPresentation.swift
 ModelCapability.swift
@@ -45,7 +50,9 @@ PrivacyFilter.swift
 PrivacyHistoryTag.swift
 PrivacySubmissionPreview.swift
 Provider.swift
+QuickInputImageSubmission.swift
 RequestSession.swift
+RequestUsage.swift
 ResultCommand.swift
 ResultCompletionLifecycle.swift
 ResultContentPresentation.swift

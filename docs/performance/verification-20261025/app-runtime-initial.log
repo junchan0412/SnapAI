@@ -1,0 +1,36 @@
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+Tests/Runtime/QuickInputOCRRuntimeTests.swift:50:18: warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 48 |             return .recognized(.init(text: "Previous image recognized text", confidence: 1))
+ 49 |         })
+ 50 |         weak var weakModel = model
+    |                  `- warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 51 |         var publishedText: [String] = []
+ 52 |         let observation = model!.$imageInput.sink { input in
+
+[#VariableNeverMutated]: <https://docs.swift.org/compiler/documentation/diagnostics/variable-never-mutated>
+[#WeakMutability]: <https://docs.swift.org/compiler/documentation/diagnostics/weak-mutability>
+FAIL App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, 30 settings lifecycle cycles, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape
+FAIL: Submission privacy: follow-up previews and redacts historical assistant, original user, system and new user content
+FAIL: Submission privacy: cancelled follow-up previews all previous turns and the pending assistant response
+FAIL: Submission privacy: retry reapplies current redaction and system settings to history without adding the replaced answer
+FAIL: Submission privacy: regenerate reapplies current redaction and system settings to history without adding the replaced answer
+FAIL: Markdown reading (10000 characters): initial presentation and its bottom anchor reach the viewport
+FAIL: Markdown reading (10000 characters): presentation and first bottom appearance notify exactly once each (got 1)
+FAIL: Markdown reading (10000 characters): the final Markdown block stays reachable after initial layout
+FAIL: Markdown reading (10000 characters): wide code and the ten-column table expose their own visible horizontal scroll views
+FAIL: Markdown reading (10000 characters): bottom reappearance must not notify ready or request another final scroll (got 2)
+FAIL: Markdown reading (10000 characters): the reader can stop in the middle after revisiting the bottom
+FAIL: Markdown reading (10000 characters): idle presentation does not steal the settled reading position
+FAIL: Markdown reading (10000 characters): ready count stays unchanged while reading
+FAIL: Markdown reading (10000 characters): scrolling up does not publish ready again
+FAIL: Markdown reading (10000 characters): bottom reappearance must not notify ready or request another final scroll (got 2)
+FAIL: Markdown reading (10000 characters): ready count stays unchanged while reading
+2026-10-25 01:04:13.827 SnapAIRuntimeSmoke[65741:1102300] SnapAI: history store failure: The file “history-failure-blocker” couldn’t be saved in the folder “fixtures” because a file with the same name already exists.

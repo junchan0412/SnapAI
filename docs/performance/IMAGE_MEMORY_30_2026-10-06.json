@@ -1,0 +1,1536 @@
+{
+  "metadata": {
+    "started_at_utc": "2026-10-06T04:56:16.362312+00:00",
+    "commit": "89ea7d7c0f3a48830293c59b201c8f89ada486f5",
+    "working_tree_dirty": true,
+    "source_sha256": {
+      "Sources/SnapAILogic/ImageTextRecognition.swift": "34a01602899253ce06dbae37d4830fd25f369a6a636d55897baf5ca3bcad6d72",
+      "Tests/Performance/ImageMemoryBenchmarks.swift": "3ec25b34aefe1f1107b15afc3f74adf553147d209f6022c014818ae620ef5d3c"
+    },
+    "binary_sha256": "ff7bba88025a19115fa0d93502b6ead3ea527faa1962ad04547f2206bd7359c7",
+    "fixture_sha256": "b2dc0edb6989e8a90e12dcef25c57716a489213c206d177296923334cddba7a9",
+    "fixture_path": "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125614/large-image.png",
+    "build_configuration": "standalone release-optimized swiftc -O; not App bundle",
+    "build_command": [
+      "swiftc",
+      "-O",
+      "-parse-as-library",
+      "-package-name",
+      "SnapAI",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125614/ImageTextRecognition.swift",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125614/ImageMemoryBenchmarks.swift",
+      "-o",
+      "/Users/qidewei/Documents/SnapAI/.build/image-memory-20261006-125614/image-memory-benchmark",
+      "-framework",
+      "Vision",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "CoreText",
+      "-framework",
+      "ImageIO"
+    ],
+    "swift_version": "Apple Swift version 6.4 (swiftlang-6.4.0.34.1 clang-2100.3.34.1)\nTarget: arm64-apple-macosx27.2.0",
+    "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.2\nBuildVersion:\t\t26B5101f",
+    "hardware_model": "Mac16,10",
+    "cpu": "Apple M4",
+    "memory_bytes": 17179869184,
+    "architecture": "arm64",
+    "fixture_generation": "separate process; 6000x4000 white PNG with twelve Helvetica English text rows; no user files",
+    "finished_at_utc": "2026-10-06T04:56:58.784269+00:00"
+  },
+  "dimensions": [
+    6000,
+    4000
+  ],
+  "iterations": 30,
+  "peak_definition": "Mach task_vm_info ledger_phys_footprint_peak is process lifetime high-water mark, not stage-specific peak",
+  "release_definition": "local Data/CGImage/OCR result references and autorelease pool released; system framework caches remain possible; no forced allocator purge",
+  "samples": [
+    {
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 1786312,
+        "physical_footprint_bytes": 1753544
+      },
+      "stage": "baseline"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 2589128,
+        "physical_footprint_bytes": 2589128
+      },
+      "milliseconds": 0.10099999963131268,
+      "stage": "read"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 99746416,
+        "physical_footprint_bytes": 3736176
+      },
+      "milliseconds": 34.275500000148895,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 323372064,
+        "physical_footprint_bytes": 104989584
+      },
+      "milliseconds": 295.4346250007802,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 323372064,
+        "physical_footprint_bytes": 104989584
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 1,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 323372064,
+        "physical_footprint_bytes": 104530832
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 323372064,
+        "physical_footprint_bytes": 105202576
+      },
+      "milliseconds": 0.6859999994048849,
+      "stage": "read"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 323372064,
+        "physical_footprint_bytes": 63079384
+      },
+      "milliseconds": 64.52291666573728,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 333448272,
+        "physical_footprint_bytes": 113968064
+      },
+      "milliseconds": 167.24133333264035,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 333448272,
+        "physical_footprint_bytes": 113968064
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 2,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 333448272,
+        "physical_footprint_bytes": 113509312
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 333448272,
+        "physical_footprint_bytes": 113509312
+      },
+      "milliseconds": 0.5942083334957715,
+      "stage": "read"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 333448272,
+        "physical_footprint_bytes": 71369736
+      },
+      "milliseconds": 64.58220833337691,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334087248,
+        "physical_footprint_bytes": 114410432
+      },
+      "milliseconds": 169.13658333396597,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334087248,
+        "physical_footprint_bytes": 114410432
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 3,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334087248,
+        "physical_footprint_bytes": 113951680
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334087248,
+        "physical_footprint_bytes": 113951680
+      },
+      "milliseconds": 0.7609583335579373,
+      "stage": "read"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334087248,
+        "physical_footprint_bytes": 71812104
+      },
+      "milliseconds": 69.40241666598013,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334431312,
+        "physical_footprint_bytes": 114738112
+      },
+      "milliseconds": 166.32720833331405,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334431312,
+        "physical_footprint_bytes": 114738112
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 4,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334431312,
+        "physical_footprint_bytes": 114279360
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334431312,
+        "physical_footprint_bytes": 114279360
+      },
+      "milliseconds": 0.56662500173843,
+      "stage": "read"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334431312,
+        "physical_footprint_bytes": 114328584
+      },
+      "milliseconds": 59.826249998877756,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334496848,
+        "physical_footprint_bytes": 114754496
+      },
+      "milliseconds": 163.65820833379985,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334496848,
+        "physical_footprint_bytes": 114754496
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 5,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334496848,
+        "physical_footprint_bytes": 114295744
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334496848,
+        "physical_footprint_bytes": 114295744
+      },
+      "milliseconds": 0.6133333336038049,
+      "stage": "read"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334496848,
+        "physical_footprint_bytes": 114344968
+      },
+      "milliseconds": 55.7292083340144,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334546000,
+        "physical_footprint_bytes": 114852800
+      },
+      "milliseconds": 167.5156250003056,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334546000,
+        "physical_footprint_bytes": 114852800
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 6,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334546000,
+        "physical_footprint_bytes": 114394048
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 7,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334546000,
+        "physical_footprint_bytes": 114394048
+      },
+      "milliseconds": 0.7112500006769551,
+      "stage": "read"
+    },
+    {
+      "iteration": 7,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334546000,
+        "physical_footprint_bytes": 114443272
+      },
+      "milliseconds": 66.94795833391254,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 7,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114852800
+      },
+      "milliseconds": 168.76875000161817,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 7,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114852800
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 7,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114394048
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 8,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114394048
+      },
+      "milliseconds": 0.7718749984633178,
+      "stage": "read"
+    },
+    {
+      "iteration": 8,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114443272
+      },
+      "milliseconds": 63.83704166546522,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 8,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114885568
+      },
+      "milliseconds": 165.78820833274222,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 8,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114885568
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 8,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114426816
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 9,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114426816
+      },
+      "milliseconds": 0.7357499998761341,
+      "stage": "read"
+    },
+    {
+      "iteration": 9,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 334611536,
+        "physical_footprint_bytes": 114476040
+      },
+      "milliseconds": 51.714249999349704,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 9,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335021136,
+        "physical_footprint_bytes": 115327936
+      },
+      "milliseconds": 166.83349999948405,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 9,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335021136,
+        "physical_footprint_bytes": 115327936
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 9,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335021136,
+        "physical_footprint_bytes": 91800512
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 10,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335021136,
+        "physical_footprint_bytes": 91800512
+      },
+      "milliseconds": 0.6960833325138083,
+      "stage": "read"
+    },
+    {
+      "iteration": 10,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335021136,
+        "physical_footprint_bytes": 91849736
+      },
+      "milliseconds": 59.104333333380055,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 10,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335119440,
+        "physical_footprint_bytes": 115409856
+      },
+      "milliseconds": 166.95637499833538,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 10,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335119440,
+        "physical_footprint_bytes": 115409856
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 10,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335119440,
+        "physical_footprint_bytes": 114951104
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 11,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335119440,
+        "physical_footprint_bytes": 114951104
+      },
+      "milliseconds": 0.6610833333979826,
+      "stage": "read"
+    },
+    {
+      "iteration": 11,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335119440,
+        "physical_footprint_bytes": 115000328
+      },
+      "milliseconds": 62.78833333271905,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 11,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115622848
+      },
+      "milliseconds": 166.99250000056054,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 11,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115622848
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 11,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115164096
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 12,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115164096
+      },
+      "milliseconds": 0.6449583343055565,
+      "stage": "read"
+    },
+    {
+      "iteration": 12,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115213320
+      },
+      "milliseconds": 68.03545833281532,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 12,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115622848
+      },
+      "milliseconds": 172.54729166779725,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 12,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115622848
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 12,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115164096
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 13,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115164096
+      },
+      "milliseconds": 0.6237916677491739,
+      "stage": "read"
+    },
+    {
+      "iteration": 13,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335381584,
+        "physical_footprint_bytes": 115213320
+      },
+      "milliseconds": 63.10137500076962,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 13,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335545424,
+        "physical_footprint_bytes": 115803072
+      },
+      "milliseconds": 166.2691250003263,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 13,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335545424,
+        "physical_footprint_bytes": 115803072
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 13,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335545424,
+        "physical_footprint_bytes": 115344320
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 14,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335545424,
+        "physical_footprint_bytes": 115344320
+      },
+      "milliseconds": 0.6876666666357778,
+      "stage": "read"
+    },
+    {
+      "iteration": 14,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335545424,
+        "physical_footprint_bytes": 115393544
+      },
+      "milliseconds": 65.94162500005041,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 14,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335594576,
+        "physical_footprint_bytes": 115835840
+      },
+      "milliseconds": 163.58254166698316,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 14,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335594576,
+        "physical_footprint_bytes": 115835840
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 14,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335594576,
+        "physical_footprint_bytes": 115377088
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 15,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335594576,
+        "physical_footprint_bytes": 115377088
+      },
+      "milliseconds": 0.777666666181176,
+      "stage": "read"
+    },
+    {
+      "iteration": 15,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335594576,
+        "physical_footprint_bytes": 115442696
+      },
+      "milliseconds": 55.219124998984626,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 15,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335610960,
+        "physical_footprint_bytes": 115884992
+      },
+      "milliseconds": 162.08662499957427,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 15,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335610960,
+        "physical_footprint_bytes": 115884992
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 15,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335610960,
+        "physical_footprint_bytes": 73237440
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 16,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335610960,
+        "physical_footprint_bytes": 73237440
+      },
+      "milliseconds": 0.7338750001508743,
+      "stage": "read"
+    },
+    {
+      "iteration": 16,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335610960,
+        "physical_footprint_bytes": 73286664
+      },
+      "milliseconds": 67.44654166686814,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 16,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335660112,
+        "physical_footprint_bytes": 115934144
+      },
+      "milliseconds": 163.45433333299297,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 16,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335660112,
+        "physical_footprint_bytes": 115934144
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 16,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335660112,
+        "physical_footprint_bytes": 73286592
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 17,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335660112,
+        "physical_footprint_bytes": 73286592
+      },
+      "milliseconds": 0.7234166660055052,
+      "stage": "read"
+    },
+    {
+      "iteration": 17,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335660112,
+        "physical_footprint_bytes": 73335816
+      },
+      "milliseconds": 66.66012499954377,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 17,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335692880,
+        "physical_footprint_bytes": 115950528
+      },
+      "milliseconds": 167.98266666773998,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 17,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335692880,
+        "physical_footprint_bytes": 115950528
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 17,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335692880,
+        "physical_footprint_bytes": 115491776
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 18,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335692880,
+        "physical_footprint_bytes": 110216128
+      },
+      "milliseconds": 0.5863749993295642,
+      "stage": "read"
+    },
+    {
+      "iteration": 18,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335692880,
+        "physical_footprint_bytes": 73597960
+      },
+      "milliseconds": 54.035333334468305,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 18,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335709264,
+        "physical_footprint_bytes": 115966912
+      },
+      "milliseconds": 164.5154999987426,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 18,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335709264,
+        "physical_footprint_bytes": 115966912
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 18,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335709264,
+        "physical_footprint_bytes": 115508160
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 19,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335709264,
+        "physical_footprint_bytes": 115508160
+      },
+      "milliseconds": 0.7697500004724134,
+      "stage": "read"
+    },
+    {
+      "iteration": 19,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335709264,
+        "physical_footprint_bytes": 73614344
+      },
+      "milliseconds": 59.03358333307551,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 19,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335725648,
+        "physical_footprint_bytes": 115966912
+      },
+      "milliseconds": 161.0312499997235,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 19,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335725648,
+        "physical_footprint_bytes": 115966912
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 19,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335725648,
+        "physical_footprint_bytes": 115508160
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 20,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335725648,
+        "physical_footprint_bytes": 115508160
+      },
+      "milliseconds": 0.6820416656410089,
+      "stage": "read"
+    },
+    {
+      "iteration": 20,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335725648,
+        "physical_footprint_bytes": 73614344
+      },
+      "milliseconds": 58.44029166655673,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 20,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335742032,
+        "physical_footprint_bytes": 115999680
+      },
+      "milliseconds": 166.6357499998412,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 20,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335742032,
+        "physical_footprint_bytes": 115999680
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 20,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335742032,
+        "physical_footprint_bytes": 115540928
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 21,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335742032,
+        "physical_footprint_bytes": 115540928
+      },
+      "milliseconds": 0.7436666655848967,
+      "stage": "read"
+    },
+    {
+      "iteration": 21,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 335742032,
+        "physical_footprint_bytes": 115590152
+      },
+      "milliseconds": 60.41712499973073,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 21,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 116278208
+      },
+      "milliseconds": 170.42187500010186,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 21,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 116278208
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 21,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115819456
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 22,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115819456
+      },
+      "milliseconds": 0.5899583320569945,
+      "stage": "read"
+    },
+    {
+      "iteration": 22,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115868680
+      },
+      "milliseconds": 50.145458333645365,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 22,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 116294592
+      },
+      "milliseconds": 164.47362500002782,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 22,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 116294592
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 22,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115835840
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 23,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115835840
+      },
+      "milliseconds": 0.703833333318471,
+      "stage": "read"
+    },
+    {
+      "iteration": 23,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336036944,
+        "physical_footprint_bytes": 115885064
+      },
+      "milliseconds": 64.00125000072876,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 23,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 116278208
+      },
+      "milliseconds": 164.5215000007738,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 23,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 116278208
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 23,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115819456
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 24,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115819456
+      },
+      "milliseconds": 0.6620000003749738,
+      "stage": "read"
+    },
+    {
+      "iteration": 24,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115868680
+      },
+      "milliseconds": 72.04470833312371,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 24,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 116278208
+      },
+      "milliseconds": 166.22450000068056,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 24,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 116278208
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 24,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115819456
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 25,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115819456
+      },
+      "milliseconds": 0.6977916673349682,
+      "stage": "read"
+    },
+    {
+      "iteration": 25,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336053328,
+        "physical_footprint_bytes": 115868680
+      },
+      "milliseconds": 57.7764166664565,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 25,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "milliseconds": 165.3952083324839,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 25,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 25,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116212672
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 26,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116212672
+      },
+      "milliseconds": 0.6775833335268544,
+      "stage": "read"
+    },
+    {
+      "iteration": 26,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116261896
+      },
+      "milliseconds": 64.57299999965471,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 26,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "milliseconds": 164.01624999889464,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 26,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 26,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74023872
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 27,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74023872
+      },
+      "milliseconds": 0.5398333323682891,
+      "stage": "read"
+    },
+    {
+      "iteration": 27,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74073096
+      },
+      "milliseconds": 59.09437499940395,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 27,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "milliseconds": 165.44633333251113,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 27,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 116671424
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 27,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74023872
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 28,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74023872
+      },
+      "milliseconds": 0.6743333342456026,
+      "stage": "read"
+    },
+    {
+      "iteration": 28,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336430160,
+        "physical_footprint_bytes": 74089480
+      },
+      "milliseconds": 61.555624999527936,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 28,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "milliseconds": 165.31745833344758,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 28,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 28,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116540352
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 29,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116540352
+      },
+      "milliseconds": 0.7685416658205213,
+      "stage": "read"
+    },
+    {
+      "iteration": 29,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 74400776
+      },
+      "milliseconds": 64.3894166660175,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 29,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "milliseconds": 166.04770833328075,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 29,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 29,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116540352
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "compressed_bytes": 781052,
+      "iteration": 30,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116540352
+      },
+      "milliseconds": 0.6393750009010546,
+      "stage": "read"
+    },
+    {
+      "iteration": 30,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 74400776
+      },
+      "milliseconds": 65.86054166655231,
+      "stage": "forced_decode"
+    },
+    {
+      "characters": 494,
+      "confidence": 0.7083333333333334,
+      "contains_fixture_text": true,
+      "iteration": 30,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "milliseconds": 167.87887499958742,
+      "outcome": "recognized",
+      "recognized_fixture_text": "SnapAl large image memory fixture row 1.\nSnapAl large image memory fixture row 2.\nSnapAl large image memory fixture row 3.\nSnapAl large image memory fixture row 4.\nSnapAl large image memory fixture row 5.\nSnapAl large image memory fixture row 6.\nSnapAl large image memory fixture row 7.\nSnapAl large image memory fixture row 8.\nSnapAl large image memory fixture row 9.\nSnapAl large image memory fixture row 10.\nSnapAl large image memory fixture row 11.\nSnapAl large image memory fixture row 12.",
+      "stage": "production_data_ocr"
+    },
+    {
+      "iteration": 30,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116999104
+      },
+      "stage": "released"
+    },
+    {
+      "iteration": 30,
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 116540352
+      },
+      "stage": "released_after_1s"
+    },
+    {
+      "memory": {
+        "lifetime_peak_physical_footprint_bytes": 336757840,
+        "physical_footprint_bytes": 73925568
+      },
+      "stage": "final_released_after_5s"
+    }
+  ],
+  "scope": "isolated synchronous production Data-to-Vision OCR; separate forced ImageIO decode probe; no window, QuickInput model, attachment optimization, SwiftUI deletion, or cloud request"
+}

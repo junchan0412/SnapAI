@@ -1,0 +1,249 @@
+
+==> 检查源版本号
+
+==> 检查 diff 空白问题
+
+==> 检查开源许可证
+
+==> 运行审计修复状态检查
+SnapAILogic boundaries verified: 97 real sources, zero symlinks, zero duplicate app/core types.
+Audit remediation check: ok
+
+==> 检查逻辑测试 target 边界
+SnapAILogic boundaries verified: 97 real sources, zero symlinks, zero duplicate app/core types.
+
+==> 运行供应链扫描
+Starting filesystem walk for root: /
+Scanned /Users/qidewei/Documents/SnapAI/Package.resolved file and found 1 package
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 1.479166ms elapsed, 1.479ms wall time
+
+No issues found
+
+==> 运行逻辑测试
+Building for debugging...
+[1 / 1]
+Build complete! (0.46秒)
+Test Suite 'Selected tests' started at 2026-10-25 01:16:25.395.
+Test Suite 'SnapAILogicTests.xctest' started at 2026-10-25 01:16:25.395.
+Test Suite 'SnapAILogicTests' started at 2026-10-25 01:16:25.395.
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' started.
+2026-10-25 01:16:26.914 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-F21B94C0-89FD-49E1-84F8-BB97159CC4AC”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:16:26.915 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-F21B94C0-89FD-49E1-84F8-BB97159CC4AC”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:16:26.920 xctest[69422:1125799] SnapAI: history store failure: history write failed: fixture stop
+2026-10-25 01:16:26.925 xctest[69422:1125799] SnapAI: history store failure: history store requires a newer app version
+2026-10-25 01:16:26.931 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-D77EA526-E7BC-4111-867E-DAAEEF6D114C”中，因为已存在同名文件。
+2026-10-25 01:16:26.931 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-D77EA526-E7BC-4111-867E-DAAEEF6D114C”中，因为已存在同名文件。
+2026-10-25 01:16:26.933 xctest[69422:1125799] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-10-25 01:16:26.959 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-2DD1ACD9-CBCA-4A6E-956A-86F46FB9FE06”中，因为已存在同名文件。
+2026-10-25 01:16:26.960 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-2DD1ACD9-CBCA-4A6E-956A-86F46FB9FE06”中，因为已存在同名文件。
+2026-10-25 01:16:26.964 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-2DD1ACD9-CBCA-4A6E-956A-86F46FB9FE06”中，因为已存在同名文件。
+2026-10-25 01:16:28.553 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-6C8A64C5-F8FA-435C-A220-B8875EB22D9B”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:16:28.554 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-6C8A64C5-F8FA-435C-A220-B8875EB22D9B”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:16:28.554 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-6C8A64C5-F8FA-435C-A220-B8875EB22D9B”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:16:28.555 xctest[69422:1125799] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-6C8A64C5-F8FA-435C-A220-B8875EB22D9B”保存在文件夹“T”中，因为已存在同名文件。
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' passed (4.833 seconds).
+Test Suite 'SnapAILogicTests' passed at 2026-10-25 01:16:30.229.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.833 (4.833) seconds
+Test Suite 'SnapAILogicTests.xctest' passed at 2026-10-25 01:16:30.229.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.833 (4.834) seconds
+Test Suite 'Selected tests' passed at 2026-10-25 01:16:30.229.
+	 Executed 1 test, with 0 failures (0 unexpected) in 4.833 (4.834) seconds
+
+==> 运行离线流式与 App 生命周期回归
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+NOTE: idle gap beyond request timeout disconnects the stream (gap=head, error=The request timed out.); see timeout hint in provider settings
+Markdown coalescing: 502 refreshes, 2 builds, 1 publication; idle typewriter: 0 active timers
+Streaming runtime smoke passed: cancellation, restart, request snapshot, slow-gap timeout probe, partial failure, idle timers, Markdown coalescing
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+Tests/Runtime/QuickInputOCRRuntimeTests.swift:50:18: warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 48 |             return .recognized(.init(text: "Previous image recognized text", confidence: 1))
+ 49 |         })
+ 50 |         weak var weakModel = model
+    |                  `- warning: weak variable 'weakModel' was never mutated; consider changing to 'let' constant [#VariableNeverMutated::WeakMutability]
+ 51 |         var publishedText: [String] = []
+ 52 |         let observation = model!.$imageInput.sink { input in
+
+[#VariableNeverMutated]: <https://docs.swift.org/compiler/documentation/diagnostics/variable-never-mutated>
+[#WeakMutability]: <https://docs.swift.org/compiler/documentation/diagnostics/weak-mutability>
+PASS App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, 30 settings lifecycle cycles, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape
+
+==> 运行 macOS smoke 测试
+
+==> 检查逻辑 target 边界
+SnapAILogic boundaries verified: 97 real sources, zero symlinks, zero duplicate app/core types.
+
+==> 探测 macOS 剪贴板与隐私权限
+Pasteboard roundtrip: ok
+Pasteboard isolation: unique test pasteboard
+Accessibility trusted: yes
+Screen recording granted: yes
+Hotkey register probe: ok
+Hotkey handler install: ok
+Hotkey handler dispatch probe: ok
+Reusable window content release: ok
+
+macOS smoke checks completed.
+
+==> 运行 SwiftPM 构建
+Building for debugging...
+Build complete! (0.32秒)
+
+==> 构建 release app bundle
+==> SwiftPM release build (macOS 14+)
+Building for production...
+[Planning 1 / 154]
+[Planning deferred tasks]
+[9 / 21]
+[11 / 23] SnapAIUpdater-product
+[20 / 58]
+[23 / 58]
+[30 / 113]
+[35 / 113]
+[37 / 113]
+[44 / 113]
+[47 / 113]
+[55 / 113]
+[58 / 113]
+[60 / 113]
+[61 / 113]
+[76 / 113]
+[79 / 113]
+[81 / 113]
+[86 / 113]
+[95 / 113]
+[100 / 113]
+[100 / 113] SnapAIUpdater-product
+[100 / 113]
+[101 / 113]
+[102 / 113]
+[103 / 113]
+/Users/qidewei/Documents/SnapAI/Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+[104 / 113] SnapAILogic
+[110 / 115] SnapAI-product
+[123 / 129]
+[124 / 129]
+[125 / 129] SnapAI-product
+[127 / 129] SnapAI-product
+[128 / 129] SnapAI-product
+Build complete! (49.95秒)
+==> 嵌入 Sparkle.framework
+==> 提取 App Intents 元数据
+2026-10-25 01:20:00.640 appintentsmetadataprocessor[71152:1135387] Starting appintentsmetadataprocessor export
+2026-10-25 01:20:00.742 appintentsmetadataprocessor[71152:1135387] Writing Metadata.appintents
+2026-10-25 01:20:00.742 appintentsmetadataprocessor[71152:1135387] Metadata root: /var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.4Lroyx/SnapAI.app/Contents/Resources/Metadata.appintents
+==> 精简发行符号（dSYM 保留在 SwiftPM 构建目录）
+==> 签名 (SnapAI Local Signing)
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.4Lroyx/SnapAI.app/Contents/Frameworks/Sparkle.framework: replacing existing signature
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.4Lroyx/SnapAI.app/Contents/Helpers/SnapAIUpdater: replacing existing signature
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.4Lroyx/SnapAI.app: replacing existing signature
+
+构建完成: /Users/qidewei/Documents/SnapAI/SnapAI.app
+
+==> 验证 app 签名
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+SnapAI.app: valid on disk
+SnapAI.app: satisfies its Designated Requirement
+
+==> 检查 app bundle 版本号
+
+==> 运行 app bundle 启动 smoke
+App initialized: ok (isolated settings, history, secrets and metrics)
+Bundle id: com.snapai.app
+Launched pid: 71188
+App terminate: ok
+
+==> 打包 release 资产
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--prepared:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/Users/qidewei/Documents/SnapAI/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+SnapAI.app: valid on disk
+SnapAI.app: satisfies its Designated Requirement
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-package-check.q8INO5/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-package-check.q8INO5/SnapAI.app: valid on disk
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-package-check.q8INO5/SnapAI.app: satisfies its Designated Requirement
+dist/SnapAI-v2.1.0.zip
+dist/snapai-manifest-v2.1.0.json
+dist/snapai-manifest-v2.1.0.json.sig
+dist/snapai-sbom-v2.1.0.json
+dist/appcast.xml
+sha256=9d300e20532de48aa9db9a0d0873dc4e8c32a85b15f1101dd513a84ade795f1f
+
+==> 验证 release 资产
+
+==> 验证 Sparkle appcast
+
+==> 验证 SBOM 标识、引用与来源
+SBOM identifiers, references and source hashes: ok
+
+==> 验证 release zip 可安装性
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Helpers/SnapAIUpdater
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Autoupdate
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--prepared:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/Updater.app
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Downloader.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/XPCServices/Installer.xpc
+--validated:/private/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T/snapai-release-check.aenOkH/SnapAI.app/Contents/Frameworks/Sparkle.framework/Versions/Current/.
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-release-check.aenOkH/SnapAI.app: valid on disk
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-release-check.aenOkH/SnapAI.app: satisfies its Designated Requirement
+
+Preflight passed for v2.1.0

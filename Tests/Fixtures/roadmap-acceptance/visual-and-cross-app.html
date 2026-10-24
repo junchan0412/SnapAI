@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SnapAI 固定验收样本 v1</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 24px; background: #eee; color: #17202a; font: 18px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+  nav { margin-bottom: 24px; } nav a { margin-right: 24px; }
+  section { width: 960px; margin-bottom: 48px; padding: 36px; background: white; border: 2px solid #8895a2; }
+  h1 { font-size: 26px; margin: 0 0 12px; } h2 { font-size: 20px; }
+  .label { color: #526170; font-size: 16px; }
+  .legend { display: flex; gap: 28px; margin: 22px 0 28px 70px; }
+  .key::before { content: ""; display: inline-block; width: 18px; height: 18px; margin-right: 8px; vertical-align: middle; background: var(--color); }
+  .a { --color: #1664ae; } .b { --color: #b85813; }
+  .chart { position: relative; margin: 0 50px 48px 70px; height: 240px; border-left: 2px solid #243746; border-bottom: 2px solid #243746; }
+  .grid { position: absolute; left: 0; width: 100%; height: 1px; background: #c5cdd5; }
+  .grid span { position: absolute; right: calc(100% + 12px); top: -14px; }
+  .groups { position: absolute; inset: 0; display: flex; justify-content: space-around; align-items: flex-end; }
+  .group { width: 150px; height: 240px; display: flex; gap: 18px; justify-content: center; align-items: flex-end; position: relative; }
+  .bar { width: 48px; height: calc(var(--value) * 4px); background: var(--color); border: 1px solid #17202a; }
+  .month { position: absolute; top: 252px; left: 0; width: 100%; text-align: center; }
+  .field { display: grid; grid-template-columns: 150px 1fr; gap: 12px; margin: 18px 0; }
+  .value { border: 1px solid #b9c2cc; padding: 8px 12px; border-radius: 4px; }
+  .chosen { background: #e8f2fd; border-color: #1664ae; }
+  .options { display: flex; gap: 24px; }
+  input[type=checkbox] { width: 18px; height: 18px; }
+  button { padding: 10px 24px; font: inherit; }
+  button:disabled { color: #66717d; background: #e7eaee; border: 1px solid #b9c2cc; }
+  pre { white-space: pre-wrap; font: 20px/1.7 ui-monospace, Menlo, monospace; }
+  textarea { display: block; width: 100%; height: 230px; font: 18px/1.6 -apple-system, sans-serif; padding: 12px; }
+  .readonly { white-space: pre-line; padding: 12px; background: #f2f5f8; }
+</style>
+<nav><a href="#chart">Q5 图表</a><a href="#interface">Q6 界面</a><a href="#text">Q7 纯文字</a><a href="#cross-app">跨应用</a></nav>
+<section id="chart">
+  <h1>季度已完成工单</h1>
+  <div class="label">测试数据 · 2026年7—9月 · 单位：件</div>
+  <div class="legend"><span class="key a">甲组</span><span class="key b">乙组</span></div>
+  <div class="chart">
+    <div class="grid" style="bottom:0"><span>0</span></div>
+    <div class="grid" style="bottom:80px"><span>20</span></div>
+    <div class="grid" style="bottom:160px"><span>40</span></div>
+    <div class="grid" style="bottom:240px"><span>60</span></div>
+    <div class="groups">
+      <div class="group"><div class="bar a" style="--value:20"></div><div class="bar b" style="--value:30"></div><span class="month">7月</span></div>
+      <div class="group"><div class="bar a" style="--value:40"></div><div class="bar b" style="--value:20"></div><span class="month">8月</span></div>
+      <div class="group"><div class="bar a" style="--value:30"></div><div class="bar b" style="--value:50"></div><span class="month">9月</span></div>
+    </div>
+  </div>
+  <div class="label">说明：柱高表示完成件数；图中未提供原因、目标或人员数量。</div>
+</section>
+<section id="interface">
+  <h1>导出试点报告</h1>
+  <div class="label">北极星 · 2026-07-01 至 2026-09-30</div>
+  <div class="field"><span>文件格式</span><div class="options"><span class="value chosen">◉ Markdown</span><span class="value">○ PDF</span></div></div>
+  <div class="field"><span>目标文件夹</span><span class="value">请选择文件夹</span></div>
+  <div class="field"><span>附加内容</span><div class="options"><label><input type="checkbox" checked disabled>包含图表</label><label><input type="checkbox" disabled>包含原始附件</label></div></div>
+  <p>尚未选择目标文件夹，选择后才能导出。</p>
+  <button disabled>导出报告</button>
+  <p class="label">当前状态：未导出</p>
+</section>
+<section id="text">
+  <h1>校对清单 / Proofreading sheet</h1>
+  <pre>01 项目：北极星（测试样本）
+02 时间：2026-10-08 09:30 UTC+8
+03 应付：USD 1,248.50；未付款
+04 重量：2.5 kg，不是 25 kg
+05 编号：Q7-I1-0O
+06 文件：pilot_v2-final.csv
+07 字段：customer_id
+08 联系：analyst@example.invalid
+09 状态：只读；未经批准不得发布
+10 Note: preview ≠ publication.
+11 条件：错误率 &gt; 2% 时停止
+12 完成项：8/12（不是 12/12）</pre>
+</section>
+<section id="cross-app">
+  <h1>跨应用取词与写回</h1>
+  <p class="label">先选只读文本检查取词；写回只使用下方可编辑副本。</p>
+  <div class="readonly">SNAPAI-AX-FIXTURE-v1
+会议由2026年10月8日09:30改为10月10日09:30（UTC+8）。
+预算上限为12,500元，不含税；尚未批准支出。
+请保留 customer_id 和 pilot_v2-final.csv。
+END-OF-FIXTURE</div>
+  <h2>可编辑副本</h2>
+  <textarea spellcheck="false" aria-label="跨应用可编辑验收文本">SNAPAI-AX-FIXTURE-v1
+会议由2026年10月8日09:30改为10月10日09:30（UTC+8）。
+预算上限为12,500元，不含税；尚未批准支出。
+请保留 customer_id 和 pilot_v2-final.csv。
+END-OF-FIXTURE</textarea>
+  <h2>焦点切换对照框</h2>
+  <textarea spellcheck="false" aria-label="不得被自动写回的对照文本">CONTROL-FIELD — 保持这段文字不变。</textarea>
+</section>
+</html>

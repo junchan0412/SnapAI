@@ -93,6 +93,7 @@ final class PermissionHealthController: NSObject, NSWindowDelegate {
 }
 
 struct PermissionHealthView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: PermissionHealthModel
     private var snapshot: PermissionHealthSnapshot { model.snapshot }
     private let healthColumns = [
@@ -213,7 +214,7 @@ struct PermissionHealthView: View {
                     .accessibilityLabel(notice)
             }
         }
-        .animation(.easeInOut(duration: 0.18), value: copyNotice.value)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: copyNotice.value)
     }
 
     private func detailSection<Content: View>(_ title: String,

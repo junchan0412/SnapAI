@@ -7,6 +7,7 @@ struct ResultWorkspaceHeader: View {
     let modelName: String
     let providerName: String
     let isStreaming: Bool
+    var isPresenting = false
     let hasError: Bool
     let isTranslation: Bool
     let targetLanguage: TargetLanguage
@@ -36,6 +37,10 @@ struct ResultWorkspaceHeader: View {
                         if !modelSummary.isEmpty {
                             Text("·")
                         }
+                    } else if isPresenting {
+                        Text("已生成 · 正在显示")
+                            .foregroundStyle(.secondary)
+                        if !modelSummary.isEmpty { Text("·") }
                     } else if hasError {
                         Text("请求未完成")
                             .foregroundStyle(SnapAIUI.StatusColor.error)

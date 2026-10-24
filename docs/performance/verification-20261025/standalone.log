@@ -1,0 +1,38 @@
+==> Running standalone logic test runner
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 |
+Tests/SnapAILogicTests/ImageTextRecognitionTests.swift:76:14: warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 74 |     let task = Task.detached {
+ 75 |         ready.signal()
+ 76 |         gate.wait()
+    |              `- warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 77 |         result.withLock { $0 = SnapAIImageTextRecognition.recognizeText(in: Data()) }
+ 78 |         finished.signal()
+
+Dispatch.DispatchSemaphore.wait:2:13: note: 'wait()' declared here
+1 | class DispatchSemaphore {
+2 | public func wait()}
+  |             `- note: 'wait()' declared here
+3 |
+2026-10-25 01:21:29.834 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryStore-Blocked-370EB456-4480-4F09-B6EE-E47EDB5FFBC2” couldn’t be saved in the folder “T” because a file with the same name already exists.
+2026-10-25 01:21:29.835 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryStore-Blocked-370EB456-4480-4F09-B6EE-E47EDB5FFBC2” couldn’t be saved in the folder “T” because a file with the same name already exists.
+2026-10-25 01:21:29.841 SnapAILogicTests[71653:1138155] SnapAI: history store failure: history write failed: fixture stop
+2026-10-25 01:21:29.845 SnapAILogicTests[71653:1138155] SnapAI: history store failure: history store requires a newer app version
+2026-10-25 01:21:29.853 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “blocked” couldn’t be saved in the folder “SnapAI-StorageTests-7D8027F4-852C-461D-B076-321602662773” because a file with the same name already exists.
+2026-10-25 01:21:29.854 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “blocked” couldn’t be saved in the folder “SnapAI-StorageTests-7D8027F4-852C-461D-B076-321602662773” because a file with the same name already exists.
+2026-10-25 01:21:29.857 SnapAILogicTests[71653:1138155] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-10-25 01:21:29.884 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “migration” couldn’t be saved in the folder “SnapAI-StorageTests-C6E57B78-E6AA-48C2-A31B-71596A8E43F9” because a file with the same name already exists.
+2026-10-25 01:21:29.885 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “migration” couldn’t be saved in the folder “SnapAI-StorageTests-C6E57B78-E6AA-48C2-A31B-71596A8E43F9” because a file with the same name already exists.
+2026-10-25 01:21:29.890 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “migration” couldn’t be saved in the folder “SnapAI-StorageTests-C6E57B78-E6AA-48C2-A31B-71596A8E43F9” because a file with the same name already exists.
+2026-10-25 01:22:06.033 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryMutation-Blocked-D37A9182-5035-4509-B0D2-C0F9D9FF7966” couldn’t be saved in the folder “T” because a file with the same name already exists.
+2026-10-25 01:22:06.034 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryMutation-Blocked-D37A9182-5035-4509-B0D2-C0F9D9FF7966” couldn’t be saved in the folder “T” because a file with the same name already exists.
+2026-10-25 01:22:06.035 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryMutation-Blocked-D37A9182-5035-4509-B0D2-C0F9D9FF7966” couldn’t be saved in the folder “T” because a file with the same name already exists.
+2026-10-25 01:22:06.036 SnapAILogicTests[71653:1138155] SnapAI: history store failure: The file “SnapAI-HistoryMutation-Blocked-D37A9182-5035-4509-B0D2-C0F9D9FF7966” couldn’t be saved in the folder “T” because a file with the same name already exists.
+SnapAILogicTests passed

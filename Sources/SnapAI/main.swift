@@ -69,7 +69,7 @@ if let launchSmoke {
                     launchSmokeToken: launchSmoke.token)
     }
 } else {
-#if DEBUG
+#if DEBUG || SNAPAI_PREVIEW
     if arguments.contains("--preview") || Bundle.main.bundleIdentifier == "com.snapai.preview" {
         setenv("SNAPAI_LOGIC_TESTS", "1", 1)
         var previewDefaults = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)

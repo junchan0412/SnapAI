@@ -70,6 +70,8 @@ package struct AIRequestFallbackDecision: Equatable {
 
     package var reason: Reason
 
+    package init(reason: Reason) { self.reason = reason }
+
     package var shouldTryNext: Bool {
         reason == .willTryNext
     }
@@ -182,27 +184,31 @@ package struct AIRequestPayloadDiagnostic: Equatable {
     package func contextFitSummary(for route: AIRequestRoute) -> String {
         Self.contextFitSummary(estimatedTextTokens: estimatedTextTokens,
                                modelName: route.modelName,
-                               providerName: route.providerName)
+                               providerName: route.providerName,
+                               capability: route.capability)
     }
 
     package func imageFitSummary(for route: AIRequestRoute,
                          hasImage: Bool) -> String {
         Self.imageFitSummary(hasImage: hasImage,
                              modelName: route.modelName,
-                             providerName: route.providerName)
+                             providerName: route.providerName,
+                             capability: route.capability)
     }
 
     package func reasoningFitSummary(for route: AIRequestRoute,
                              requiresReasoning: Bool) -> String {
         Self.reasoningFitSummary(requiresReasoning: requiresReasoning,
                                  modelName: route.modelName,
-                                 providerName: route.providerName)
+                                 providerName: route.providerName,
+                                 capability: route.capability)
     }
 
     package static func contextFitSummary(estimatedTextTokens: Int,
                                   modelName: String,
-                                  providerName: String = "") -> String {
-        let capability = ModelCapabilityRegistry.capability(for: modelName,
+                                  providerName: String = "",
+                                  capability: ModelCapability? = nil) -> String {
+        let capability = capability ?? ModelCapabilityRegistry.capability(for: modelName,
                                                             providerName: providerName)
         let contextTokens = max(0, capability.contextTokens)
         guard contextTokens > 0 else { return "context unknown" }
@@ -222,19 +228,21 @@ package struct AIRequestPayloadDiagnostic: Equatable {
 
     package static func imageFitSummary(hasImage: Bool,
                                 modelName: String,
-                                providerName: String = "") -> String {
+                                providerName: String = "",
+                                capability: ModelCapability? = nil) -> String {
         guard hasImage else { return "image not-required" }
-        let supportsVision = ModelCapabilityRegistry.capability(for: modelName,
-                                                                providerName: providerName).supportsVision
+        let supportsVision = (capability ?? ModelCapabilityRegistry.capability(for: modelName,
+                                                                providerName: providerName)).supportsVision
         return supportsVision ? "image supported" : "image unsupported"
     }
 
     package static func reasoningFitSummary(requiresReasoning: Bool,
                                     modelName: String,
-                                    providerName: String = "") -> String {
+                                    providerName: String = "",
+                                    capability: ModelCapability? = nil) -> String {
         guard requiresReasoning else { return "reasoning not-required" }
-        let supportsReasoning = ModelCapabilityRegistry.capability(for: modelName,
-                                                                   providerName: providerName).supportsReasoning
+        let supportsReasoning = (capability ?? ModelCapabilityRegistry.capability(for: modelName,
+                                                                   providerName: providerName)).supportsReasoning
         return supportsReasoning ? "reasoning supported" : "reasoning unsupported"
     }
 
@@ -258,8 +266,7 @@ package struct AIRequestPayloadDiagnostic: Equatable {
         var reasoningUnsupported = 0
 
         for route in routes {
-            let capability = ModelCapabilityRegistry.capability(for: route.modelName,
-                                                                providerName: route.providerName)
+            let capability = route.capability
             let contextFit = contextFitStatus(estimatedTextTokens: estimatedTextTokens,
                                               contextTokens: capability.contextTokens)
             if contextFit == "over-limit" {
@@ -299,8 +306,7 @@ package struct AIRequestPayloadDiagnostic: Equatable {
         var imageUnsupported = 0
 
         for route in routes {
-            let capability = ModelCapabilityRegistry.capability(for: route.modelName,
-                                                                providerName: route.providerName)
+            let capability = route.capability
             let contextFit = contextFitStatus(estimatedTextTokens: estimatedTextTokens,
                                               contextTokens: capability.contextTokens)
             if contextFit == "over-limit" {
@@ -330,6 +336,7 @@ package struct AIRequestDiagnostics: Equatable {
     package var hasImage: Bool
     package var fallbackEnabled: Bool
     package var autoRouteEnabled: Bool
+    package var prefersLocalRoutes: Bool
     package var routingPreference: AIRoutingPreference
     package var candidateCount: Int
     package var actionPipeline: ActionPipelineDiagnostic
@@ -466,7 +473,7 @@ package struct AIRequestDiagnostics: Equatable {
             case .willTryNext:
                 return "等待备用模型尝试"
             case .cloudFallbackRequiresConfirmation:
-                return "本地模型失败;如需改用云端模型,请手动选择云端模型或关闭严格本地优先后重试"
+                return "本地模型失败或不适配;如需改用云端模型,请关闭自动路由并手动选择云端模型后重试"
             case .fallbackDisabled:
                 return errorRecovery ?? "开启 fallback 或切换可用模型后重试"
             case .noNextRoute:
@@ -677,8 +684,7 @@ package struct AIRequestDiagnostics: Equatable {
     package var cloudFallbackReviewSummary: String {
         let localCount = candidateRoutes.filter(\.isLocalEndpoint).count
         let cloudCount = candidateRoutes.filter { !$0.isLocalEndpoint }.count
-        guard actionPipeline.modelPolicy == "auto-route-local-first",
-              localCount > 0,
+        guard autoRouteEnabled, prefersLocalRoutes,
               cloudCount > 0 else {
             return "not-needed; local=\(localCount); cloud=\(cloudCount)"
         }
@@ -688,13 +694,15 @@ package struct AIRequestDiagnostics: Equatable {
     package func requiresCloudFallbackConfirmation(from failedRoute: AIRequestRoute,
                                            to nextRoute: AIRequestRoute?) -> Bool {
         guard fallbackEnabled,
-              actionPipeline.modelPolicy == "auto-route-local-first",
-              failedRoute.isLocalEndpoint,
               let nextRoute,
-              !nextRoute.isLocalEndpoint else {
+              requiresCloudRouteConfirmation(isLocalEndpoint: nextRoute.isLocalEndpoint) else {
             return false
         }
         return true
+    }
+
+    package func requiresCloudRouteConfirmation(isLocalEndpoint: Bool) -> Bool {
+        autoRouteEnabled && prefersLocalRoutes && !isLocalEndpoint
     }
 
     package var healthStatusLine: String {
@@ -952,6 +960,7 @@ package struct AIRequestDiagnostics: Equatable {
                  hasImage: Bool,
                  fallbackEnabled: Bool,
                  autoRouteEnabled: Bool = false,
+                 prefersLocalRoutes: Bool = false,
                  routingPreference: AIRoutingPreference,
                  candidateCount: Int,
                  actionPipeline: ActionPipelineDiagnostic = .empty,
@@ -968,6 +977,7 @@ package struct AIRequestDiagnostics: Equatable {
         self.hasImage = hasImage
         self.fallbackEnabled = fallbackEnabled
         self.autoRouteEnabled = autoRouteEnabled
+        self.prefersLocalRoutes = prefersLocalRoutes
         self.routingPreference = routingPreference
         self.candidateCount = candidateCount
         self.actionPipeline = actionPipeline

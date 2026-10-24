@@ -7,11 +7,11 @@ import SnapAILogic
 final class QuickInputModel: ObservableObject {
     @Published var text: String = ""
     @Published var actionID: String = ""
-    @Published private(set) var imageData: Data? = nil   // #3 截图/粘贴的图片
+    @Published private(set) var imageInput = QuickInputImageInput()
     @Published private(set) var imagePreview: NSImage? = nil
-    @Published private(set) var imageMimeType: String = "image/png"
     @Published private(set) var imageNotice: QuickInputImageNotice? = nil
     @Published var isCapturing = false
+    @Published var isCropping = false
     /// 发送后短暂为 true,用于在发送按钮上显示「已发送」反馈。
     @Published private(set) var didJustSend = false
     /// 通用瞬时状态(如「诊断已复制」),到期自动清除。
@@ -21,23 +21,47 @@ final class QuickInputModel: ObservableObject {
 
     private var sendFeedbackWork: DispatchWorkItem?
     private var transientWork: DispatchWorkItem?
-    /// OCR 代际令牌:新图片使旧识别结果作废,避免串入错误的文字。
-    private var ocrGeneration = 0
+    private var imageRecognitionTask: Task<Void, Never>?
+    private let recognizeText: @Sendable (Data) -> SnapAIImageTextRecognition.Outcome
 
-    init(settings: AppSettings) { self.settings = settings }
+    var imageData: Data? { imageInput.imageData }
+    var imageMimeType: String { imageInput.mimeType }
+    var canSubmitContent: Bool { imageInput.submission(prompt: text) != nil }
+
+    var imageSubmissionDescription: String {
+        switch imageInput.mode {
+        case .image: return "发送问题与原图；OCR 文字不会自动加入。"
+        case .text: return "仅发送问题与 OCR 文字，原图留在本机。"
+        case .imageAndText: return "发送问题、原图与 OCR 文字。"
+        }
+    }
+
+    init(settings: AppSettings,
+         recognizeText: @escaping @Sendable (Data) -> SnapAIImageTextRecognition.Outcome = {
+             SnapAIImageTextRecognition.recognizeText(in: $0)
+         }) {
+        self.settings = settings
+        self.recognizeText = recognizeText
+    }
+
+    deinit { imageRecognitionTask?.cancel() }
 
     func submit() {
-        guard !didJustSend else { return }
+        guard !didJustSend, !isCropping else { return }
         guard !isCapturing else {
             showTransientStatus("截图完成后才能发送", autoDismiss: 1.6)
             return
         }
-        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty || imageData != nil else { return }
+        guard let submission = imageInput.submission(prompt: text) else {
+            if imageData != nil && imageInput.mode.requiresRecognition {
+                showTransientStatus("请等待文字识别完成，或选择原图发送。", autoDismiss: 2.5)
+            }
+            return
+        }
         let act = settings.enabledActions.first(where: { $0.id == actionID })
             ?? settings.enabledActions.first
         guard let act = act else { return }
-        guard onSubmit?(t, act, imageData, imageMimeType) == true else {
+        guard onSubmit?(submission.text, act, submission.imageData, submission.imageMimeType) == true else {
             showTransientStatus("已保留草稿")
             return
         }
@@ -65,10 +89,10 @@ final class QuickInputModel: ObservableObject {
     }
 
     func clearImage() {
-        ocrGeneration &+= 1
-        imageData = nil
+        imageRecognitionTask?.cancel()
+        imageRecognitionTask = nil
+        imageInput.clear()
         imagePreview = nil
-        imageMimeType = "image/png"
         imageNotice = nil
     }
 
@@ -99,39 +123,45 @@ final class QuickInputModel: ObservableObject {
             ).userMessage)
             return
         }
-        imageData = payload.data
+        imageRecognitionTask?.cancel()
+        imageRecognitionTask = nil
+        imageInput.attach(data: payload.data, mimeType: payload.mimeType)
         imagePreview = preview
-        imageMimeType = payload.mimeType
         imageNotice = .success(QuickInputImageStatus.optimizedMessage(payload: payload))
-        startLocalOCRIfEnabled(data: payload.data)
+        if settings.imageOCREnabled { recognizeImageText() }
     }
 
-    /// 图片本地 OCR:纯文本截图转文字,走文本通道发送,省流量且图片不出本机。
-    /// 后台识别,成功后把文字拼入输入框并移除图片;失败/低置信则静默保留图片走视觉模型。
-    private func startLocalOCRIfEnabled(data: Data) {
-        guard settings.imageOCREnabled else { return }
-        ocrGeneration &+= 1
-        let generation = ocrGeneration
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let recognized = SnapAIImageTextRecognition.recognizeText(in: data)
-            DispatchQueue.main.async { [weak self] in
-                guard let self, generation == self.ocrGeneration else { return }
-                guard let recognized else { return }
-                self.applyOCRResult(recognized.text)
+    func cropImage(_ source: CGImage, selection: CGRect, displaySize: CGSize) -> Bool {
+        guard let cropped = ImageCrop.crop(source, selection: selection, displaySize: displaySize),
+              let payload = NSImage(cgImage: cropped, size: NSSize(width: cropped.width, height: cropped.height))
+                .snapAIOptimizedData() else { return false }
+        let mode = imageInput.mode
+        attachImage(payload)
+        selectImageMode(mode)
+        isCropping = false
+        return true
+    }
+
+    func selectImageMode(_ mode: QuickInputImageMode) {
+        imageInput.mode = mode
+        if mode.requiresRecognition, imageInput.recognition == .notStarted {
+            recognizeImageText()
+        }
+    }
+
+    func recognizeImageText() {
+        guard let data = imageData, let generation = imageInput.beginRecognition() else { return }
+        let recognizeText = recognizeText
+        imageRecognitionTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard !Task.isCancelled else { return }
+            let recognized = recognizeText(data)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self,
+                      self.imageInput.completeRecognition(outcome: recognized, generation: generation) else { return }
+                self.imageRecognitionTask = nil
             }
         }
-    }
-
-    private func applyOCRResult(_ recognizedText: String) {
-        let trimmed = recognizedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            text = trimmed
-        } else {
-            text = text + "\n\n" + trimmed
-        }
-        clearImage()
-        imageNotice = .success("已在本地识别图片文字,图片不出本机,按发送直接提问。")
     }
 }
 
@@ -154,7 +184,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
 
     func show() {
         let view = QuickInputView(model: model, onClose: { [weak self] in self?.hide() },
-                                  onCapture: { [weak self] in self?.captureScreen() })
+                                  onCapture: { [weak self] mode in self?.captureScreen(mode: mode) })
         let panel: FloatingPanel
         let hosting: NSHostingView<QuickInputView>
         if let existing = self.panel, let existingHosting = hostingView {
@@ -201,7 +231,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     }
 
     /// #3 截图:隐藏所有窗口 → 等300ms → 后台运行 screencapture → 重新显示
-    private func captureScreen() {
+    private func captureScreen(mode: ScreenCaptureMode) {
         guard !model.isCapturing else { return }
         model.isCapturing = true
         guard ScreenCapturePermission.isGranted() else {
@@ -212,29 +242,31 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         let visible = NSApp.windows.filter { $0.isVisible }
         visible.forEach { $0.orderOut(nil) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.runScreenCapture(visibleWindows: visible)
+            self?.runScreenCapture(mode: mode, visibleWindows: visible)
         }
     }
 
-    private func runScreenCapture(visibleWindows: [NSWindow]) {
+    private func runScreenCapture(mode: ScreenCaptureMode, visibleWindows: [NSWindow]) {
         let tmpURL = ScreenCaptureTemporaryFile.makeURL()
         captureQueue.async { [weak self] in
             let proc = Process()
             proc.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            proc.arguments = ["-x", tmpURL.path]   // -x 静音
+            proc.arguments = mode.arguments(outputURL: tmpURL)
             let timeout = DispatchWorkItem {
                 if proc.isRunning {
                     proc.terminate()
                 }
             }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 15, execute: timeout)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + (mode.isInteractive ? 120 : 15), execute: timeout)
 
-            let result: Result<SnapAIImagePayload, Error>
-            do {
+            let result = Result<SnapAIImagePayload?, Error> {
+                defer { timeout.cancel() }
                 try proc.run()
                 proc.waitUntilExit()
-                timeout.cancel()
                 let output = ScreenCaptureOutputSnapshot.make(fileURL: tmpURL)
+                if mode.wasCancelled(exitStatus: proc.terminationStatus, outputExists: output.exists) {
+                    return nil
+                }
                 guard proc.terminationStatus == 0 else {
                     throw ScreenCaptureFailureDiagnostic(reason: .commandFailed(proc.terminationStatus),
                                                          permissionGranted: true,
@@ -264,10 +296,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
                                                          permissionGranted: true,
                                                          output: output)
                 }
-                result = .success(payload)
-            } catch {
-                timeout.cancel()
-                result = .failure(error)
+                return payload
             }
             try? FileManager.default.removeItem(at: tmpURL)
 
@@ -277,12 +306,16 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func finishScreenCapture(_ result: Result<SnapAIImagePayload, Error>, visibleWindows: [NSWindow]) {
+    private func finishScreenCapture(_ result: Result<SnapAIImagePayload?, Error>, visibleWindows: [NSWindow]) {
         model.isCapturing = false
         visibleWindows.forEach { $0.makeKeyAndOrderFront(nil) }
         switch result {
         case .success(let payload):
-            model.attachImage(payload)
+            if let payload {
+                model.attachImage(payload)
+            } else {
+                model.showTransientStatus("已取消截图，草稿保持不变。")
+            }
         case .failure(let error):
             presentScreenCaptureFailure(error)
         }
@@ -326,7 +359,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
     private func installEscMonitor() {
         removeEscMonitor()
         escMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self, event.window === self.panel else { return event }
+            guard let self, event.window === self.panel, !self.model.isCropping else { return event }
             if let editor = self.panel?.firstResponder as? NSTextView, editor.hasMarkedText() {
                 return event
             }
@@ -434,15 +467,14 @@ extension NSImage {
         let scale = largest > maxPixel ? maxPixel / largest : 1
         let targetSize = NSSize(width: max(1, floor(width * scale)),
                                 height: max(1, floor(height * scale)))
-        let resized = NSImage(size: targetSize)
-        resized.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-        draw(in: NSRect(origin: .zero, size: targetSize),
-             from: NSRect(origin: .zero, size: size),
-             operation: .copy,
-             fraction: 1)
-        resized.unlockFocus()
-        return resized
+        guard let context = CGContext(data: nil, width: Int(targetSize.width), height: Int(targetSize.height),
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(origin: .zero, size: targetSize))
+        guard let resized = context.makeImage() else { return nil }
+        return NSImage(cgImage: resized, size: targetSize)
     }
 
     private func snapAIImageData(type: NSBitmapImageRep.FileType,

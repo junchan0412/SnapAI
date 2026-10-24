@@ -286,6 +286,7 @@ package struct PrivacySubmissionDiagnostic: Equatable {
 package struct PrivacyPreparedSubmission: Equatable {
     package var text: String
     package var diagnostic: PrivacySubmissionDiagnostic
+    package var messages: [ChatMessage]?
 
     /// 未配置额外脱敏/确认 handler 时的保守直通结果，仍执行风险评估与历史保护。
     package static func passthrough(text: String,
@@ -317,9 +318,11 @@ package struct PrivacyPreparedSubmission: Equatable {
     }
 
     package init(text: String,
-                 diagnostic: PrivacySubmissionDiagnostic) {
+                 diagnostic: PrivacySubmissionDiagnostic,
+                 messages: [ChatMessage]? = nil) {
         self.text = text
         self.diagnostic = diagnostic
+        self.messages = messages
     }
 }
 
@@ -334,6 +337,8 @@ package struct PrivacySubmissionPreview {
     package var redactionReports: [PrivacyRedactionRuleReport]
     package var saveHistoryEnabled: Bool
     package var historyContentStorage: HistoryContentStorage
+    package var messages: [ChatMessage]?
+    private var originalPayloadText: String?
 
     package init(action: AIAction,
          originalText: String,
@@ -342,17 +347,65 @@ package struct PrivacySubmissionPreview {
          redactionEnabled: Bool,
          hasImage: Bool,
          historyContentStorage: HistoryContentStorage = .full,
-         userPromptOverride: String? = nil) {
+         userPromptOverride: String? = nil,
+         messages: [ChatMessage]? = nil,
+         originalMessages: [ChatMessage]? = nil) {
         self.actionName = action.name
         self.originalText = originalText
         self.processedText = redactionPreview.output
-        self.systemPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.userPrompt = userPromptOverride ?? action.render(text: redactionPreview.output)
-        self.hasImage = hasImage
+        self.systemPrompt = messages?.first { $0.role == .system }?.content
+            ?? (messages == nil ? systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines) : "")
+        self.userPrompt = messages?.last { $0.role == .user }?.content
+            ?? (messages == nil ? userPromptOverride ?? action.render(text: redactionPreview.output) : "")
+        self.hasImage = messages.map { $0.contains { $0.imageData != nil } } ?? hasImage
         self.redactionEnabled = redactionEnabled
         self.redactionReports = redactionPreview.reports
         self.saveHistoryEnabled = action.saveHistory
         self.historyContentStorage = historyContentStorage
+        self.messages = messages
+        self.originalPayloadText = (originalMessages ?? messages)?.map(\.content).joined(separator: "\n\n")
+    }
+
+    package static func prepare(text: String,
+                                action: AIAction,
+                                settings: AppSettings,
+                                messageBuilder: (String) -> [ChatMessage]) -> PrivacySubmissionPreview {
+        let originalMessages = messageBuilder(text)
+        let textPreview = settings.redactionEnabled
+            ? PrivacyFilter.preview(text: text, rules: settings.redactionRules)
+            : PrivacyRedactionPreview(output: text, reports: [])
+        var reports = textPreview.reports.map { report in
+            var report = report
+            report.matchCount = 0
+            return report
+        }
+        let messages = originalMessages.map { message in
+            guard settings.redactionEnabled else { return message }
+            let preview = PrivacyFilter.preview(text: message.content, rules: settings.redactionRules)
+            for (index, report) in preview.reports.enumerated() {
+                reports[index].matchCount += report.matchCount
+            }
+            var message = message
+            message.content = preview.output
+            return message
+        }
+        return PrivacySubmissionPreview(
+            action: action,
+            originalText: text,
+            redactionPreview: PrivacyRedactionPreview(output: textPreview.output, reports: reports),
+            systemPrompt: settings.effectiveSystemPrompt,
+            redactionEnabled: settings.redactionEnabled,
+            hasImage: false,
+            historyContentStorage: settings.historyContentStorage,
+            messages: messages,
+            originalMessages: originalMessages
+        )
+    }
+
+    package func preparedSubmission(userPreferenceEnabled: Bool) -> PrivacyPreparedSubmission {
+        PrivacyPreparedSubmission(text: processedText,
+                                  diagnostic: diagnostic(previewRequirement: previewRequirement(userPreferenceEnabled: userPreferenceEnabled)),
+                                  messages: messages)
     }
 
     package var totalRedactionMatches: Int {
@@ -364,7 +417,7 @@ package struct PrivacySubmissionPreview {
     }
 
     package var riskAssessment: PrivacyRiskAssessment {
-        PrivacyRiskAssessment.assess(originalText: originalText,
+        PrivacyRiskAssessment.assess(originalText: originalPayloadText ?? originalText,
                                      redactionPreview: PrivacyRedactionPreview(output: processedText,
                                                                                reports: redactionReports),
                                      redactionEnabled: redactionEnabled,
@@ -400,8 +453,11 @@ package struct PrivacySubmissionPreview {
             "隐私建议: \(riskAssessment.recoverySuggestion)",
             "保存历史: \(saveHistoryEnabled ? "是" : "否")",
             "历史内容: \(diagnostic(previewRequired: false).historyStorageSummary)",
-            "附加内容: \(hasImage ? "1 张图片" : "无")"
+            "附加内容: \(hasImage ? "\(imageCount) 张图片" : "无")"
         ]
+        if let messages {
+            lines.append("完整请求: \(messages.count) 条消息 · 文本 \(messages.reduce(0) { $0 + $1.content.count }) 字符")
+        }
         if let previewRequirement {
             lines.insert("预览原因: \(previewRequirement.reason.displayText)", at: 5)
         }
@@ -443,6 +499,23 @@ package struct PrivacySubmissionPreview {
     }
 
     package func contentText(previewRequirement: PrivacyPreviewRequirement?) -> String {
+        if let messages {
+            let payload = messages.enumerated().map { index, message in
+                let attachment = message.imageData.map {
+                    "\n[图片附件: \(message.imageMimeType), \($0.count) 字节]"
+                } ?? ""
+                return "[\(index + 1)] \(message.role.rawValue)\n\(message.content)\(attachment)"
+            }.joined(separator: "\n\n")
+            return """
+            \(summaryText(previewRequirement: previewRequirement))
+
+            脱敏规则:
+            \(redactionReportText)
+
+            即将发送的完整消息:
+            \(payload)
+            """
+        }
         let systemText = systemPrompt.isEmpty ? "(空)" : systemPrompt
         return """
         \(summaryText(previewRequirement: previewRequirement))
@@ -456,5 +529,9 @@ package struct PrivacySubmissionPreview {
         User Prompt:
         \(userPrompt)
         """
+    }
+
+    private var imageCount: Int {
+        messages?.filter { $0.imageData != nil }.count ?? (hasImage ? 1 : 0)
     }
 }

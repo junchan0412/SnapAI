@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class ResultSubmissionCoordinator {
+    typealias PreparationHandler = (String, AIAction, @escaping (String) -> [ChatMessage]) -> PrivacyPreparedSubmission?
+
     private let settings: AppSettings
     private(set) var messages: [ChatMessage] = []
 
@@ -12,24 +14,25 @@ final class ResultSubmissionCoordinator {
 
     func prepare(text: String,
                  action: AIAction,
-                 using handler: ((String, AIAction) -> PrivacyPreparedSubmission?)?) -> PrivacyPreparedSubmission? {
+                 messageBuilder: @escaping (String) -> [ChatMessage],
+                 using handler: PreparationHandler?) -> PrivacyPreparedSubmission? {
         if let handler {
-            return handler(text, action)
+            return handler(text, action, messageBuilder)
         }
-        return PrivacyPreparedSubmission.passthrough(
-            text: text,
-            saveHistoryEnabled: action.saveHistory,
-            historyContentStorage: settings.historyContentStorage
-        )
+        let preview = PrivacySubmissionPreview.prepare(text: text, action: action,
+                                                       settings: settings, messageBuilder: messageBuilder)
+        return PrivacyPreparedSubmission(text: preview.processedText,
+                                         diagnostic: preview.diagnostic(previewRequired: false),
+                                         messages: preview.messages)
     }
 
-    func beginInitialRequest(action: AIAction,
-                             targetLanguage: TargetLanguage,
-                             sourceText: String,
-                             imageData: Data?,
-                             imageMimeType: String,
-                             sourceContext: SelectionSourceContext?) -> Bool {
-        let payload = RequestSession.initialMessages(
+    func initialMessages(action: AIAction,
+                         targetLanguage: TargetLanguage,
+                         sourceText: String,
+                         imageData: Data?,
+                         imageMimeType: String,
+                         sourceContext: SelectionSourceContext?) -> [ChatMessage] {
+        RequestSession.initialMessages(
             settings: settings,
             action: action,
             targetLanguage: targetLanguage,
@@ -37,14 +40,26 @@ final class ResultSubmissionCoordinator {
             imageData: imageData,
             imageMimeType: imageMimeType,
             sourceContext: sourceContext
-        )
-        messages = payload.messages
-        return payload.hasImage
+        ).messages
     }
 
-    func appendFollowUp(assistantText: String, userText: String) {
+    func followUpMessages(assistantText: String, userText: String) -> [ChatMessage] {
+        var messages = currentMessages()
         RequestSession.appendFollowUp(to: &messages,
                                       assistantText: assistantText,
                                       userText: userText)
+        return messages
+    }
+
+    func currentMessages() -> [ChatMessage] {
+        var messages = messages.filter { $0.role != .system }
+        if !settings.effectiveSystemPrompt.isEmpty {
+            messages.insert(ChatMessage(role: .system, content: settings.effectiveSystemPrompt), at: 0)
+        }
+        return messages
+    }
+
+    func replaceMessages(_ messages: [ChatMessage]) {
+        self.messages = messages
     }
 }

@@ -40,30 +40,15 @@ final class PanelCoordinator {
         return true
     }
 
-    /// 打开双模型对照:以当前结果原文为准,左侧为当前模型输出,
-    /// 右侧为首个备选路由输出(占位:当前为同一输出的差异演示,待双跑接入后替换)。
     func openModelCompare() {
         guard let host else { return }
-        let settings = host.settings
-        let resultVM: ResultViewModel = host.resultVM
-        let routes = AIRequestRouter.candidates(settings: settings,
-                                                action: resultVM.action,
-                                                sourceText: resultVM.sourceText,
-                                                hasImage: false,
-                                                routingTextCharacterCount: max(resultVM.sourceText.count, 1_200))
-        let leftTitle = routeTitle(at: 0, routes: routes, settings: settings)
-        let rightTitle = routeTitle(at: 1, routes: routes, settings: settings)
-        let comparison = ModelCompare.compare(
-            left: .init(title: leftTitle, text: resultVM.completeText),
-            right: .init(title: rightTitle, text: resultVM.completeText))
-        host.compareWindow.show(comparison: comparison, sourceText: resultVM.sourceText)
-    }
-
-    private func routeTitle(at index: Int, routes: [AIRequestRoute], settings: AppSettings) -> String {
-        guard routes.indices.contains(index) else {
-            return index == 0 ? settings.modelSelectionTitle : "备选模型"
+        guard let resultVM = host.resultVM else { return }
+        guard !resultVM.isGenerating else {
+            resultVM.showTransientNotice("请等待当前生成完成后再打开双模型对照。")
+            return
         }
-        let route = routes[index]
-        return "\(route.providerName) / \(route.modelName)"
+        host.compareWindow.show(session: ModelCompareSession(settings: host.settings,
+                                                             action: resultVM.action,
+                                                             messages: resultVM.comparisonMessages))
     }
 }

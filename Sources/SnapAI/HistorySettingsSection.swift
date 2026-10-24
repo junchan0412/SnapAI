@@ -28,7 +28,7 @@ struct HistorySettingsSection: View {
                         showClearHistoryConfirm = true
                     }
                     .controlSize(.small)
-                    .disabled(settings.history.isEmpty)
+                    .disabled(settings.historyLimit == 0)
                     .help("清空全部历史记录（需确认）")
                 }
                 historyList
@@ -46,10 +46,10 @@ struct HistorySettingsSection: View {
         .snapAIConfirmDestructive(
             isPresented: $showClearHistoryConfirm,
             title: "清空全部历史记录",
-            message: "将永久删除全部 \(settings.history.count) 条历史记录,此操作不可撤销。",
+            message: "将永久删除全部历史记录、已保存会话及其图片，此操作不可撤销。",
             action: {
                 guard settings.clearHistory() else {
-                    operationCoordinator.showError("清空历史失败，现有记录未被删除。请稍后重试。")
+                    operationCoordinator.showError("未能清空全部历史或会话，请稍后重试。")
                     return
                 }
                 commit()

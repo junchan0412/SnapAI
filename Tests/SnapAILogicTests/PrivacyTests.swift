@@ -1,11 +1,90 @@
 import Foundation
-import AppKit
-import ApplicationServices
-import Carbon.HIToolbox
 #if !SNAPAI_MANUAL_TEST_MAIN
 @testable import SnapAILogic
 #endif
 
+func testPrivacySubmissionPreviewUsesCompleteConversationPayload() {
+    let settings = AppSettings()
+    settings.redactionEnabled = false
+    settings.systemPrompt = "系统上下文 system@example.com"
+    let action = AIAction(name: "完整预览", prompt: "{{text}}", saveHistory: true)
+    let context = SelectionSourceContext.make(appName: "Xcode")
+    let image = Data([1, 2, 3])
+    var originalMessages = RequestSession.initialMessages(settings: settings, action: action,
+                                                          targetLanguage: .auto,
+                                                          sourceText: "历史用户 user@example.com",
+                                                          imageData: image, imageMimeType: "image/jpeg",
+                                                          sourceContext: context).messages
+    RequestSession.appendFollowUp(to: &originalMessages,
+                                  assistantText: "历史回答 assistant@example.com",
+                                  userText: "继续")
+    originalMessages[originalMessages.count - 1].imageData = Data([4, 5])
+    originalMessages[originalMessages.count - 1].imageMimeType = "image/png"
+    let preview = PrivacySubmissionPreview.prepare(text: "继续", action: action, settings: settings) { _ in
+        originalMessages
+    }
+    expect(preview.messages == originalMessages, "preview preserves the exact complete conversation")
+    expect(preview.hasImage && preview.summaryText.contains("附加内容: 2 张图片"),
+           "preview counts image attachments across historical and latest messages")
+    expect(preview.summaryText.contains("完整请求: 4 条消息"), "preview reports all outbound messages")
+    expect(preview.contentText.contains(context.promptPrefix) &&
+           preview.contentText.contains("[3] assistant\n历史回答 assistant@example.com"),
+           "preview includes source context and assistant history in message order")
+    expect(preview.contentText.contains("[图片附件: image/jpeg, 3 字节]") &&
+           preview.contentText.contains("[图片附件: image/png, 2 字节]"),
+           "preview describes each attachment without encoding its bytes")
+    expect(preview.userPrompt == "继续" && preview.systemPrompt == settings.effectiveSystemPrompt,
+           "final user and system prompt counts are derived from the actual messages")
+    expect(preview.riskAssessment.detectedSensitiveMatchCount == 3 && preview.riskAssessment.level == .high,
+           "a harmless new question still inherits sensitive-history and image risk")
+    expect(preview.previewRequirement(userPreferenceEnabled: false).reason == .highPrivacyRisk,
+           "sensitive historical payload requires confirmation even when user preview is disabled")
+
+    settings.redactionEnabled = true
+    settings.redactionRules = PrivacyRedactionRule.defaults()
+    let redacted = PrivacySubmissionPreview.prepare(text: "继续", action: action, settings: settings) { _ in
+        originalMessages
+    }
+    expect(redacted.totalRedactionMatches == 3 &&
+           redacted.messages?.allSatisfy { !$0.content.contains("@example.com") } == true,
+           "current privacy rules apply to historical user, assistant and system messages")
+    expect(!redacted.contentText.contains("@example.com") && redacted.contentText.contains(context.promptPrefix),
+           "display shows the fully processed payload while retaining source context")
+    let prepared = redacted.preparedSubmission(userPreferenceEnabled: true)
+    expect(prepared.messages == redacted.messages && prepared.diagnostic.hasImage &&
+           prepared.diagnostic.riskAssessment.hasImage && prepared.diagnostic.redactionMatchCount == 3,
+           "approved messages and privacy diagnostics describe the same complete payload")
+    expect(prepared.messages?[1].imageData == image && prepared.messages?[1].imageMimeType == "image/jpeg",
+           "full-conversation redaction preserves attachment bytes and MIME type")
+    settings.systemPrompt = "确认之后变更系统上下文"
+    expect(prepared.messages?.first?.content == "系统上下文 [邮箱]",
+           "confirmed payload stays frozen when configuration subsequently changes")
+}
+
+func testPrivacySubmissionPreviewRedactsEachPayloadMessageOnce() {
+    let settings = AppSettings()
+    settings.redactionEnabled = true
+    settings.redactionRules = [
+        PrivacyRedactionRule(name: "非幂等替换", pattern: "secret", replacement: "secret-hidden"),
+        PrivacyRedactionRule(name: "失效规则", pattern: "(", replacement: "")
+    ]
+    let action = AIAction(name: "单次脱敏", prompt: "模板 secret: {{text}}", saveHistory: false)
+    let preview = PrivacySubmissionPreview.prepare(text: "secret", action: action, settings: settings) { text in
+        [ChatMessage(role: .system, content: "secret"),
+         ChatMessage(role: .user, content: action.render(text: text))]
+    }
+    expect(preview.processedText == "secret-hidden" &&
+           preview.userPrompt == "模板 secret-hidden: secret-hidden",
+           "payload redaction does not process an already-redacted source twice")
+    expect(preview.totalRedactionMatches == 3, "redaction count covers actual system and rendered user payload")
+    expect(preview.invalidRedactionRuleCount == 1,
+           "an invalid rule is reported once rather than once for every historical message")
+    expect(preview.preparedSubmission(userPreferenceEnabled: true).messages == preview.messages,
+           "sending reuses approved messages instead of rendering the processed input again")
+}
+import AppKit
+import ApplicationServices
+import Carbon.HIToolbox
 func testSensitiveTextSanitizerRedactsSensitiveErrorFragments() {
     let slackToken = "xoxb-" + "123456789012-" + "abcdefghijklmnopqrstuvwxyz"
     let message = """

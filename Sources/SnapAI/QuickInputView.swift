@@ -6,9 +6,9 @@ struct QuickInputView: View {
     @ObservedObject var model: QuickInputModel
     @ObservedObject private var settings: AppSettings
     var onClose: () -> Void
-    var onCapture: () -> Void
+    var onCapture: (ScreenCaptureMode) -> Void
 
-    init(model: QuickInputModel, onClose: @escaping () -> Void, onCapture: @escaping () -> Void) {
+    init(model: QuickInputModel, onClose: @escaping () -> Void, onCapture: @escaping (ScreenCaptureMode) -> Void) {
         self.model = model
         self.settings = model.settings
         self.onClose = onClose
@@ -21,46 +21,118 @@ struct QuickInputView: View {
     }
 
     private var canSubmit: Bool {
-        currentAction != nil && !model.isCapturing && !model.didJustSend
-            && (!model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.imageData != nil)
+        currentAction != nil && !model.isCapturing && !model.isCropping && !model.didJustSend
+            && model.canSubmitContent
     }
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            VStack(alignment: .leading, spacing: 12) {
-                QuickPromptEditor(
-                    text: $model.text,
-                    placeholder: model.imagePreview == nil
-                        ? SnapAIL10n.string("Ask a question, or paste text…")
-                        : SnapAIL10n.string("What would you like to know about this image?"),
-                    onSubmit: { if canSubmit { model.submit() } }
-                )
-                .frame(minHeight: 144, idealHeight: 160, maxHeight: .infinity)
-                .snapAIGlassField(radius: 12)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    QuickPromptEditor(
+                        text: $model.text,
+                        placeholder: model.imagePreview == nil
+                            ? SnapAIL10n.string("Ask a question, or paste text…")
+                            : SnapAIL10n.string("What would you like to know about this image?"),
+                        onSubmit: { if canSubmit { model.submit() } }
+                    )
+                    .frame(height: 160)
+                    .snapAIGlassField(radius: 12)
 
-                if let preview = model.imagePreview {
-                    QuickInputAttachmentRow(image: preview,
-                                            detail: model.imageNotice?.message,
-                                            onRemove: model.clearImage)
+                    if let preview = model.imagePreview {
+                        QuickInputAttachmentRow(image: preview,
+                                                detail: model.imageNotice?.message,
+                                                submissionDetail: model.imageSubmissionDescription,
+                                                onCrop: { model.isCropping = true },
+                                                onRemove: model.clearImage)
+                        imageSubmissionOptions
+                    }
+                    if let notice = model.imageNotice, notice.isWarning {
+                        Label(notice.message, systemImage: notice.systemImage)
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(SnapAIUI.StatusColor.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if currentAction == nil {
+                        Label("先在设置中启用一个动作，即可发送提问。", systemImage: "info.circle")
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                if let notice = model.imageNotice, notice.isWarning {
-                    Label(notice.message, systemImage: notice.systemImage)
-                        .font(SnapAIUI.Typography.metaText)
-                        .foregroundStyle(SnapAIUI.StatusColor.warning)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if currentAction == nil {
-                    Label("先在设置中启用一个动作，即可发送提问。", systemImage: "info.circle")
-                        .font(SnapAIUI.Typography.metaText)
-                        .foregroundStyle(.secondary)
-                }
+                .padding(SnapAIUI.edgePadding)
             }
-            .padding(SnapAIUI.edgePadding)
             footer
         }
         .frame(minWidth: 480, idealWidth: 560, minHeight: 300)
         .background(SnapAIUI.Surface.canvas)
+        .sheet(isPresented: $model.isCropping) {
+            if let preview = model.imagePreview {
+                QuickInputCropView(image: preview,
+                                   onCancel: { model.isCropping = false },
+                                   onConfirm: model.cropImage)
+            }
+        }
+    }
+
+    private var imageSubmissionOptions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("本次图片发送方式", selection: Binding(
+                get: { model.imageInput.mode },
+                set: model.selectImageMode
+            )) {
+                ForEach(QuickInputImageMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("本次图片发送方式")
+
+            switch model.imageInput.recognition {
+            case .notStarted:
+                Button("在本机识别文字", action: model.recognizeImageText)
+                    .font(SnapAIUI.Typography.metaText)
+            case .recognizing:
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text(model.imageInput.mode == .image
+                         ? "正在本机识别文字；可立即发送原图。"
+                         : "正在本机识别文字，完成后可发送；也可改用原图。")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            case .ready(let text):
+                Label("已在本机识别 \(text.count) 个字符", systemImage: "checkmark.circle")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
+                if model.imageInput.mode.requiresRecognition {
+                    ScrollView {
+                        Text(text)
+                            .font(SnapAIUI.Typography.metaText)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                    }
+                    .frame(height: 88)
+                    .background(SnapAIUI.Surface.content)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .accessibilityLabel("本次将发送的 OCR 文字")
+                }
+            case .unavailable, .failed:
+                Label(model.imageInput.recognition.failureMessage ?? "", systemImage: "exclamationmark.triangle")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(SnapAIUI.StatusColor.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("重新识别", action: model.recognizeImageText)
+                    if model.imageInput.mode != .image {
+                        Button("改用原图") { model.selectImageMode(.image) }
+                    }
+                }
+                .font(SnapAIUI.Typography.metaText)
+            }
+        }
     }
 
     private var header: some View {
@@ -128,7 +200,11 @@ struct QuickInputView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Button(action: onCapture) {
+            Menu {
+                ForEach(ScreenCaptureMode.allCases) { mode in
+                    Button(mode.title) { onCapture(mode) }
+                }
+            } label: {
                 HStack(spacing: 6) {
                     if model.isCapturing {
                         ProgressView().controlSize(.mini)
@@ -139,7 +215,10 @@ struct QuickInputView: View {
                 }
             }
             .disabled(model.isCapturing)
-            .help("截取当前屏幕并附加到提问")
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("选择区域、窗口或主屏幕；区域与窗口选择可按 Esc 取消。")
+            .accessibilityLabel("截图范围")
             Button(action: model.pasteImageFromClipboard) {
                 Label(SnapAIL10n.string("Paste Image"), systemImage: "photo.on.rectangle")
             }
@@ -182,6 +261,8 @@ struct QuickInputView: View {
 private struct QuickInputAttachmentRow: View {
     let image: NSImage
     let detail: String?
+    let submissionDetail: String
+    var onCrop: () -> Void
     var onRemove: () -> Void
 
     var body: some View {
@@ -194,13 +275,20 @@ private struct QuickInputAttachmentRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .accessibilityLabel("已附加图片的预览")
             VStack(alignment: .leading, spacing: 4) {
-                Text("已附加 1 张图片")
+                Text("已保留 1 张图片")
                     .font(.system(size: 13, weight: .medium))
-                Text("将随问题一起发送")
+                Text(submissionDetail)
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
+            Button(action: onCrop) {
+                Image(systemName: "crop")
+            }
+            .buttonStyle(SnapAIIconButtonStyle(circular: false))
+            .help("发送前裁剪图片")
+            .accessibilityLabel("裁剪图片附件")
             Button(action: onRemove) {
                 Image(systemName: "xmark")
             }

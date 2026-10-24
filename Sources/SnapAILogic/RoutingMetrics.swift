@@ -105,6 +105,8 @@ package struct RoutePerformanceRecord: Codable, Equatable {
 
 package struct RoutingMetricsTable: Codable, Equatable {
     package var records: [String: RoutePerformanceRecord] = [:]
+    package var dailyUsage: [String: RequestUsageDay]?
+    package var monthlyBudgetUSD: Double?
 
     package static let empty = RoutingMetricsTable()
 
@@ -247,7 +249,7 @@ package final class RoutingMetricsStore {
         }
     }
 
-    private func update(_ block: (inout RoutingMetricsTable) -> Void) {
+    func update(_ block: (inout RoutingMetricsTable) -> Void) {
         lock.lock()
         var table = cached ?? Self.load(from: url)
         block(&table)

@@ -8,8 +8,11 @@ struct ResultView: View {
     var onClose: () -> Void
     var onOpenAISettings: () -> Void = {}
 
+    @State private var showConversation = false
+    @State private var showConversationLibrary = false
     @State private var isSourceExpanded = false
     @State private var followsOutput = true
+    @StateObject private var readingAnchor = ResultReadingAnchor()
 
     init(vm: ResultViewModel,
          onClose: @escaping () -> Void,
@@ -27,7 +30,8 @@ struct ResultView: View {
                 actions: settings.enabledActions,
                 modelName: vm.activeModelName.isEmpty ? settings.model : vm.activeModelName,
                 providerName: vm.activeProviderName,
-                isStreaming: vm.isStreaming,
+                isStreaming: vm.isGenerating,
+                isPresenting: vm.isPresenting,
                 hasError: vm.errorMessage != nil,
                 isTranslation: vm.isTranslation,
                 targetLanguage: vm.targetLanguage,
@@ -42,9 +46,16 @@ struct ResultView: View {
         .frame(minWidth: 440, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
         .background(SnapAIUI.Surface.canvas)
         .overlay(alignment: .top) {
-            if vm.isStreaming {
+            if vm.isGenerating {
                 SnapAIStreamingProgressBar()
             }
+        }
+        .sheet(isPresented: $showConversation) { ResultConversationView(vm: vm) }
+        .sheet(isPresented: $showConversationLibrary) {
+            ConversationLibraryView(settings: settings, restore: vm.restoreConversation)
+        }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)) { _ in
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { vm.revealFullOutput() }
         }
     }
 
@@ -54,7 +65,8 @@ struct ResultView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     ResultSourceSection(text: $vm.sourceText,
                                         isExpanded: $isSourceExpanded,
-                                        isStreaming: vm.isStreaming,
+                                        isStreaming: vm.isGenerating,
+                                        hasImage: vm.hasSourceImage,
                                         onResend: vm.resendEdited)
                     ResultThinkingSection(state: vm.thinkingState, isExpanded: $vm.showThinking)
 
@@ -75,12 +87,15 @@ struct ResultView: View {
                         state: vm.outputState,
                         isStreaming: vm.isStreaming,
                         onMarkdownReady: {
-                            guard followsOutput else { return }
+                            vm.markMarkdownReady()
+                            guard followsOutput else { readingAnchor.restore(); return }
                             vm.markFinalAutoScroll()
                             proxy.scrollTo("output", anchor: .bottom)
                         },
                         onCopyCode: vm.copyCodeBlock
                     )
+                    .background(ResultReadingAnchorObserver(anchor: readingAnchor,
+                        isStreaming: vm.isStreaming, followsOutput: followsOutput))
                     .font(.system(size: 15))
                     .lineSpacing(4)
                 }
@@ -88,7 +103,8 @@ struct ResultView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(SnapAIUI.edgePadding)
                 .background(ResultScrollActivityObserver {
-                    if vm.isStreaming { followsOutput = false }
+                    readingAnchor.cancel()
+                    followsOutput = false
                 })
             }
             .snapAIScrollEdge()
@@ -147,6 +163,14 @@ struct ResultView: View {
                     .help(followsOutput ? "已跟随输出，点击暂停自动滚动" : "继续跟随最新输出")
                     .accessibilityLabel(followsOutput ? "暂停自动滚动" : "继续自动滚动")
                 }
+                Menu {
+                    Button("会话与分支…") { showConversation = true }
+                        .disabled(vm.conversationSession == nil)
+                    Button("恢复已保存会话…") { showConversationLibrary = true }
+                } label: {
+                    Label(vm.conversationSession?.activeCompression != nil ? "会话 · 已压缩" : "会话", systemImage: "bubble.left.and.bubble.right")
+                }
+                .disabled(vm.isGenerating)
                 Spacer(minLength: 0)
                 ResultActionsToolbar(vm: vm, outputState: vm.outputState)
             }
@@ -161,7 +185,7 @@ struct ResultView: View {
                                   vm.shouldHandleFollowUpHistoryNavigation(currentText: text,
                                                                            direction: direction)
                               })
-                    .disabled(vm.isStreaming)
+                    .disabled(vm.isGenerating)
                 Button(action: vm.sendFollowUp) {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 14, weight: .semibold))
@@ -222,7 +246,7 @@ struct ResultView: View {
     }
 
     private var canSendFollowUp: Bool {
-        !vm.isStreaming && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !vm.isGenerating && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// 错误块:主恢复操作用主按钮强调,诊断类操作收纳为单一菜单,降低按钮密度。
@@ -319,7 +343,7 @@ struct ResultView: View {
     private var resultCommandState: ResultCommandState {
         ResultCommandState(resultText: vm.outputState.text,
                            diagnosticsText: vm.requestDiagnosticText,
-                           isStreaming: vm.isStreaming,
+                           isStreaming: vm.isGenerating,
                            sourceText: vm.sourceText,
                            protectsContentExport: vm.contentExportProtectionEnabled,
                            recoveryCode: vm.errorRecoveryCode)

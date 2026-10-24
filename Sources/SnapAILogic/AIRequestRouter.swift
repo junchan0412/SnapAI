@@ -6,6 +6,11 @@ package struct AIRequestRoute: Identifiable, Equatable {
     package var modelName: String
     package var reason: String
     package var isLocalEndpoint: Bool = false
+    package var resolvedCapability: ModelCapability? = nil
+
+    package var capability: ModelCapability {
+        resolvedCapability ?? ModelCapabilityRegistry.capability(for: modelName, providerName: providerName)
+    }
 
     package var id: String { "\(providerID)::\(modelName)" }
 
@@ -61,7 +66,8 @@ package enum AIRequestRouter {
                                          providerName: provider.name,
                                          modelName: model,
                                          reason: reason,
-                                         isLocalEndpoint: provider.isLocalEndpoint))
+                                         isLocalEndpoint: provider.isLocalEndpoint,
+                                         resolvedCapability: ModelCapabilityRegistry.capability(for: model, provider: provider)))
         }
 
         let allRoutes = requestReadyProviders.flatMap { provider in
@@ -77,25 +83,25 @@ package enum AIRequestRouter {
                                                    prefersLocalRoutes: settings.prefersLocalModelRoutes,
                                                    preference: settings.routingPreference,
                                                    routingMetrics: routingMetrics),
-                               isLocalEndpoint: provider.isLocalEndpoint)
+                               isLocalEndpoint: provider.isLocalEndpoint,
+                               resolvedCapability: ModelCapabilityRegistry.capability(for: model, provider: provider))
             }
         }
         let hasFittingReadyRoute = allRoutes.contains {
-            contextFitStatus(modelName: $0.modelName,
-                             providerName: $0.providerName,
-                             textLength: textLength) != "over-limit"
+            AIRequestPayloadDiagnostic.contextFitStatus(
+                estimatedTextTokens: AIRequestPayloadDiagnostic.estimatedTextTokens(forCharacterCount: textLength),
+                contextTokens: $0.capability.contextTokens) != "over-limit"
         }
         let hasVisionReadyRoute = !hasImage || allRoutes.contains {
-            modelSupportsImageInput(modelName: $0.modelName,
-                                    providerName: $0.providerName)
+            $0.capability.supportsVision
         }
         let hasReasoningReadyRoute = !action.thinkingMode || allRoutes.contains {
-            modelSupportsReasoning(modelName: $0.modelName,
-                                   providerName: $0.providerName)
+            $0.capability.supportsReasoning
         }
         let hasLocalReadyRoute = allRoutes.contains { $0.isLocalEndpoint }
 
         func shouldPinExplicit(provider: AIProvider, model: String) -> Bool {
+            let capability = ModelCapabilityRegistry.capability(for: model, provider: provider)
             guard settings.autoRouteEnabled else {
                 return true
             }
@@ -106,20 +112,18 @@ package enum AIRequestRouter {
             }
             if action.thinkingMode,
                hasReasoningReadyRoute,
-               !modelSupportsReasoning(modelName: model,
-                                       providerName: provider.name) {
+               !capability.supportsReasoning {
                 return false
             }
             if hasImage,
                hasVisionReadyRoute,
-               !modelSupportsImageInput(modelName: model,
-                                        providerName: provider.name) {
+               !capability.supportsVision {
                 return false
             }
             if hasFittingReadyRoute,
-               contextFitStatus(modelName: model,
-                                providerName: provider.name,
-                                textLength: textLength) == "over-limit" {
+               AIRequestPayloadDiagnostic.contextFitStatus(
+                   estimatedTextTokens: AIRequestPayloadDiagnostic.estimatedTextTokens(forCharacterCount: textLength),
+                   contextTokens: capability.contextTokens) == "over-limit" {
                 return false
             }
             return true
@@ -343,7 +347,7 @@ package enum AIRequestRouter {
                                     prefersLocalRoutes: Bool,
                                     preference: AIRoutingPreference,
                                     routingMetrics: RoutingMetricsTable = .empty) -> String {
-        let capability = ModelCapabilityRegistry.capability(for: model, providerName: provider.name)
+        let capability = ModelCapabilityRegistry.capability(for: model, provider: provider)
         if let reason = routingMetrics.preferredReason(providerID: provider.id, modelName: model) {
             return reason
         }
@@ -367,8 +371,7 @@ package enum AIRequestRouter {
                               textLength: Int,
                               hasImage: Bool,
                               routingMetrics: RoutingMetricsTable = .empty) -> Int {
-        let capability = ModelCapabilityRegistry.capability(for: route.modelName,
-                                                            providerName: route.providerName)
+        let capability = route.capability
         var value = 0
         if route.providerID == action.providerID { value += 500 }
         if route.providerID == settings.activeProviderID && route.modelName == settings.activeModel { value += 200 }
@@ -414,6 +417,9 @@ package enum AIRequestRouter {
                                       providerOrder: [String: Int],
                                       modelOrder: [String: Int],
                                       routingMetrics: RoutingMetricsTable = .empty) -> Bool {
+        if settings.prefersLocalModelRoutes, lhs.isLocalEndpoint != rhs.isLocalEndpoint {
+            return lhs.isLocalEndpoint
+        }
         let lhsScore = score(route: lhs,
                              settings: settings,
                              action: action,
