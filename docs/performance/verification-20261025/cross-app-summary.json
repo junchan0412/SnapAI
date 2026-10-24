@@ -1,0 +1,189 @@
+{
+  "scope": "owned fixtures in TextEdit and Word; not the 60-case acceptance matrix",
+  "counts": {
+    "BLOCKED": 2,
+    "PASS": 18
+  },
+  "rows": [
+    {
+      "file": "textedit-ax-1.json",
+      "status": "BLOCKED",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "target-identity-mismatch",
+      "transactionAttempted": false,
+      "captureMethod": null
+    },
+    {
+      "file": "textedit-ax-2.json",
+      "status": "PASS",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-ax-round1.json",
+      "status": "PASS",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-ax-round2.json",
+      "status": "PASS",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-ax-round3.json",
+      "status": "PASS",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-clipboard-round1.json",
+      "status": "PASS",
+      "mode": "replace",
+      "expected": "pasteboard-changed",
+      "reason": "pasteboard-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-clipboard-round2.json",
+      "status": "PASS",
+      "mode": "replace",
+      "expected": "pasteboard-changed",
+      "reason": "pasteboard-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-clipboard-round3.json",
+      "status": "PASS",
+      "mode": "replace",
+      "expected": "pasteboard-changed",
+      "reason": "pasteboard-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-copy-replace.json",
+      "status": "PASS",
+      "mode": "copy-replace",
+      "expected": "pass",
+      "reason": "replacement-verified",
+      "transactionAttempted": true,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "textedit-copy-round1.json",
+      "status": "PASS",
+      "mode": "copy",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "textedit-copy-round2.json",
+      "status": "PASS",
+      "mode": "copy",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "textedit-copy-round3.json",
+      "status": "PASS",
+      "mode": "copy",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "textedit-replace.json",
+      "status": "PASS",
+      "mode": "replace",
+      "expected": "pass",
+      "reason": "replacement-verified",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "textedit-source-changed.jsonl",
+      "status": "PASS",
+      "mode": "two-phase",
+      "expected": "source-changed",
+      "reason": "source-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "word-ax.json",
+      "status": "PASS",
+      "mode": "ax",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "word-clipboard.json",
+      "status": "PASS",
+      "mode": "replace",
+      "expected": "pasteboard-changed",
+      "reason": "pasteboard-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "word-copy-replace.json",
+      "status": "PASS",
+      "mode": "copy-replace",
+      "expected": "pass",
+      "reason": "replacement-verified",
+      "transactionAttempted": true,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "word-copy.json",
+      "status": "PASS",
+      "mode": "copy",
+      "expected": "pass",
+      "reason": "capture-verified",
+      "transactionAttempted": false,
+      "captureMethod": "clipboard"
+    },
+    {
+      "file": "word-source-changed-attempt1.jsonl",
+      "status": "BLOCKED",
+      "mode": "two-phase",
+      "expected": "source-changed",
+      "reason": "go-marker-timeout",
+      "transactionAttempted": false,
+      "captureMethod": "accessibility"
+    },
+    {
+      "file": "word-source-changed.jsonl",
+      "status": "PASS",
+      "mode": "two-phase",
+      "expected": "source-changed",
+      "reason": "source-changed",
+      "transactionAttempted": true,
+      "captureMethod": "accessibility"
+    }
+  ]
+}

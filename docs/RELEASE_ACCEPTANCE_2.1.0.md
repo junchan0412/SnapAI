@@ -11,7 +11,7 @@
 ## 自动检查
 
 - SwiftPM 逻辑回归通过，新增 7 个存储/分支/压缩/隐私测试已注册到正式 runner。
-- App runtime 全量回归通过：会话实际 payload、恢复不联网、旧目标写回拒绝、OCR 生命周期、独立对照、Shortcuts 返回、五时点、30 次设置窗口生命周期及 10k/40k/100k 阅读往返。
+- App runtime 全量回归通过：会话实际 payload、恢复不联网、旧目标写回拒绝、OCR 生命周期、独立对照、Shortcuts 返回、五时点、30 次设置窗口生命周期及 10k/40k/100k 阅读往返。流式 runtime 也通过；为 hosted runner 的 run loop 增加了与主线程 Timer 同 cadence 的 fallback，正常 App 仍由 Timer 驱动。
 - 首次失败记录 [app-runtime-initial.log](performance/verification-20261025/app-runtime-initial.log) 保留。修复当前回复尚未落盘导致追问遗漏，以及 Markdown 排版通知早于视图挂载导致首次末尾定位失败。
 - 模块边界：97 个真实 Logic 源文件，0 symlink，0 App/core 重复类型。
 - 本机发布预检包含供应链扫描、流式 runtime、macOS smoke、release 构建、macOS 14 deployment target、签名、安装 ZIP、manifest、SBOM 和 Sparkle appcast 校验。最终日志见同目录。
@@ -37,6 +37,8 @@
 
 24MP 图片 30 轮隔离采样沿用 [已有大图证据](performance/IMAGE_MEMORY_RASTER_2026-10-06.json)：峰值约 324 MiB，释放等待后约 73 MiB。它不等于完整附件 UI 长期内存验证。
 
+隔离 debug-preview 进程运行约 13 分与 25 分时，physical footprint 均为 43 MB、peak 45 MB，RSS 从约 52 MiB 到 55 MiB，采样 CPU 均为 0%。期间操作过会话 UI，两个离散快照不等于持续采样，也不是正式 release 的空闲内存承诺；证据为 `preview-memory-12min.md` 和 `preview-memory-25min.md`。
+
 ## 真实模型固定任务
 
 使用仓库内虚构资料，未发送用户文档或密钥。通过产品 AIClient 流式请求，未改用户供应商配置。A 为已配置 `agnes-3.0-flash`，B 为已配置 `deepseek-v4`。每个模型执行 Q1a/Q1b/Q2/Q3/Q4 各一次；这是有限对照，未完成原验收设计的每配置 24 任务、两位独立评审盲评。原始正文 A001–A005、B001–B005 与请求记录均保留。评阅由本次执行 agent 按固定核对表完成，不称为人工盲评。
@@ -57,5 +59,9 @@
 ## 实机边界
 
 跨应用固定 runner 每次验证 PID、bundleID、精确自有 fixture 标题、选区和目标身份；记录捕获方式、剪贴板和实际 transaction 回调。安全拒绝与成功写回分别记录。其初始化不是硬件全局快捷键链路。原始 JSON 与执行范围见同目录，不能把逻辑 fixture、少量实测或 AX 名称走查填成四应用 60 场景全通过。
+
+本轮 TextEdit/Word 共记录 20 次 runner 尝试：18 次达到对应预期，另有前台身份变化与测试 go-marker 等待超时各 1 次环境阻塞。18 次分为 9 次取词、3 次实际写回、6 次按预期保护拒绝（剪贴板竞争或同范围源文变化）。未观察到误写，但样本不覆盖所有控件；详见 `cross-app-summary.json`。Word 使用 RTF 兼容模式，选区只替换固定文本，不能代替富文本样式还原的完整验收。
+
+浏览器打开本地 fixture 被工具 URL 策略拒绝，未绕过策略，记为未完成；未找到本次指定的已安装 Electron 编辑器，未测。硬件快捷键链路、四应用完整 60 场景和系统 Shortcuts 下游串联尚无完整本轮实测证据。
 
 macOS 14/15、120 Hz、完整 VoiceOver/对比度人工检查、全部浏览器富文本和 Electron 控件仍未完整实测。当前设备所得结果是发布基线及明确限制，不作“任意应用”“稳定 60/120 FPS”或“所有模型质量达标”承诺。

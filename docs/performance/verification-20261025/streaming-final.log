@@ -1,0 +1,12 @@
+Sources/SnapAILogic/TextCapture.swift:383:22: warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+381 |                                             &value) == .success,
+382 |               let value, isAXUIElementRef(value) else { return nil }
+383 |         return value as! AXUIElement
+    |                |     | `- note: use 'as?' to perform a conditional downcast to 'AXUIElement'
+    |                |     `- warning: treating a forced downcast to 'AXUIElement' as optional will never produce 'nil'
+    |                `- note: add parentheses around the cast to silence this warning
+384 |     }
+385 | 
+NOTE: idle gap beyond request timeout disconnects the stream (gap=head, error=The request timed out.); see timeout hint in provider settings
+Markdown coalescing: 502 refreshes, 2 builds, 1 publication; idle typewriter: 0 active timers
+Streaming runtime smoke passed: cancellation, restart, request snapshot, slow-gap timeout probe, partial failure, idle timers, Markdown coalescing

@@ -1,0 +1,49 @@
+Building for debugging...
+[4 / 23] SnapAILogic
+[6 / 25] SnapAILogic
+[12 / 21] SnapAILogicTests-product
+[14 / 21] SnapAILogicTests-product
+[16 / 23] SnapAI-product
+[18 / 25] SnapAILogicTests-product
+/Users/qidewei/Documents/SnapAI/Tests/SnapAILogicTests/ImageTextRecognitionTests.swift:78:14: warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 76 |     let task = Task.detached {
+ 77 |         ready.signal()
+ 78 |         gate.wait()
+    |              `- warning: instance method 'wait' is unavailable from asynchronous contexts; Await a Task handle instead; this is an error in the Swift 6 language mode
+ 79 |         result.withLock { $0 = SnapAIImageTextRecognition.recognizeText(in: Data()) }
+ 80 |         finished.signal()
+
+Dispatch.DispatchSemaphore.wait:2:13: note: 'wait()' declared here
+1 | class DispatchSemaphore {
+2 | public func wait()}
+  |             `- note: 'wait()' declared here
+3 |
+[23 / 30] SnapAILogicTests-product
+[25 / 28] SnapAI-product
+[28 / 30] SnapAI-product
+Build complete! (4.44秒)
+Test Suite 'Selected tests' started at 2026-10-25 01:40:20.068.
+Test Suite 'SnapAILogicTests.xctest' started at 2026-10-25 01:40:20.070.
+Test Suite 'SnapAILogicTests' started at 2026-10-25 01:40:20.070.
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' started.
+2026-10-25 01:40:21.786 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-FC62ED8B-F1E1-4B3C-8551-599451FCE3D2”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:40:21.788 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-FC62ED8B-F1E1-4B3C-8551-599451FCE3D2”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:40:21.795 xctest[75548:1166972] SnapAI: history store failure: history write failed: fixture stop
+2026-10-25 01:40:21.800 xctest[75548:1166972] SnapAI: history store failure: history store requires a newer app version
+2026-10-25 01:40:21.808 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-B520BAA3-0222-4E36-8FA6-F6C1331D77F8”中，因为已存在同名文件。
+2026-10-25 01:40:21.808 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-B520BAA3-0222-4E36-8FA6-F6C1331D77F8”中，因为已存在同名文件。
+2026-10-25 01:40:21.811 xctest[75548:1166972] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-10-25 01:40:21.838 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-4C8B0B5C-AAD8-4457-9D1D-F8E6DD9639E9”中，因为已存在同名文件。
+2026-10-25 01:40:21.838 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-4C8B0B5C-AAD8-4457-9D1D-F8E6DD9639E9”中，因为已存在同名文件。
+2026-10-25 01:40:21.844 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-4C8B0B5C-AAD8-4457-9D1D-F8E6DD9639E9”中，因为已存在同名文件。
+2026-10-25 01:40:23.785 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-2659F5B2-4991-458C-A2E8-8D7F60434172”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:40:23.786 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-2659F5B2-4991-458C-A2E8-8D7F60434172”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:40:23.786 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-2659F5B2-4991-458C-A2E8-8D7F60434172”保存在文件夹“T”中，因为已存在同名文件。
+2026-10-25 01:40:23.788 xctest[75548:1166972] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-2659F5B2-4991-458C-A2E8-8D7F60434172”保存在文件夹“T”中，因为已存在同名文件。
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' passed (5.419 seconds).
+Test Suite 'SnapAILogicTests' passed at 2026-10-25 01:40:25.490.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.419 (5.420) seconds
+Test Suite 'SnapAILogicTests.xctest' passed at 2026-10-25 01:40:25.490.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.419 (5.420) seconds
+Test Suite 'Selected tests' passed at 2026-10-25 01:40:25.490.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.419 (5.422) seconds
