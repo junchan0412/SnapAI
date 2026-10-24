@@ -12,8 +12,9 @@ func testImageTextRecognitionDetectsEnglishAndChinese() {
     ]
     for lines in fixtures {
         let image = imageTextRecognitionFixture(lines: lines)
-        guard case .recognized(let result) = SnapAIImageTextRecognition.recognizeText(in: image) else {
-            expect(false, "clear English and Chinese images produce reliable OCR without changing confidence thresholds")
+        let outcome = SnapAIImageTextRecognition.recognizeText(in: image)
+        guard case .recognized(let result) = outcome else {
+            expect(false, "clear English and Chinese images produce reliable OCR without changing confidence thresholds: \(outcome)")
             continue
         }
         expect(result.text.contains(lines[2]), "OCR preserves the full sentence in the detected language")
@@ -24,8 +25,9 @@ func testImageTextRecognitionDetectsEnglishAndChinese() {
 
 func testImageTextRecognitionDistinguishesNoTextAndTimeout() {
     let blank = imageTextRecognitionFixture(lines: [])
-    expect(SnapAIImageTextRecognition.recognizeText(in: blank) == .noReliableText,
-           "a valid blank image is distinct from a failed recognition request")
+    let outcome = SnapAIImageTextRecognition.recognizeText(in: blank)
+    expect(outcome == .noReliableText,
+           "a valid blank image is distinct from a failed recognition request: \(outcome)")
     expect(SnapAIImageTextRecognition.recognizeText(in: blank, timeout: 0) == .failed(.timedOut),
            "an exhausted time budget reports timeout instead of claiming the image has no text")
 }
