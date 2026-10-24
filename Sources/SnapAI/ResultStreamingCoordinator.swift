@@ -29,7 +29,8 @@ final class ResultStreamingCoordinator {
     }
 
     func begin(speed: TypewriterSpeed,
-               reduceMotion: Bool = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+               reduceMotion: Bool = ProcessInfo.processInfo.environment["SNAPAI_LOGIC_TESTS"] == "1"
+                    ? false : NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                onOutputChunk: @escaping (String) -> Void,
                onDrained: @escaping () -> Void) {
         stopTimer()
