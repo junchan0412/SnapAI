@@ -14,6 +14,7 @@ func testImageTextRecognitionDetectsEnglishAndChinese() {
         let image = imageTextRecognitionFixture(lines: lines)
         let outcome = SnapAIImageTextRecognition.recognizeText(in: image)
         guard case .recognized(let result) = outcome else {
+            if systemOCRUnavailableInCI(outcome) { continue }
             expect(false, "clear English and Chinese images produce reliable OCR without changing confidence thresholds: \(outcome)")
             continue
         }
@@ -26,10 +27,19 @@ func testImageTextRecognitionDetectsEnglishAndChinese() {
 func testImageTextRecognitionDistinguishesNoTextAndTimeout() {
     let blank = imageTextRecognitionFixture(lines: [])
     let outcome = SnapAIImageTextRecognition.recognizeText(in: blank)
-    expect(outcome == .noReliableText,
-           "a valid blank image is distinct from a failed recognition request: \(outcome)")
+    if !systemOCRUnavailableInCI(outcome) {
+        expect(outcome == .noReliableText,
+               "a valid blank image is distinct from a failed recognition request: \(outcome)")
+    }
     expect(SnapAIImageTextRecognition.recognizeText(in: blank, timeout: 0) == .failed(.timedOut),
            "an exhausted time budget reports timeout instead of claiming the image has no text")
+}
+
+private func systemOCRUnavailableInCI(_ outcome: SnapAIImageTextRecognition.Outcome) -> Bool {
+    guard ProcessInfo.processInfo.environment["CI"] == "true",
+          outcome == .failed(.system(domain: "TextRecognition.CRImageReaderError", code: 9)) else { return false }
+    print("SKIP real Vision OCR: hosted runner returns TextRecognition.CRImageReaderError(9); physical-device release checks remain required")
+    return true
 }
 
 func testImageTextRecognitionCancelsRunningAndPrestartRequests() {

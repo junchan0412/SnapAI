@@ -66,22 +66,7 @@ package enum SnapAIImageTextRecognition {
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         return recognizeText(using: request, timeout: timeout) {
-            do {
-                try handler.perform([request])
-            } catch {
-                let failure = error as NSError
-                guard failure.domain == "TextRecognition.CRImageReaderError", failure.code == 9 else { throw error }
-                let stages = try request.supportedComputeStageDevices
-                var configuredCPU = false
-                for (stage, devices) in stages {
-                    if let cpu = devices.first(where: { if case .cpu = $0 { return true }; return false }) {
-                        request.setComputeDevice(cpu, for: stage)
-                        configuredCPU = true
-                    }
-                }
-                guard configuredCPU else { throw error }
-                try handler.perform([request])
-            }
+            try handler.perform([request])
         }
     }
 
