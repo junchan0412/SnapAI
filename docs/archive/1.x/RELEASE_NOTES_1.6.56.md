@@ -14,7 +14,7 @@ SnapAI 1.6.56 聚焦窗口生命周期与可复现内存测量。设置和 onboa
 
 - 新增 `scripts/profile-runtime-memory.sh`。
 - 输出 RSS、CPU、physical footprint、peak footprint 和重点 VM region。
-- 新增 [运行时内存基线](RUNTIME_MEMORY_BASELINE.md),记录测量方法、1.6.55 基线和后续场景。
+- 新增 [运行时内存基线](../../baselines/RUNTIME_MEMORY_BASELINE.md),记录测量方法、1.6.55 基线和后续场景。
 
 ## 回归保护
 

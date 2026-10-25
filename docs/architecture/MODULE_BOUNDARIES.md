@@ -20,7 +20,7 @@ Swift 不会把 struct 隐式 memberwise initializer 自动提升为 `package`�
 
 ## 单一实现
 
-本次统一将剩余 37 份 symlink 改为真实库源码，并删除 App 中对应的源码。当前逻辑模块共有 84 个真实 Swift 文件。
+本次统一将剩余 37 份 symlink 改为真实库源码，并删除 App 中对应的源码。当前逻辑模块共有 97 个真实 Swift 文件（2026-10-25 检查）。
 
 旧 `AutomationURLCommandAppBridge.swift` 中重复的 5 个 Automation 类型和 `AIAction` 扩展已删除。URL 命令处理直接使用逻辑模块返回的值；不再把同一种枚举转成 raw value 后重新构造，也不再复制同一种历史筛选结构。
 

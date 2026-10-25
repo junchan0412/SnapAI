@@ -16,7 +16,7 @@
 
 ## 验证
 
-逻辑、独立 runner、流式及 App runtime、macOS smoke、签名安装包与更新 feed 按发布预检验证。原始日志、固定模型任务和本机性能结果见 [2.1.0 验收记录](RELEASE_ACCEPTANCE_2.1.0.md)。
+逻辑、独立 runner、流式及 App runtime、macOS smoke、签名安装包与更新 feed 按发布预检验证。原始日志、固定模型任务和本机性能结果见 [2.1.0 验收记录](../reports/RELEASE_ACCEPTANCE_2.1.0.md)。
 
 ## 兼容性与范围
 

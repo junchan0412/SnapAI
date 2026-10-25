@@ -1,5 +1,7 @@
 # SnapAI 项目综合评估报告
 
+> 历史基线：本文描述 2026-10-02 的状态，部分缺口已在 2.1.0 解决。当前情况见 [2026-10-25 检查报告](PROJECT_HEALTH_2026-10-25.md) 与 [2.1.0 验收记录](RELEASE_ACCEPTANCE_2.1.0.md)。
+
 评估日期：2026-10-02（Asia/Shanghai）
 评估版本：2.0.8，Git `89ea7d7c0f3a48830293c59b201c8f89ada486f5`
 重点：现有功能的真实完成度、界面与动画效果、性能证据、后续产品方向。
@@ -203,7 +205,7 @@ RSS、physical footprint、peak 是不同指标，不应互相替代；CPU 0.0% 
 
 文档问题：`run-ui-preview.sh` 执行默认 `swift build`，却被内存报告引用为 release 预览。流式 fixture 文档还写“每片重渲染 Markdown”，而实际已是流式纯文本；演示规模与时长描述也有漂移。建议每份基线固定记录 commit、设备、配置、fixture 和实际命令。
 
-证据：[run-ui-preview.sh:12](/Users/qidewei/Documents/SnapAI/scripts/run-ui-preview.sh:12)、[STARTUP_BASELINE.md](/Users/qidewei/Documents/SnapAI/docs/STARTUP_BASELINE.md)、[RUNTIME_MEMORY_BASELINE.md](/Users/qidewei/Documents/SnapAI/docs/RUNTIME_MEMORY_BASELINE.md)。
+证据：[run-ui-preview.sh:12](/Users/qidewei/Documents/SnapAI/scripts/run-ui-preview.sh:12)、[STARTUP_BASELINE.md](/Users/qidewei/Documents/SnapAI/docs/baselines/STARTUP_BASELINE.md)、[RUNTIME_MEMORY_BASELINE.md](/Users/qidewei/Documents/SnapAI/docs/baselines/RUNTIME_MEMORY_BASELINE.md)。
 
 ### 7.4 尚待实测的性能风险
 
@@ -232,7 +234,7 @@ RSS、physical footprint、peak 是不同指标，不应互相替代；CPU 0.0% 
 - README 后部仍描述旧的 manifest/helper 更新链路，与 2.0.8 Sparkle 实现不一致，应合并清理。
 - 英文仅局部 UI 接入资源，尚不能视为完整双语产品。
 
-证据：[LocalSecretStore.swift:5](/Users/qidewei/Documents/SnapAI/Sources/SnapAILogic/LocalSecretStore.swift:5)、[ACCESSIBILITY_WALKTHROUGH.md](/Users/qidewei/Documents/SnapAI/docs/ACCESSIBILITY_WALKTHROUGH.md)、[UpdateCheckerApp.swift:3](/Users/qidewei/Documents/SnapAI/Sources/SnapAI/UpdateCheckerApp.swift:3)、[README.md:195](/Users/qidewei/Documents/SnapAI/README.md:195)。
+证据：[LocalSecretStore.swift:5](/Users/qidewei/Documents/SnapAI/Sources/SnapAILogic/LocalSecretStore.swift:5)、[ACCESSIBILITY_WALKTHROUGH.md](/Users/qidewei/Documents/SnapAI/docs/guides/ACCESSIBILITY_WALKTHROUGH.md)、[UpdateCheckerApp.swift:3](/Users/qidewei/Documents/SnapAI/Sources/SnapAI/UpdateCheckerApp.swift:3)、[README.md:195](/Users/qidewei/Documents/SnapAI/README.md:195)。
 
 ## 9. 后续功能路线建议
 
@@ -300,11 +302,11 @@ RSS、physical footprint、peak 是不同指标，不应互相替代；CPU 0.0% 
 
 测试原始日志保存在本机临时目录，关键结果已写入本文，临时目录可能被系统清理：
 
-- [逻辑测试日志](/tmp/snapai-audit-20261002/logic-tests-swiftpm.log)
-- [流式 runtime 日志](/tmp/snapai-audit-20261002/streaming-runtime.log)
-- [解析微基准日志](/tmp/snapai-audit-20261002/benchmark-streaming.log)
-- [存储五轮原始数据](/tmp/snapai-audit-20261002/benchmark-storage.log)
-- [debug 预览内存快照](/tmp/snapai-audit-20261002/runtime-preview.md)
-- [standalone 失败日志](/tmp/snapai-audit-20261002/logic-tests.log)
+- 逻辑测试日志（原路径：`/tmp/snapai-audit-20261002/logic-tests-swiftpm.log`；2026-10-25 复核已不存在）
+- 流式 runtime 日志（原路径：`/tmp/snapai-audit-20261002/streaming-runtime.log`；2026-10-25 复核已不存在）
+- 解析微基准日志（原路径：`/tmp/snapai-audit-20261002/benchmark-streaming.log`；2026-10-25 复核已不存在）
+- 存储五轮原始数据（原路径：`/tmp/snapai-audit-20261002/benchmark-storage.log`；2026-10-25 复核已不存在）
+- debug 预览内存快照（原路径：`/tmp/snapai-audit-20261002/runtime-preview.md`；2026-10-25 复核已不存在）
+- standalone 失败日志（原路径：`/tmp/snapai-audit-20261002/logic-tests.log`；2026-10-25 复核已不存在）
 
 本轮交付为评估报告。上述缺陷与建议尚未实施；业务代码保持原样。

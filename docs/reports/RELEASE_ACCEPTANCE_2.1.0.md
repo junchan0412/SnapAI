@@ -1,18 +1,18 @@
 # SnapAI 2.1.0 验收记录
 
-日期：2026-10-25。接续 `PROJECT_REVIEW_2026-10-02.md` 第 9、10 节。原始证据位于 [verification-20261025](performance/verification-20261025/)。
+日期：2026-10-25。接续 `PROJECT_REVIEW_2026-10-02.md` 第 9、10 节。原始证据位于 [verification-20261025](../performance/verification-20261025/)。
 
 ## 交付范围
 
 完成报告 P0、P1 主路径和前序确认的 P2 持久会话、分支、可撤销上下文压缩。压缩由用户填写并确认摘要，不额外调用模型，原始轮次保留。会话仅本机保存，不进入 iCloud；历史保存关闭、仅元信息及高风险保护继续生效。文件检索与引用按需求排除；应用自动配置与逐段接受改写未纳入已确认范围。源文变更保护已实现。
 
-新会话能力已接入结果窗口和历史窗口。恢复不请求网络、不沿用旧文档写回目标；原图及 OCR-only 提交状态分别恢复。实机预览已操作启用摘要、撤销、创建分支并观察写回按钮禁用，见 [界面证据](performance/verification-20261025/conversation-compression.png)。预览使用独立存储，不修改真实历史或供应商配置。
+新会话能力已接入结果窗口和历史窗口。恢复不请求网络、不沿用旧文档写回目标；原图及 OCR-only 提交状态分别恢复。实机预览已操作启用摘要、撤销、创建分支并观察写回按钮禁用，见 [界面证据](../performance/verification-20261025/conversation-compression.png)。预览使用独立存储，不修改真实历史或供应商配置。
 
 ## 自动检查
 
 - SwiftPM 逻辑回归通过，新增 7 个存储/分支/压缩/隐私测试已注册到正式 runner。
 - App runtime 全量回归通过：会话实际 payload、恢复不联网、旧目标写回拒绝、OCR 生命周期、独立对照、Shortcuts 返回、五时点、30 次设置窗口生命周期及 10k/40k/100k 阅读往返。流式 runtime 也通过；为 hosted runner 的 run loop 增加了与主线程 Timer 同 cadence 的 fallback，正常 App 仍由 Timer 驱动。
-- 首次失败记录 [app-runtime-initial.log](performance/verification-20261025/app-runtime-initial.log) 保留。修复当前回复尚未落盘导致追问遗漏，以及 Markdown 排版通知早于视图挂载导致首次末尾定位失败。
+- 首次失败记录 [app-runtime-initial.log](../performance/verification-20261025/app-runtime-initial.log) 保留。修复当前回复尚未落盘导致追问遗漏，以及 Markdown 排版通知早于视图挂载导致首次末尾定位失败。
 - 模块边界：97 个真实 Logic 源文件，0 symlink，0 App/core 重复类型。
 - 本机发布预检包含供应链扫描、流式 runtime、macOS smoke、release 构建、macOS 14 deployment target、签名、安装 ZIP、manifest、SBOM 和 Sparkle appcast 校验。最终日志见同目录。
 
@@ -33,9 +33,9 @@
 | 200 条历史完整搜索，暖连接 | 120.2 ms | 122.1 ms |
 | 500 条历史完整搜索，暖连接 | 293.6 ms | 303.3 ms |
 
-窗口测量为真实 controller.show → 可输入/Markdown 可读、alpha≥0.99 且连续两次观察通过；控制器与 fixture 预先准备，同进程框架缓存保持温热，不包含硬件快捷键、系统进程启动、GPU 扫描和网络。解析在后台执行，解析耗时不等于 UI 帧耗时。历史完整搜索包含系统 embedding，词法结果先发布，不能把该指标冒充连续键入的端到端显示时延。原始数据见 [window-latency.json](performance/verification-20261025/window-latency.json) 与 [roadmap-performance.json](performance/verification-20261025/roadmap-performance.json)。
+窗口测量为真实 controller.show → 可输入/Markdown 可读、alpha≥0.99 且连续两次观察通过；控制器与 fixture 预先准备，同进程框架缓存保持温热，不包含硬件快捷键、系统进程启动、GPU 扫描和网络。解析在后台执行，解析耗时不等于 UI 帧耗时。历史完整搜索包含系统 embedding，词法结果先发布，不能把该指标冒充连续键入的端到端显示时延。原始数据见 [window-latency.json](../performance/verification-20261025/window-latency.json) 与 [roadmap-performance.json](../performance/verification-20261025/roadmap-performance.json)。
 
-24MP 图片 30 轮隔离采样沿用 [已有大图证据](performance/IMAGE_MEMORY_RASTER_2026-10-06.json)：峰值约 324 MiB，释放等待后约 73 MiB。它不等于完整附件 UI 长期内存验证。
+24MP 图片 30 轮隔离采样沿用 [已有大图证据](../performance/IMAGE_MEMORY_RASTER_2026-10-06.json)：峰值约 324 MiB，释放等待后约 73 MiB。它不等于完整附件 UI 长期内存验证。
 
 隔离 debug-preview 进程运行约 13 分与 25 分时，physical footprint 均为 43 MB、peak 45 MB，RSS 从约 52 MiB 到 55 MiB，采样 CPU 均为 0%。期间操作过会话 UI，两个离散快照不等于持续采样，也不是正式 release 的空闲内存承诺；证据为 `preview-memory-12min.md` 和 `preview-memory-25min.md`。
 

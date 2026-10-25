@@ -17,7 +17,7 @@ SnapAI 1.6.52 完成新一轮全量审计与 remediation。本版重点提升历
   - `bridge` / `app-api`:没有 symlink 消费者,但 app/test 仍直接消费,迁移前需要 DTO 或 app bridge。
   - `ready` / `isolated`:未检测到 symlink 或 app/test 消费者,可作为最小候选。
 - 审计门禁新增候选分析 app-api 风险分类检查。
-- `docs/LOGIC_TARGET_MIGRATION_PLAN.md` 更新剩余候选状态解释。
+- `docs/architecture/LOGIC_TARGET_MIGRATION_PLAN.md` 更新剩余候选状态解释。
 - `SnapAILogic` 真实源码基线从 35 提升到 36。
 - README 与 UI 总览同步到 1.6.52,并修正不存在许可证文件的误导性说明。
 

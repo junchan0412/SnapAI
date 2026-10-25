@@ -22,7 +22,7 @@
 | 30 次完整读取 | 400.870 ms | 131.495 ms | 67.2% |
 | 50 次收藏更新 | 895.471 ms | 6.013 ms | 99.3% |
 
-表格使用提交前完整代码的最后一轮复核。[最终原始样本](benchmarks/storage-2.0.0-final.json)；[首轮原始样本](benchmarks/storage-2.0.0.json)。两轮五次交替测量的中位数降幅分别为：批量写入 71.7% / 74.6%，读取 71.0% / 67.2%，收藏 98.0% / 99.3%。机器负载导致绝对耗时波动，未将这些结果推广为所有工作负载。复现：
+表格使用提交前完整代码的最后一轮复核。[最终原始样本](../benchmarks/storage-2.0.0-final.json)；[首轮原始样本](../benchmarks/storage-2.0.0.json)。两轮五次交替测量的中位数降幅分别为：批量写入 71.7% / 74.6%，读取 71.0% / 67.2%，收藏 98.0% / 99.3%。机器负载导致绝对耗时波动，未将这些结果推广为所有工作负载。复现：
 
 ```bash
 scripts/benchmark-storage.sh 7631ef4
@@ -30,7 +30,7 @@ scripts/benchmark-storage.sh 7631ef4
 
 ### 文本与呈现
 
-同一优化构建 runner 对照旧版，统计中位数，并记录块数量/输出字节数累加值以避免空工作；内容正确性由独立逻辑回归验证。数值会随机器负载波动。[最终输出](benchmarks/streaming-2.0.0.txt)。
+同一优化构建 runner 对照旧版，统计中位数，并记录块数量/输出字节数累加值以避免空工作；内容正确性由独立逻辑回归验证。数值会随机器负载波动。[最终输出](../benchmarks/streaming-2.0.0.txt)。
 
 | 场景 | 1.6.75 | 2.0.0 |
 | --- | ---: | ---: |
@@ -75,12 +75,12 @@ scripts/preflight-release.sh --require-clean --require-synced
 
 全部截图来自使用演示数据的独立预览应用。检查了设置全部分区、差异预览、权限健康、历史列表/阅读联动、快捷输入的中文多行文本、命令面板中文搜索/方向键/回车，以及浅深色和紧凑窗口。权限复查不会自动弹出授权请求。
 
-- [设置（浅色）](screenshots/snapai-settings-light.png) / [设置（深色、紧凑）](screenshots/snapai-settings-dark.png)
-- [结果（浅色）](screenshots/snapai-result-light.png) / [结果（深色）](screenshots/snapai-result-dark.png) / [紧凑结果](screenshots/snapai-result-compact.png)
-- [快捷输入](screenshots/snapai-quick-dark.png) / [紧凑输入](screenshots/snapai-quick-compact.png)
-- [历史记录](screenshots/snapai-history-light.png) / [动作编辑](screenshots/snapai-actions-light.png)
-- [差异预览](screenshots/snapai-diff-light.png) / [权限健康](screenshots/snapai-health-light.png)
-- [首次引导](screenshots/snapai-welcome-light.png) / [命令面板](screenshots/snapai-commands-light.png)
+- [设置（浅色）](../screenshots/snapai-settings-light.png) / [设置（深色、紧凑）](../screenshots/snapai-settings-dark.png)
+- [结果（浅色）](../screenshots/snapai-result-light.png) / [结果（深色）](../screenshots/snapai-result-dark.png) / [紧凑结果](../screenshots/snapai-result-compact.png)
+- [快捷输入](../screenshots/snapai-quick-dark.png) / [紧凑输入](../screenshots/snapai-quick-compact.png)
+- [历史记录](../screenshots/snapai-history-light.png) / [动作编辑](../screenshots/snapai-actions-light.png)
+- [差异预览](../screenshots/snapai-diff-light.png) / [权限健康](../screenshots/snapai-health-light.png)
+- [首次引导](../screenshots/snapai-welcome-light.png) / [命令面板](../screenshots/snapai-commands-light.png)
 
 ```bash
 scripts/run-ui-preview.sh result light --compact

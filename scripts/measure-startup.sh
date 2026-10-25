@@ -7,7 +7,7 @@
 # 采样点出现,不影响计时。
 #
 # 用法:scripts/measure-startup.sh [次数] [app bundle 路径]
-# 结果写入 docs/STARTUP_BASELINE.md(手工同步)。
+# 结果写入 docs/baselines/STARTUP_BASELINE.md(手工同步)。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

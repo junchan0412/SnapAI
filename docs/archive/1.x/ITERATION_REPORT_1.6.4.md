@@ -5,7 +5,7 @@
 ## 已完成
 
 - 重新截取设置页截图,裁剪为独立窗口图片,并替换不适合公开展示的本机配置名。
-- 恢复 `docs/snapai-settings.png`,避免 README 首页破图。
+- 恢复 `docs/archive/assets/snapai-settings.png`,避免 README 首页破图。
 - 将 `ResultWriteBackCoordinator` 调整为 `WriteBackCoordinator` 的兼容别名,同时保留既有调用方式。
 - README、Release Notes、Iteration Report 和 UI 总览图同步到 1.6.4。
 

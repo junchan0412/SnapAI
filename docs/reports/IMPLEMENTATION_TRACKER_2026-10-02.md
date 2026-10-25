@@ -1,5 +1,7 @@
 # 报告路线实施与验收清单
 
+> 本文保留按时间追加的实施过程，文内 active/blocked 是当时记录。当前状态见 [项目检查报告](PROJECT_HEALTH_2026-10-25.md)，后续待办统一维护于 [当前路线图](../roadmap/ROADMAP_2026-10-25.md)。
+
 更新：2026-10-25。依据 `PROJECT_REVIEW_2026-10-02.md` 第 9、10 节，在原工作区改动上继续实施。报告保留为 10 月 2 日基线；前序记录描述当时状态，本轮接续和发布结果见文末。
 
 总目标继续覆盖报告第9、10节，尚未宣布完成。本轮执行报告的“可信维护版”“截图与阅读增强版”，并选取真正双模型、可组合 Shortcuts 两项场景效率能力，并补齐P1用量统计。P2 遵守报告“验证需求后推进”的前提，不将未实现能力列为完成。
@@ -30,12 +32,12 @@
 下列为本轮实际取得的自动检查和固定设备测量证据。真实模型回答、跨应用写回、系统Shortcuts发现不由本地fixture替代。
 
 - SwiftPM debug 构建：通过；正式release与隔离release-preview构建通过。
-- 逻辑测试：2026-10-06 11:44 的 SwiftPM 聚合 XCTest 通过（0 failures，3.594秒），持久日志为 [`logic-final.log`](performance/verification-20261006/logic-final.log)。包含真实图、空白图、OCR超时/运行中及启动前取消、写回源校验；之后的历史搜索取消修改已完成复验：[`history-final.log`](performance/verification-20261006/history-final.log) 记录12:31聚合XCTest通过（280个注册case，0 failures，3.713秒），[`history-app-build.log`](performance/verification-20261006/history-app-build.log) 记录App debug构建通过（0.52秒）。
+- 逻辑测试：2026-10-06 11:44 的 SwiftPM 聚合 XCTest 通过（0 failures，3.594秒），持久日志为 [`logic-final.log`](../performance/verification-20261006/logic-final.log)。包含真实图、空白图、OCR超时/运行中及启动前取消、写回源校验；之后的历史搜索取消修改已完成复验：[`history-final.log`](../performance/verification-20261006/history-final.log) 记录12:31聚合XCTest通过（280个注册case，0 failures，3.713秒），[`history-app-build.log`](../performance/verification-20261006/history-app-build.log) 记录App debug构建通过（0.52秒）。
 - 模块边界：95个真实Logic源文件、0 symlink、0 App/core重复类型。
 - 流式 runtime：通过，含尾部usage兼容、有界等待、Anthropic最终用量与取消。
 - App runtime：通过，包含独立对照、Shortcuts、五个时点、30次设置窗开关和原有取消/错误/写回策略。复验中发现并修复本地优先可能被云模型高分反超的问题。2026-10-06已完成全量复跑，含最终LazyVStack/末尾锚点、完整payload隐私、本地预检跳过/动作绑定/无本地候选，以及10k/40k/100k往返阅读和代码/表格横滚回归。
-- 性能原始数据和测量口径：[性能验收记录](ROADMAP_PERFORMANCE_2026-10-04.md)。
-- 固定任务、评分、跨应用场景与未实测记录：[功能验收集](ROADMAP_ACCEPTANCE_2026-10-04.md)。
+- 性能原始数据和测量口径：[性能验收记录](../roadmap/ROADMAP_PERFORMANCE_2026-10-04.md)。
+- 固定任务、评分、跨应用场景与未实测记录：[功能验收集](../roadmap/ROADMAP_ACCEPTANCE_2026-10-04.md)。
 
 ## 第 10 节覆盖与限制
 
@@ -63,23 +65,23 @@ GUI复验仍在继续，瞬时锁屏状态以各次执行记录为准。P2需求
 - 清晰英文图在固定中文优先OCR下平均置信度0.433；启用自动语言检测后为1.0，未降低0.5阈值，中文fixture同时通过。模型首次加载实测27.08秒，默认等待预算45秒，超时取消任务；无可靠文字/超时/解码/系统错误分别保留。
 - 实际图片UI验证：1600×1066原图保留，三模式说明与内容切换正确；拖动裁剪到519×252后使用新图，OCR从78字刷新为66字，保留“图文一起”；删除附件同时清除OCR并禁用空提交。此为工作流验证，不代表逐字OCR质量满分。
 - OCR lifecycle：删除、有效换图、成功裁剪和模型释放均取消旧任务，隐藏窗口保留草稿与OCR；runtime先等待识别闭包启动再取消，覆盖旧结果不得发布。Vision运行中每至多50ms检查取消并调用request.cancel；单次系统调用的退出时间仍由系统决定。
-- App runtime本轮首次失败日志保留为 [`app-runtime.log`](performance/verification-20261006/app-runtime.log)。size与Escape测试改用hosting的VM身份定位窗口，未放宽断言/超时或改业务关闭逻辑；修正后全量 [`window-diagnostic.log`](performance/verification-20261006/window-diagnostic.log) PASS，包含新增OCR lifecycle。
+- App runtime本轮首次失败日志保留为 [`app-runtime.log`](../performance/verification-20261006/app-runtime.log)。size与Escape测试改用hosting的VM身份定位窗口，未放宽断言/超时或改业务关闭逻辑；修正后全量 [`window-diagnostic.log`](../performance/verification-20261006/window-diagnostic.log) PASS，包含新增OCR lifecycle。
 - 写回还增加粘贴前剪贴板changeCount检查，竞争时保留新剪贴板且不以fallback复制覆盖；成功后保留可验证snapshot用于撤销。Diff左列明确为“捕获时原文”。
 - 四组窗口延迟每组30次已保存，详见性能记录；以model/VM精确身份绑定的新版基准器已编译，尚待执行。
 - 旧 `/tmp` 跨应用原始日志已丢失，只能保留当时观察，不能据此填满当前验收矩阵。新runner/fixture保存在 `.build`，新原始日志写入 `docs/performance/verification-20261006/`；完整复验待完成。
 - 真实模型探测：Apple Foundation Models报告 `deviceNotEligible`；Ollama与LM Studio默认本地端点当次不可达，不代表全部自定义端点不存在。真实质量评分仍待指定可用供应商/模型和费用范围。
 
-- 历史搜索首次测试遇到Swift closure exclusivity编译错误，原日志保留为 [`history-initial-compile-failure.log`](performance/verification-20261006/history-initial-compile-failure.log)；`shouldCancel`改为`@escaping`后逻辑回归及App构建通过。连续输入到可见结果的GUI端到端P50/P95仍未取得。
+- 历史搜索首次测试遇到Swift closure exclusivity编译错误，原日志保留为 [`history-initial-compile-failure.log`](../performance/verification-20261006/history-initial-compile-failure.log)；`shouldCancel`改为`@escaping`后逻辑回归及App构建通过。连续输入到可见结果的GUI端到端P50/P95仍未取得。
 
 ## 2026-10-06 裁剪可访问性与大图采样
 
-- 裁剪选区原来只能拖动；现增加左/上/宽/高原生像素 Stepper，即时更新同一选区，并提供“选择全图”。像素与显示坐标转换消除整数边界的浮点表示误差，保留真实分数边缘向外取整，支持有效的1像素裁剪。逻辑回归和App构建通过，见 [`crop-accessibility-logic.log`](performance/verification-20261006/crop-accessibility-logic.log) 与 [`crop-accessibility-build.log`](performance/verification-20261006/crop-accessibility-build.log)。真实键盘、VoiceOver和布局仍待桌面验收。
-- 24MP图片的30轮隔离进程采样保存于 [`IMAGE_MEMORY_RASTER_2026-10-06.json`](performance/IMAGE_MEMORY_RASTER_2026-10-06.json)。29次暖OCR P50/P95为164.189/166.882ms；全程physical footprint peak为323.894MiB，最后释放后113.894MiB，额外等待5秒后73.300MiB。存在回落，不能直接判定持续泄漏或缓存归因；不覆盖QuickInput完整UI生命周期。详细口径见性能文档。
+- 裁剪选区原来只能拖动；现增加左/上/宽/高原生像素 Stepper，即时更新同一选区，并提供“选择全图”。像素与显示坐标转换消除整数边界的浮点表示误差，保留真实分数边缘向外取整，支持有效的1像素裁剪。逻辑回归和App构建通过，见 [`crop-accessibility-logic.log`](../performance/verification-20261006/crop-accessibility-logic.log) 与 [`crop-accessibility-build.log`](../performance/verification-20261006/crop-accessibility-build.log)。真实键盘、VoiceOver和布局仍待桌面验收。
+- 24MP图片的30轮隔离进程采样保存于 [`IMAGE_MEMORY_RASTER_2026-10-06.json`](../performance/IMAGE_MEMORY_RASTER_2026-10-06.json)。29次暖OCR P50/P95为164.189/166.882ms；全程physical footprint peak为323.894MiB，最后释放后113.894MiB，额外等待5秒后73.300MiB。存在回落，不能直接判定持续泄漏或缓存归因；不覆盖QuickInput完整UI生命周期。详细口径见性能文档。
 - 图像测量于12:58:41结束；裁剪测试日志于12:59:20创建，未与该轮编译重叠。桌面工具本轮仍报告Mac锁定，跨应用、新版窗口延迟及完整可访问性验收尚未执行。
 
 ## 2026-10-06 13:04 阻塞复核
 
-本次CUA再次返回Mac locked，已连续三个goal轮次出现同一条件；前两轮仍完成了历史搜索、裁剪控件和大图测量。本轮核查后没有可独立推进的、证据明确的必要实现缺口，也没有仍在运行的验证任务。默认Ollama/LM Studio端点复查仍不可达，见 [`local-model-endpoints-recheck.json`](performance/verification-20261006/local-model-endpoints-recheck.json)。这不排除用户另有自定义模型端点。
+本次CUA再次返回Mac locked，已连续三个goal轮次出现同一条件；前两轮仍完成了历史搜索、裁剪控件和大图测量。本轮核查后没有可独立推进的、证据明确的必要实现缺口，也没有仍在运行的验证任务。默认Ollama/LM Studio端点复查仍不可达，见 [`local-model-endpoints-recheck.json`](../performance/verification-20261006/local-model-endpoints-recheck.json)。这不排除用户另有自定义模型端点。
 
 目标进入blocked等待条件，未完成且未缩减范围。解除条件后继续：
 

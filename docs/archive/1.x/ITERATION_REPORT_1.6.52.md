@@ -19,7 +19,7 @@
 - 将无 symlink 消费者但仍有 app/test 消费者的文件标为 `bridge` / `app-api`。
 - 保留真正无消费者的 `ready` / `isolated` 状态,让后续迁移更容易挑选最小切口。
 - 在 `scripts/run-audit-remediation-check.sh` 中加入 app-api 分类存在性检查,防止分析脚本退回到过粗的状态。
-- 更新 `docs/LOGIC_TARGET_MIGRATION_PLAN.md` 的候选状态说明。
+- 更新 `docs/architecture/LOGIC_TARGET_MIGRATION_PLAN.md` 的候选状态说明。
 
 ## 当前边界状态
 

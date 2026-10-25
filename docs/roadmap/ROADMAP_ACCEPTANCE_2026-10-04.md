@@ -1,6 +1,6 @@
 # 路线验收任务集与跨应用记录表
 
-日期：2026-10-04；语料版本：`roadmap-acceptance-v1`。对应 [项目审查第10节](PROJECT_REVIEW_2026-10-02.md#10-下一轮如何验收效果和性能)。
+日期：2026-10-04；语料版本：`roadmap-acceptance-v1`。对应 [项目审查第10节](../reports/PROJECT_REVIEW_2026-10-02.md#10-下一轮如何验收效果和性能)。
 
 **本文交付的是可重复执行的任务、评分规则和记录模板，不是已完成的质量或跨应用验收报告。所有实测表初始状态均为「未执行」，空值不得按0分、零故障或通过处理。** 固定语料已检查内容与链接完整性；App runtime回归另见第5节。没有向真实模型发送本任务集。后续已有部分外部应用fixture操作，但旧原始日志丢失，未完成下述60场景矩阵；状态和证据限制见第7节。
 
@@ -8,9 +8,9 @@
 
 | 文件 | 用途 |
 | --- | --- |
-| [text-tasks.md](../Tests/Fixtures/roadmap-acceptance/text-tasks.md) | Q1双向翻译、Q2润色、Q3长总结、Q4代码解释的固定任务要求与输入 |
-| [visual-and-cross-app.html](../Tests/Fixtures/roadmap-acceptance/visual-and-cross-app.html) | Q5图表、Q6界面、Q7纯文字的离线截图原件，以及浏览器可编辑/只读取词区域 |
-| [cross-app.txt](../Tests/Fixtures/roadmap-acceptance/cross-app.txt) | TextEdit、Electron、办公应用统一使用的文本；复制到临时文档后测试 |
+| [text-tasks.md](../../Tests/Fixtures/roadmap-acceptance/text-tasks.md) | Q1双向翻译、Q2润色、Q3长总结、Q4代码解释的固定任务要求与输入 |
+| [visual-and-cross-app.html](../../Tests/Fixtures/roadmap-acceptance/visual-and-cross-app.html) | Q5图表、Q6界面、Q7纯文字的离线截图原件，以及浏览器可编辑/只读取词区域 |
+| [cross-app.txt](../../Tests/Fixtures/roadmap-acceptance/cross-app.txt) | TextEdit、Electron、办公应用统一使用的文本；复制到临时文档后测试 |
 
 HTML 不请求网络、不加载外部字体、不使用生成图片。用浏览器直接打开，缩放设为100%，选择顶部锚点，截图完整白色边框内区域。保持浏览器窗口宽度至少1050 CSS px、页面未缩放、无浮层遮挡；记录屏幕缩放和截图像素尺寸。每个场景只截一次，保留 PNG 原件并让所有模型使用同一文件，不对某个模型单独提高分辨率或改裁剪。UI控件是静态样本，不能据其点击行为验证 SnapAI。
 
@@ -178,7 +178,7 @@ M是修改等级，越低越好，不与F/S求总分。额外记录编辑耗时�
 
 ## 7. 2026-10-06 增量验证与证据保存
 
-持久证据目录为 [`performance/verification-20261006/`](performance/verification-20261006/)。`logic-final.log` 的 SwiftPM 聚合测试为0 failures；`window-diagnostic.log` 为完整App runtime PASS，覆盖OCR删除/换图/裁剪/释放时取消、隐藏保留和旧结果隔离。首次App runtime失败日志 `app-runtime.log` 同时保留：size与Escape测试随后改用hosting的VM身份定位窗口，没有改业务关闭逻辑或放宽断言；后续PASS不能抹去首次失败。历史搜索取消和先发布词法结果的新修改已通过逻辑回归与App构建：[`history-final.log`](performance/verification-20261006/history-final.log) 为280个注册case、0 failures、3.713秒，[`history-app-build.log`](performance/verification-20261006/history-app-build.log) 为swift build通过、0.52秒。首次Swift closure exclusivity编译失败保留于 [`history-initial-compile-failure.log`](performance/verification-20261006/history-initial-compile-failure.log)，最终以`shouldCancel @escaping`修复。尚未取得GUI连续输入到结果显示的P50/P95。
+持久证据目录为 [`performance/verification-20261006/`](../performance/verification-20261006/)。`logic-final.log` 的 SwiftPM 聚合测试为0 failures；`window-diagnostic.log` 为完整App runtime PASS，覆盖OCR删除/换图/裁剪/释放时取消、隐藏保留和旧结果隔离。首次App runtime失败日志 `app-runtime.log` 同时保留：size与Escape测试随后改用hosting的VM身份定位窗口，没有改业务关闭逻辑或放宽断言；后续PASS不能抹去首次失败。历史搜索取消和先发布词法结果的新修改已通过逻辑回归与App构建：[`history-final.log`](../performance/verification-20261006/history-final.log) 为280个注册case、0 failures、3.713秒，[`history-app-build.log`](../performance/verification-20261006/history-app-build.log) 为swift build通过、0.52秒。首次Swift closure exclusivity编译失败保留于 [`history-initial-compile-failure.log`](../performance/verification-20261006/history-initial-compile-failure.log)，最终以`shouldCancel @escaping`修复。尚未取得GUI连续输入到结果显示的P50/P95。
 
 写回实现现在区分已知变化与无法核验：恢复选区前及粘贴前核对捕获range/text、当前选区、PID、AX元素/窗口及可读document身份；已知变化拒绝，缺少可靠锚点时只能明确二次确认，不能标为verified。未选区内容改变不要求拒绝。粘贴前检测剪贴板changeCount，竞争时保留新内容，不用复制fallback覆盖；替换后记录可核验snapshot支持撤销。这些实现与逻辑断言不能替代跨应用实测。
 
@@ -186,4 +186,4 @@ M是修改等级，越低越好，不与F/S求总分。额外记录编辑耗时�
 
 此前曾观察到TextEdit、Chrome、Word的AX/复制/复制写回、源文/选区变化及剪贴板竞争通过，TextEdit另有Unicode观察；Chrome第一次源文修改同时改了范围长度，实际为selection-changed，后续同范围修改才符合source-changed预期。原始 `/tmp` 日志现已丢失，这些仅保留为历史观察，不能重建当前成功率或假造JSONL。VS Code此前三次CUA尝试超时，未取得有效编辑窗口，不计为已测。新的完整矩阵与primary→alternate目标变化复验仍待完成；各次阻塞记录只描述当时状态，不能据此推断当前GUI状态。
 
-当前本地模型探测见 [`model-availability.txt`](performance/verification-20261006/model-availability.txt) 和 [`local-model-endpoints.json`](performance/verification-20261006/local-model-endpoints.json)：Apple Foundation Models为 `unavailable (deviceNotEligible)`；无代理访问Ollama `127.0.0.1:11434/api/tags`、LM Studio `127.0.0.1:1234/v1/models` 均为URLError。该探测不覆盖自定义端点，不能推断所有模型不可用。真实模型24任务/配置的质量评分仍未执行，待指定供应商/模型及费用范围；无需把API Key写入验收文档。
+当前本地模型探测见 [`model-availability.txt`](../performance/verification-20261006/model-availability.txt) 和 [`local-model-endpoints.json`](../performance/verification-20261006/local-model-endpoints.json)：Apple Foundation Models为 `unavailable (deviceNotEligible)`；无代理访问Ollama `127.0.0.1:11434/api/tags`、LM Studio `127.0.0.1:1234/v1/models` 均为URLError。该探测不覆盖自定义端点，不能推断所有模型不可用。真实模型24任务/配置的质量评分仍未执行，待指定供应商/模型及费用范围；无需把API Key写入验收文档。

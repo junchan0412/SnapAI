@@ -51,7 +51,7 @@ SnapAI 2.0.7 是自动化与「云 + 本地」补齐版本:七个功能面一次
 - **发布链路进 CI**:`readonly-preflight` 手动工作流跑可移植的只读前缀;本轮补上「范围空白检查」(干净检出上 `git diff --check` 恒为空)与「版本一致性」检查,签名/打包/SBOM/tag/Release 仍只在本机。
 - **冷启动基线**:中位 182 ms、首启 624 ms(dyld+init 403 ms),`scripts/measure-startup.sh` 可复测;热启动 170 ms 几乎全在装配,是后续优化对象。
 - **内存基线补齐**:设置窗口分 section 实测 32–63 MB(6 个 detail 本就按选中项构建),通用页改 `LazyVStack` 后 63 → 46 MB;菜单栏空闲 5 分钟稳 48 MB;流式峰值 58 MB;更新窗口(下载态)27 MB。
-- **无障碍走查**:`scripts/ax-audit.sh` 遍历 AX 树(VoiceOver 朗读的那棵树)报告无可读名称的控件,16 个 surface 从 39 处降到 **0**;`docs/ACCESSIBILITY_WALKTHROUGH.md` 记录整改表与仍需人工过的 4 条。
+- **无障碍走查**:`scripts/ax-audit.sh` 遍历 AX 树(VoiceOver 朗读的那棵树)报告无可读名称的控件,16 个 surface 从 39 处降到 **0**;`../../../guides/ACCESSIBILITY_WALKTHROUGH.md` 记录整改表与仍需人工过的 4 条。
 - **截图自动化**:`scripts/screenshots-all.sh` 逐 surface 起隔离预览、取窗口号、`screencapture -l` 直出,release notes 配图不再靠手工。
 
 ## 兼容性

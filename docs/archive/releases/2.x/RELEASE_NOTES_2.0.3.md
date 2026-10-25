@@ -40,7 +40,7 @@ SnapAI 2.0.3 是审查驱动的维护版本：补 MIT 许可证、修复并发�
 ## 文档治理
 
 - `docs/` 下 1.x 的 83 份迭代报告与 83 份发布说明移入 `docs/archive/1.x/`（共 166 个文件，仅移动未改内容）。`docs/` 根保留 2.x release notes、重构报告与迁移/模块文档。
-- 此后每次修改都需同步更新开发文档：在对应版本 release notes（或 `docs/REFACTOR_REPORT_*.md`）中记录变更内容，本次即按此执行。
+- 此后每次修改都需同步更新开发文档：在对应版本 release notes（或 `docs/reports/REFACTOR_REPORT_*.md`）中记录变更内容，本次即按此执行。
 
 ## 兼容性
 

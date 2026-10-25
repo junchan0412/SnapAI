@@ -13,7 +13,7 @@
 
 ## 本轮实测
 
-设备为 Apple M4 / 16 GB，macOS 27.2；当前工作区优化构建，每组30次。完整原始记录见 [当前基线 JSON](performance/ROADMAP_2026-10-04.json)。
+设备为 Apple M4 / 16 GB，macOS 27.2；当前工作区优化构建，每组30次。完整原始记录见 [当前基线 JSON](../performance/ROADMAP_2026-10-04.json)。
 
 | 场景 | 规模 | P50 | P95 |
 | --- | --- | ---: | ---: |
@@ -28,7 +28,7 @@
 
 历史查询的冷连接/暖连接全部样本（读取、FTS、完整搜索）保存在 JSON。上述完整搜索已预热**系统距离缓存**；合成记录具有相同的前500字符，只使用固定`needle`查询，缓存命中率很高。数据说明固定查询及重复文本的收益，不能代表不同查询、大量唯一文本、首次embedding查询或所有真实历史。
 
-为查明热点，另用 `SNAPAI_BENCHMARK_SAMPLES=1 SNAPAI_BENCHMARK_EMBEDDING_REF=HEAD scripts/benchmark-roadmap.sh docs/performance/ROADMAP_BEFORE_CACHE_2026-10-04.json` 替换为修改前的语义检索实现，其余源码同一工作区；[原始探索性样本](performance/ROADMAP_BEFORE_CACHE_2026-10-04.json)显示暖连接完整搜索50条约4,465 ms，200条约17,973 ms，500条约18,137 ms。**旧实现每组仅1次，不将其作为P50/P95，也不据此宣称普遍提升百分比。** 原计划30次的旧实现运行约20分钟仍未完成，已中止，没有把未完成数据计入结果。
+为查明热点，另用 `SNAPAI_BENCHMARK_SAMPLES=1 SNAPAI_BENCHMARK_EMBEDDING_REF=HEAD scripts/benchmark-roadmap.sh docs/performance/ROADMAP_BEFORE_CACHE_2026-10-04.json` 替换为修改前的语义检索实现，其余源码同一工作区；[原始探索性样本](../performance/ROADMAP_BEFORE_CACHE_2026-10-04.json)显示暖连接完整搜索50条约4,465 ms，200条约17,973 ms，500条约18,137 ms。**旧实现每组仅1次，不将其作为P50/P95，也不据此宣称普遍提升百分比。** 原计划30次的旧实现运行约20分钟仍未完成，已中止，没有把未完成数据计入结果。
 
 最终优化保留系统 `NLEmbedding.distance` 原始值，按query、实际截断文本、语言和embedding revision做512项有界内存缓存。首次不同query/text组合仍可能昂贵。2026-10-06新增cooperative cancellation：候选/语言边界检查取消，新输入取消旧查询，generation继续拒绝过期发布；词法/FTS结果先显示，再补语义结果。该增量已通过逻辑回归与App构建，单次系统distance调用仍不可抢占；本表是此前缓存版数据，不能当作新实现端到端时延。
 
@@ -47,8 +47,8 @@
 
 | 独立运行实例 | 进程已运行 | physical footprint | 进程peak | RSS | 原始记录 |
 | --- | --- | ---: | ---: | ---: | --- |
-| 改前VStack，100k末尾 | 04:20 | 369 MB | 439 MB | 456,944 KB | [改前快照](performance/UI_100K_2026-10-04_START.md) |
-| 改后LazyVStack＋末尾锚点 | 15:38 | 65 MB | 144 MB | 145,216 KB | [改后快照](performance/UI_100K_2026-10-04_FINAL.md) |
+| 改前VStack，100k末尾 | 04:20 | 369 MB | 439 MB | 456,944 KB | [改前快照](../performance/UI_100K_2026-10-04_START.md) |
+| 改后LazyVStack＋末尾锚点 | 15:38 | 65 MB | 144 MB | 145,216 KB | [改后快照](../performance/UI_100K_2026-10-04_FINAL.md) |
 
 改前Core Animation为269.4 MB；改后约9.4 MB。**两次运行时长不同，末次采样后电脑操作工具报告Mac已锁定，采样瞬间的遮挡状态未单独记录。这不是严格相同可见性/温度/运行时长的A/B实验，不换算普遍提升百分比，也不代表完整滚动后的峰值或泄漏结论。** 当前观察支持保留按需布局，解锁后仍需在相同窗口位置/时长补齐复测。
 
@@ -82,7 +82,7 @@ OCR专项发现两个独立问题：中文优先配置使清晰英文截图置�
 
 ## 窗口延迟的持久基线
 
-[`WINDOW_LATENCY_2026-10-06.json`](performance/WINDOW_LATENCY_2026-10-06.json) 保存四组各30次的成功原始样本、构建源码/二进制hash和环境信息，脚本为 `scripts/benchmark-window-latency.sh`。同一进程中首次组每次创建controller/window/hosting，复用组排除一次预热后重复打开同一窗口；均不代表OS冷启动。
+[`WINDOW_LATENCY_2026-10-06.json`](../performance/WINDOW_LATENCY_2026-10-06.json) 保存四组各30次的成功原始样本、构建源码/二进制hash和环境信息，脚本为 `scripts/benchmark-window-latency.sh`。同一进程中首次组每次创建controller/window/hosting，复用组排除一次预热后重复打开同一窗口；均不代表OS冷启动。
 
 | 窗口/方式 | 样本 | P50 | P95 |
 | --- | ---: | ---: | ---: |
@@ -93,13 +93,13 @@ OCR专项发现两个独立问题：中文优先配置使清晰英文截图置�
 
 起点是实际controller.show调用前，模型与完成态fixture已准备。输入窗须可见/无遮挡、编辑器为firstResponder且插入内容被model接受；结果窗须指定Markdown标题和代码复制按钮的AX frame位于滚动viewport内。两者都需内容就绪后的didUpdate，以及alpha≥0.99连续两次probe；`interaction_ready_ms`另存。静态窗口fade结束后不保证额外didUpdate，因此不把该额外事件设为终点。
 
-以上包含probe开销，但不包含硬件快捷键、系统启动、AI网络/流式生成或GPU/compositor scanout，不提供FPS。后来基准器加强为hosting的model/VM身份绑定，reuse用NSWindow对象身份；终点未改。新版已编译到 `.build/window-latency-identity-20261006-1`，构建日志见 [`window-latency-build.log`](performance/verification-20261006/window-latency-build.log)，尚未取得新版测量JSON，不能把旧样本称作新版实测。
+以上包含probe开销，但不包含硬件快捷键、系统启动、AI网络/流式生成或GPU/compositor scanout，不提供FPS。后来基准器加强为hosting的model/VM身份绑定，reuse用NSWindow对象身份；终点未改。新版已编译到 `.build/window-latency-identity-20261006-1`，构建日志见 [`window-latency-build.log`](../performance/verification-20261006/window-latency-build.log)，尚未取得新版测量JSON，不能把旧样本称作新版实测。
 
-OCR取消已由持久 `window-diagnostic.log` 的全量App runtime验证生命周期，`logic-final.log` 验证运行中与启动前取消；这不测量大图长期内存。历史搜索取消/分阶段发布已通过 [`history-final.log`](performance/verification-20261006/history-final.log) 的聚合逻辑回归（280个注册case，0 failures，3.713秒）和 [`history-app-build.log`](performance/verification-20261006/history-app-build.log) 的App构建（0.52秒）。首次Swift closure exclusivity编译失败日志 `history-initial-compile-failure.log` 保留，`shouldCancel @escaping`修复后才取得通过结果。未取得GUI连续输入到结果显示的P50/P95，因此上述缓存微基准仍只描述固定重复查询。
+OCR取消已由持久 `window-diagnostic.log` 的全量App runtime验证生命周期，`logic-final.log` 验证运行中与启动前取消；这不测量大图长期内存。历史搜索取消/分阶段发布已通过 [`history-final.log`](../performance/verification-20261006/history-final.log) 的聚合逻辑回归（280个注册case，0 failures，3.713秒）和 [`history-app-build.log`](../performance/verification-20261006/history-app-build.log) 的App构建（0.52秒）。首次Swift closure exclusivity编译失败日志 `history-initial-compile-failure.log` 保留，`shouldCancel @escaping`修复后才取得通过结果。未取得GUI连续输入到结果显示的P50/P95，因此上述缓存微基准仍只描述固定重复查询。
 
 ## 24 MP 大图的隔离解码与 OCR 内存采样（2026-10-06）
 
-[`IMAGE_MEMORY_RASTER_2026-10-06.json`](performance/IMAGE_MEMORY_RASTER_2026-10-06.json) 保存 `scripts/benchmark-image-memory.sh docs/performance/IMAGE_MEMORY_RASTER_2026-10-06.json` 的30轮原始数据。Apple M4 / Mac16,10 上以独立 `swiftc -O` 进程直接编译真实 `ImageTextRecognition.swift`；fixture由另一个进程生成，固定6000×4000白底12行英文PNG（781,052 bytes），不读取用户图片、配置、历史或服务，不创建窗口。JSON含设备/系统/Swift版本、编译命令、源码/二进制/fixture SHA-256；测量结束后核对源码hash仍与工作区一致。
+[`IMAGE_MEMORY_RASTER_2026-10-06.json`](../performance/IMAGE_MEMORY_RASTER_2026-10-06.json) 保存 `scripts/benchmark-image-memory.sh docs/performance/IMAGE_MEMORY_RASTER_2026-10-06.json` 的30轮原始数据。Apple M4 / Mac16,10 上以独立 `swiftc -O` 进程直接编译真实 `ImageTextRecognition.swift`；fixture由另一个进程生成，固定6000×4000白底12行英文PNG（781,052 bytes），不读取用户图片、配置、历史或服务，不创建窗口。JSON含设备/系统/Swift版本、编译命令、源码/二进制/fixture SHA-256；测量结束后核对源码hash仍与工作区一致。
 
 每轮依次读取Data、单独以ImageIO＋CGContext.draw强制生成并持有24 MP光栅、释放光栅、调用产品的 `recognizeText(in: Data)`（其解码也计入OCR耗时），然后释放本轮局部引用与autorelease pool。阶段数值为进程 `task_vm_info.phys_footprint`，peak为 `ledger_phys_footprint_peak` 的进程终身高水位，**不是各阶段独立峰值，也不是RSS**。每轮释放后再等1秒采样，第30轮后另等5秒。
 
@@ -113,6 +113,6 @@ OCR取消已由持久 `window-diagnostic.log` 的全量App runtime验证生命�
 
 进程baseline为1.657 MiB；首次强制光栅仍被持有时为95.626 MiB（截至该阶段peak187.173 MiB）。全程最高physical footprint为323.894 MiB。第2、20、30轮释放并等待1秒分别为108.501、112.830、113.894 MiB；最后额外等待5秒回落至73.300 MiB。数据包含显著异步回落，也存在高位缓慢上升，不能将全部残留直接认定为业务泄漏或系统缓存，不能由30轮证明长期不增长。尚未做worker autorelease pool干预、分配栈归因或5–30分钟空闲观察，因此未据此修改业务内存管理。
 
-前两次探索原始文件 [`IMAGE_MEMORY_2026-10-06.json`](performance/IMAGE_MEMORY_2026-10-06.json) 和 [`IMAGE_MEMORY_30_2026-10-06.json`](performance/IMAGE_MEMORY_30_2026-10-06.json) 保留。其ImageIO probe没有明确持有完整光栅，不应与最终光栅阶段混用；首份6轮使用过严品牌字符串判定，`contains_fixture_text=false`不能视作没有识别到文字。首份OCR首次约24.98秒，而后两次新进程首次约0.30秒，说明新建进程并不能隔离系统语言模型缓存状态；这些运行不是OS冷启动A/B测试，也不计算通用优化比例。
+前两次探索原始文件 [`IMAGE_MEMORY_2026-10-06.json`](../performance/IMAGE_MEMORY_2026-10-06.json) 和 [`IMAGE_MEMORY_30_2026-10-06.json`](../performance/IMAGE_MEMORY_30_2026-10-06.json) 保留。其ImageIO probe没有明确持有完整光栅，不应与最终光栅阶段混用；首份6轮使用过严品牌字符串判定，`contains_fixture_text=false`不能视作没有识别到文字。首份OCR首次约24.98秒，而后两次新进程首次约0.30秒，说明新建进程并不能隔离系统语言模型缓存状态；这些运行不是OS冷启动A/B测试，也不计算通用优化比例。
 
 **本采样仅覆盖独立Data解码和真实Vision OCR调用。** 它不覆盖QuickInput的NSImage压缩/预览、SwiftUI附件删除、在途OCR取消后的内存、窗口反复开关或真实上传量。已有QuickInput删除/替换/裁剪取消runtime验证的是生命周期行为，仍需解锁后测量实际UI图片添加/删除和长期资源趋势，才能判断报告第10节图片流程验收是否完整通过。

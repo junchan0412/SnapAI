@@ -36,11 +36,11 @@ checkout action 已 pin 到不可变 commit SHA(审计门禁锁定)。
 这些不需要私钥,但 runner 没有对应权限或屏幕,不进 Actions:
 
 - `scripts/ax-audit.sh` —— 无障碍名称走查,需要辅助功能权限
-  (见 `docs/ACCESSIBILITY_WALKTHROUGH.md`);
+  (见 `../guides/ACCESSIBILITY_WALKTHROUGH.md`);
 - `scripts/screenshots-all.sh` —— release notes 截图,需要屏幕录制权限;
 - `scripts/measure-startup.sh` 测 Release 启动,`scripts/profile-settings-sections.sh`
   测 Debug 隔离预览;必须在同一台机器、同一构建配置下前后对比
-  (见 `docs/STARTUP_BASELINE.md`、`docs/RUNTIME_MEMORY_BASELINE.md`)。
+  (见 `../baselines/STARTUP_BASELINE.md`、`../baselines/RUNTIME_MEMORY_BASELINE.md`)。
 
 ## 更新通道:Sparkle
 
@@ -99,7 +99,7 @@ git tag -a vX.Y.Z -m "SnapAI X.Y.Z:..." && git push origin main vX.Y.Z
 gh release create vX.Y.Z dist/SnapAI-vX.Y.Z.zip \
   dist/appcast.xml \
   dist/snapai-manifest-vX.Y.Z.json dist/snapai-manifest-vX.Y.Z.json.sig \
-  dist/snapai-sbom-vX.Y.Z.json --title "SnapAI X.Y.Z" --notes-file docs/RELEASE_NOTES_X.Y.Z.md
+  dist/snapai-sbom-vX.Y.Z.json --title "SnapAI X.Y.Z" --notes-file docs/releases/RELEASE_NOTES_X.Y.Z.md
 ```
 
 私钥(`~/.snapai/snapai-manifest-private.pem`)与本地签名身份

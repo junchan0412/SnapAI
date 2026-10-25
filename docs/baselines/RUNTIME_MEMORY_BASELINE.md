@@ -23,7 +23,7 @@ scripts/profile-runtime-memory.sh <pid> debug-preview-<surface>
 scripts/profile-settings-sections.sh                       # Debug,6 个设置 section 逐个起隔离进程采样
 ```
 
-冷启动耗时不是内存,但同属性能基线,见 `docs/STARTUP_BASELINE.md`
+冷启动耗时不是内存,但同属性能基线,见 `STARTUP_BASELINE.md`
 (`scripts/measure-startup.sh`)。
 
 快照脚本从运行进程的 bundle 读取 `SnapAIBuildConfiguration`,输出构建配置、可执行文件路径、RSS、CPU、physical footprint、peak footprint,以及 `CoreAnimation`、`Image IO`、`Malloc Large`、`Malloc Small` 等重点 VM region。旧 bundle 缺少配置字段时标为 `unknown`,不根据文件名推断 Release。

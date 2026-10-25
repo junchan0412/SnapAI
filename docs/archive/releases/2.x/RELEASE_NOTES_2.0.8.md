@@ -15,7 +15,7 @@ SnapAI 2.0.8 是**更新通道与自动化入口**版本:应用内更新从自�
 - 根因:SwiftPM 构建**不执行** Xcode 的 App Intents 元数据提取阶段,包里没有 `Metadata.appintents`,Shortcuts 自然无从发现。
 - 修复:`build.sh` 显式调用 `appintentsmetadataprocessor`,把元数据写进
   `Contents/Resources/Metadata.appintents/`(与第三方应用同位置),缺失即构建失败。
-- 使用手册见 `docs/APP_INTENTS.md`(装到 /Applications、首次启动、如何搜索动作、列不出来怎么排)。
+- 使用手册见 `../../../guides/APP_INTENTS.md`(装到 /Applications、首次启动、如何搜索动作、列不出来怎么排)。
 
 ## 依赖政策:第一个第三方依赖
 
@@ -35,12 +35,12 @@ SnapAI 2.0.8 是**更新通道与自动化入口**版本:应用内更新从自�
 ## 兼容性
 
 - 最低系统版本保持 **macOS 14**;Sparkle 2 支持 10.13+,无影响。
-- 更新不改变签名身份:仍为自签名,首次安装需右键 → 打开;**不做 Apple notarization**(本机无私钥证书,决策见 `docs/RELEASE_PIPELINE.md`)。
+- 更新不改变签名身份:仍为自签名,首次安装需右键 → 打开;**不做 Apple notarization**(本机无私钥证书,决策见 `../../../releases/RELEASE_PIPELINE.md`)。
 - 提供 ZIP、签名 manifest、签名文件、SBOM 与 **appcast.xml** 五件资产。
 
 ## 已知事项
 
 - Sparkle 标准窗口的样式由上游提供,未做定制;如需主题化需实现 `SPUUserDriver`(18 个方法),暂不铺开。
 - 每个 Release 必须携带 `appcast.xml`,否则「检查更新」找不到通道(preflight 已加校验)。
-- Shortcuts 列出与 VoiceOver/纯键盘 4 条人工走查需要在真机完成,见 `docs/APP_INTENTS.md` 与 `docs/ACCESSIBILITY_WALKTHROUGH.md`。
+- Shortcuts 列出与 VoiceOver/纯键盘 4 条人工走查需要在真机完成,见 `../../../guides/APP_INTENTS.md` 与 `../../../guides/ACCESSIBILITY_WALKTHROUGH.md`。
 - 本轮无新增界面截图:更新窗口由 Sparkle 提供,需真实 feed 才能截取。

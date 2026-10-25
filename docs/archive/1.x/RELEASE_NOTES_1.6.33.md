@@ -5,7 +5,7 @@ SnapAI 1.6.33 为 `SnapAILogic` target 迁移加入硬性基线和后续拆分�
 ## 改进
 
 - `scripts/check-logic-symlinks.sh` 新增数量门禁:symlink 不得超过 58 个,真实源码不得少于 18 个。
-- 新增 `docs/LOGIC_TARGET_MIGRATION_PLAN.md`,记录剩余迁移簇和依赖风险。
+- 新增 `docs/architecture/LOGIC_TARGET_MIGRATION_PLAN.md`,记录剩余迁移簇和依赖风险。
 - README 更新到 1.6.33,并链接后续迁移计划。
 
 ## 验证

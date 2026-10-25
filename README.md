@@ -4,34 +4,16 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在支持取词的应用�
 
 ![SnapAI 2.0 结果工作区](docs/screenshots/snapai-result-light.png)
 
-## 2.0.0 版本重点
+## 当前版本：2.1.0
 
-- 全面重做设置、快捷提问、结果阅读、历史双栏、命令面板与首次引导，支持浅深色和键盘操作。
-- 核心逻辑统一为单一 `SnapAILogic` 模块，消除重复编译。**第三方依赖目前只有一个:`Sparkle`**(更新通道,`Package.resolved` 按版本固定 + 供应链扫描),其余功能全部使用一手框架(`AppIntents`、`Vision`、`NaturalLanguage`、`FoundationModels`);新增任何依赖都需要先说明理由并接入 `scripts/run-supply-chain-scan.sh`。
-- SQLite 复用连接和索引，历史批量写入与读取在本机两轮合成对照中降低约 67–75% 耗时，收藏更新降低约 98–99%。
-- 严格处理 SSE 断流、取消和过期回调；Markdown 合并过期任务，打字机等待期间停止空转。
-- 修复设置迁移、密钥并发写入和同步失败恢复；保存失败给出可重试反馈。
-- 发布二进制和 updater 的最低系统版本统一为 macOS 14，修正旧版实际要求 macOS 27 的问题。
+- 取词、快捷提问、截图与 OCR 三种输入模式，支持区域/窗口截图和发送前裁剪。
+- 流式输出与逐字展示分离；Markdown 表格、代码阅读与长文按需布局。
+- 真正独立的双模型对照、Shortcuts 正文返回、token/TTFT/估算费用与预算提醒。
+- 本机会话恢复、分支与可撤销摘要压缩；恢复会话不绑定旧文档写回目标。
+- 共享逻辑统一在 `SnapAILogic`；唯一第三方依赖为固定版本 Sparkle 2.9.6。新增依赖须说明理由，并接入 `scripts/run-supply-chain-scan.sh`。
 
-详细变化见 [Release Notes](docs/RELEASE_NOTES_2.0.0.md)，测量方法和验证范围见 [重构报告](docs/REFACTOR_REPORT_2.0.0.md)。
-
-> 2.0.1：统一各窗口区域的表面配色，消除标题栏、工具栏、正文与侧栏之间的色差与接缝，并将散落的硬编码颜色收敛为语义设计令牌。详见 [2.0.1 Release Notes](docs/RELEASE_NOTES_2.0.1.md)。
->
-> 2.0.2：应用内更新窗口重构为原生对话框（图标、发布说明卡片、下载进度窗），删除主界面各区域之间的分割线，并修复供应商行排序菜单的重复箭头图标。详见 [2.0.2 Release Notes](docs/RELEASE_NOTES_2.0.2.md)。
->
-> 2.0.3：审查驱动的维护版本——新增 MIT 许可证；取消生成不再丢弃部分结果（入库并打“部分结果”标签）；修复流式任务并发与外部进程超时隐患；历史库文件权限收紧；补无障碍标签与超时提示；CI 接入 app runtime 与 benchmark；1.x 文档归档。详见 [2.0.3 Release Notes](docs/RELEASE_NOTES_2.0.3.md)。
->
-> 2.0.4：Liquid Glass 视觉重构——全界面统一为 macOS 26 Liquid Glass（低版本自动回退），删除结构性色块与分隔线；供应商端点只显示 host，诊断复制明确不含密钥。详见 [2.0.4 Release Notes](docs/RELEASE_NOTES_2.0.4.md)。
->
-> 2.0.5：AI 设置页拆分——“AI 模型”（当前模型、路由策略）与“AI 供应商”（连接、Key、模型列表）独立成页；Anthropic 配置修复（Key 空白自动忽略、协议专属端点提示、就绪状态行）；命令面板、自动化深链与旧别名保持兼容。详见 [2.0.5 Release Notes](docs/RELEASE_NOTES_2.0.5.md)。
->
-> 2.1.0：保留原图与 OCR 三模式、截图裁剪、Markdown 表格和代码阅读、真正双模型对照、Shortcuts 正文返回、用量统计，以及本机会话恢复、分支和可撤销摘要压缩。详见 [2.1.0 Release Notes](docs/RELEASE_NOTES_2.1.0.md)。
->
-> 2.0.8：更新通道迁移到 Sparkle（appcast + EdDSA 签名 + 标准更新窗口，自签名即可、无需公证）；补上 App Intents 元数据，Shortcuts 首次能列出并执行 SnapAI；引入第一个第三方依赖 Sparkle 并接入真实供应链扫描。详见 [2.0.8 Release Notes](docs/RELEASE_NOTES_2.0.8.md)。
-
-> 2.0.7：Shortcuts（App Intents）、用量看板、历史语义搜索、截图 OCR、Apple 端侧模型、双模型对照入口、部分主路径英文本地化；配套 AppDelegate 拆分、冷启动与内存基线、无障碍名称走查、发布链路进 CI。名称走查不等于完整无障碍验收，英文界面也仍有中文文案。详见 [2.0.7 Release Notes](docs/RELEASE_NOTES_2.0.7.md)。
-
-> 2.0.6：设置窗口 Liquid Glass 收尾——侧栏 behind-window 毛玻璃（桌面透过来）+ 详情区不透明兜底；删除 `snapAISurface` / `Surface.chrome` 死代码与最后一处卡片内结构性分隔线。详见 [2.0.6 Release Notes](docs/RELEASE_NOTES_2.0.6.md)。
+见 [2.1.0 发布说明](docs/releases/RELEASE_NOTES_2.1.0.md) 与 [验收记录及已知限制](docs/reports/RELEASE_ACCEPTANCE_2.1.0.md)。
+开发资料从 [文档索引](docs/README.md) 进入；当前检查结论见 [项目报告](docs/reports/PROJECT_HEALTH_2026-10-25.md)，后续安排见 [路线图](docs/roadmap/ROADMAP_2026-10-25.md)。历次版本记录见 [归档索引](docs/archive/README.md)。
 
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 
@@ -118,12 +100,12 @@ SnapAI 当前没有 Apple Developer ID,也没有 Apple notarization。浏览器�
 - 网络完成后即可继续提问；“立即显示全文”跳过剩余逐字展示，完整回答不会误标为部分结果。打字机与自定义反馈遵守 Reduce Motion。
 - Markdown 支持表格、长代码横向滚动与基础高亮、原始列表编号和嵌套；用户停止跟随后，完成排版尽量恢复正文相对阅读位置。
 - 供应商模型行可覆盖视觉、推理、上下文窗口和 USD 单价，填写来源；缺失值继续使用标明来源的推断。
-- Shortcuts 默认返回 AI 正文，也可选择 JSON 接收结果或稳定错误码，支持超时与取消。配置与错误格式见 [App Intents](docs/APP_INTENTS.md)。
+- Shortcuts 默认返回 AI 正文，也可选择 JSON 接收结果或稳定错误码，支持超时与取消。配置与错误格式见 [App Intents](docs/guides/APP_INTENTS.md)。
 - 使用统计区分 API 返回的 token、手工单价估算费用和缺失用量，提供 TTFT、按日统计及月预算提醒。预算不是强制限额；严格兼容端点可关闭“请求 token 用量”；开启时正文确认完成后最多等2秒收集尾部usage。
 
 - 会话仅在允许保存完整历史时保存在本机 SQLite；恢复全部轮次和原图不自动发送请求。可从已保存回复创建分支，手工确认摘要后压缩后续请求上下文并随时撤销。OCR-only 原图不会因恢复而上传。恢复会话不绑定旧文档，需复制结果或重新取词后写回。历史窗口的“恢复会话”入口可跨重启继续。
 
-以上能力由 2.1.0 提供；模型输出质量、低版本系统和完整辅助功能人工验收的限制见发布说明。实施状态与验收证据见 [路线清单](docs/IMPLEMENTATION_TRACKER_2026-10-02.md)、[固定任务与跨应用验收](docs/ROADMAP_ACCEPTANCE_2026-10-04.md)和[性能记录](docs/ROADMAP_PERFORMANCE_2026-10-04.md)。
+以上能力由 2.1.0 提供；模型输出质量、低版本系统和完整辅助功能人工验收的限制见发布说明。实施状态与验收证据见 [路线清单](docs/reports/IMPLEMENTATION_TRACKER_2026-10-02.md)、[固定任务与跨应用验收](docs/roadmap/ROADMAP_ACCEPTANCE_2026-10-04.md)和[性能记录](docs/roadmap/ROADMAP_PERFORMANCE_2026-10-04.md)。
 
 ### 界面语言
 
@@ -371,7 +353,7 @@ SNAPAI_RELEASE=1 scripts/package-release.sh X.Y.Z
 
 将 `X.Y.Z` 换成 `Resources/Info.plist` 中的版本。正式 release 需要
 `SNAPAI_MANIFEST_PRIVATE_KEY` 指向 manifest 签名私钥,以及已配置的 Sparkle EdDSA
-私钥;完整步骤见 [发布流程](docs/RELEASE_PIPELINE.md):
+私钥;完整步骤见 [发布流程](docs/releases/RELEASE_PIPELINE.md):
 
 ```bash
 export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"

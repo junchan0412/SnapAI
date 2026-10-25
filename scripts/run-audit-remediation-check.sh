@@ -207,7 +207,7 @@ require_match "image OCR threshold test" 'testImageTextRecognitionRejectsUnrelia
 require_match "image OCR settings round-trip test" 'testImageOCREnabledRoundTripsThroughSettingsAndCloudPayload' Tests/SnapAILogicTests/main.swift
 require_match "icloud conflict recovery test" 'testICloudPullIfNeededEndToEndRecovery' Tests/SnapAILogicTests/main.swift
 require_match "ci readonly preflight job" 'readonly-preflight' .github/workflows/ci.yml
-require_match "release pipeline doc" '本机:签名发布' docs/RELEASE_PIPELINE.md
+require_match "release pipeline doc" '本机:签名发布' docs/releases/RELEASE_PIPELINE.md
 require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
 require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
 require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI
@@ -274,7 +274,7 @@ require_match "ci whitespace script" 'git diff --check "\$base\.\.HEAD"' scripts
 # 无障碍走查:AX 名称走查脚本 + 走查文档 + 关键控件补名
 require_match "ax audit script" 'ax-audit' scripts/ax-audit.sh
 require_match "ax audit helper" 'kAXDescriptionAttribute' scripts/support/ax-audit.swift
-require_match "ax walkthrough doc" '无可读名称的交互控件' docs/ACCESSIBILITY_WALKTHROUGH.md
+require_match "ax walkthrough doc" '无可读名称的交互控件' docs/guides/ACCESSIBILITY_WALKTHROUGH.md
 require_match "model page slider label" 'accessibilityLabel\("Temperature"\)' Sources/SnapAI/ModelSettingsSection.swift
 require_match "settings toggle row label" 'accessibilityLabel\(title\)' Sources/SnapAI/GeneralSettingsSection.swift
 require_match "privacy toggle row label" 'accessibilityLabel\(title\)' Sources/SnapAI/PrivacySettingsSection.swift
@@ -289,14 +289,14 @@ require_match "startup timing type" 'enum LaunchTiming' Sources/SnapAI/LaunchTim
 require_match "startup main entry mark" 'LaunchTiming.markMainEntry' Sources/SnapAI/main.swift
 require_match "startup ready mark" 'LaunchTiming.markReady' Sources/SnapAI/LaunchCoordinator.swift
 require_match "startup measurement script" 'measure-startup' scripts/measure-startup.sh
-require_match "startup baseline doc" 'exec->ready' docs/STARTUP_BASELINE.md
+require_match "startup baseline doc" 'exec->ready' docs/baselines/STARTUP_BASELINE.md
 
 # 设置窗口 footprint:按 section 采样 + 屏外子区块不构建
 require_match "settings section profile script" 'profile-settings-sections' scripts/profile-settings-sections.sh
-require_match "settings section profile doc" '按 section 分布' docs/RUNTIME_MEMORY_BASELINE.md
-require_match "menu bar idle baseline" '菜单栏空闲态长期驻留' docs/RUNTIME_MEMORY_BASELINE.md
-require_match "streaming peak baseline" '流式输出峰值' docs/RUNTIME_MEMORY_BASELINE.md
-require_match "update download baseline" '更新窗口与下载阶段' docs/RUNTIME_MEMORY_BASELINE.md
+require_match "settings section profile doc" '按 section 分布' docs/baselines/RUNTIME_MEMORY_BASELINE.md
+require_match "menu bar idle baseline" '菜单栏空闲态长期驻留' docs/baselines/RUNTIME_MEMORY_BASELINE.md
+require_match "streaming peak baseline" '流式输出峰值' docs/baselines/RUNTIME_MEMORY_BASELINE.md
+require_match "update download baseline" '更新窗口与下载阶段' docs/baselines/RUNTIME_MEMORY_BASELINE.md
 require_match "general section lazy stack" 'LazyVStack' Sources/SnapAI/GeneralSettingsSection.swift
 require_match "preview general surface" 'case "general"' Sources/SnapAI/AppPreview.swift
 require_match "preview permission surface" 'case "permission"' Sources/SnapAI/AppPreview.swift
