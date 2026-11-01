@@ -59,6 +59,8 @@ package struct AIProvider: Codable, Identifiable, Equatable {
     package var name: String = "新供应商"
     package var apiProtocol: APIProtocol = .openAI
     package var baseURL: String = ""
+    package var websiteURL: String = ""
+    package var customIcon: String? = nil
     /// API Key。注意:不写入 JSON(由本地加密密钥存储持久化),仅运行时驻留。
     package var apiKey: String = ""
     package var models: [AIModelEntry] = []
@@ -109,9 +111,29 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         return host
     }
 
+    package var iconWebsite: URL? {
+        let explicit = websiteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !explicit.isEmpty || !isLocalEndpoint else { return nil }
+        let source = explicit.isEmpty ? AIClient.normalizedBase(baseURL, proto: apiProtocol) : explicit
+        guard var parts = URLComponents(string: source.contains("://") ? source : "https://" + source),
+              let host = parts.host, !host.isEmpty, ["http", "https"].contains(parts.scheme?.lowercased() ?? "") else { return nil }
+        if explicit.isEmpty {
+            parts.scheme = "https"
+            let normalizedHost = host.lowercased()
+            parts.host = normalizedHost.hasPrefix("api.") ? String(normalizedHost.dropFirst(4)) : normalizedHost
+            parts.port = nil
+        }
+        parts.user = nil
+        parts.password = nil
+        parts.path = "/"
+        parts.query = nil
+        parts.fragment = nil
+        return parts.url
+    }
+
     // apiKey 不参与编解码,改由本地加密密钥存储管理
     package enum CodingKeys: String, CodingKey {
-        case id, name, apiProtocol, baseURL, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, streamUsageEnabled, requestTimeout
+        case id, name, apiProtocol, baseURL, websiteURL, customIcon, models, isEnabled, temperature, maxTokens, outputTokenParameterMode, streamUsageEnabled, requestTimeout
     }
 
     package init(id: String = UUID().uuidString,
@@ -146,6 +168,8 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         name = (try? c.decode(String.self, forKey: .name)) ?? "新供应商"
         apiProtocol = (try? c.decode(APIProtocol.self, forKey: .apiProtocol)) ?? .openAI
         baseURL = (try? c.decode(String.self, forKey: .baseURL)) ?? ""
+        websiteURL = (try? c.decode(String.self, forKey: .websiteURL)) ?? ""
+        customIcon = try? c.decode(String.self, forKey: .customIcon)
         apiKey = ""
         models = (try? c.decode([AIModelEntry].self, forKey: .models)) ?? []
         isEnabled = (try? c.decode(Bool.self, forKey: .isEnabled)) ?? true
@@ -162,6 +186,8 @@ package struct AIProvider: Codable, Identifiable, Equatable {
         try c.encode(name, forKey: .name)
         try c.encode(apiProtocol, forKey: .apiProtocol)
         try c.encode(baseURL, forKey: .baseURL)
+        try c.encode(websiteURL, forKey: .websiteURL)
+        try c.encodeIfPresent(customIcon, forKey: .customIcon)
         try c.encode(models, forKey: .models)
         try c.encode(isEnabled, forKey: .isEnabled)
         try c.encodeIfPresent(temperature, forKey: .temperature)

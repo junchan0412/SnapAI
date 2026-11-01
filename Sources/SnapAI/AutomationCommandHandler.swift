@@ -298,12 +298,8 @@ extension AppDelegate {
             showSettings(section: .general)
             return
         }
-        settings.showDockIcon = enabled
-        settings.save()
-        iCloudSync.shared.scheduleUpload(settings)
-        applyActivationPolicy()
-        buildMenu()
-        installMainMenu()
+        if enabled { openSettings() }
+        else { windowCoordinator.closeMainWindows() }
     }
 
     func setLoginItemFromAutomation(_ enabled: Bool?) {

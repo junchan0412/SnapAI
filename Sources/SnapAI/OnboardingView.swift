@@ -51,7 +51,7 @@ struct OnboardingView: View {
             .padding(24)
         }
         .frame(minWidth: 600, minHeight: 560)
-        .background(SnapAIUI.Surface.canvas)
+        .background(SnapAIVisualEffect(material: .underWindowBackground).allowsHitTesting(false).ignoresSafeArea())
         .onAppear { permission.refresh() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permission.refresh()
@@ -61,9 +61,7 @@ struct OnboardingView: View {
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: "text.viewfinder")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.tint)
+                SnapAIAppIcon(size: 44)
                 Text("SnapAI").font(.system(size: 18, weight: .semibold))
             }
             Text("想法，就在手边。")

@@ -1751,3 +1751,43 @@ func testLegacyAISectionAliasResolvesToModelPage() {
     expect(AutomationSettingsSectionSelection.resolve("供应商", fallback: .general) == .provider,
            "automation provider alias lands on provider page")
 }
+
+func testProviderIconsAndSidebarMigration() {
+    var provider = AIProvider(id: "icon", baseURL: "https://user:secret@api.example.com/v1?key=secret", apiKey: "api-secret")
+    expect(provider.iconWebsite?.absoluteString == "https://example.com/", "default icon website strips API paths and credentials")
+    provider.baseURL = "https://API.example.com:8443/v1"
+    expect(provider.iconWebsite?.absoluteString == "https://example.com/", "default icon website normalizes API host and does not reuse its service port")
+    provider.websiteURL = "https://icons.example.org/catalog?token=private"
+    expect(provider.iconWebsite?.absoluteString == "https://icons.example.org/", "explicit website overrides endpoint and strips query")
+    provider.websiteURL = "file:///tmp/private.png"
+    expect(provider.iconWebsite == nil, "automatic icons do not read arbitrary local files")
+    provider.websiteURL = ""
+    provider.baseURL = "http://127.0.0.1:11434/v1"
+    expect(provider.iconWebsite == nil, "local model endpoints are not fetched for icons by default")
+    provider.websiteURL = "http://localhost:8080/icons"
+    expect(provider.iconWebsite?.absoluteString == "http://localhost:8080/", "a manually selected local icon website keeps its explicit scheme and port")
+    var onDevice = AIProvider.preset(.apple)
+    expect(onDevice.iconWebsite == nil, "Apple on-device models have no automatic network icon source")
+    onDevice.websiteURL = "https://www.apple.com"
+    expect(onDevice.iconWebsite?.absoluteString == "https://www.apple.com/", "on-device providers still permit an explicit website icon preference")
+    provider.customIcon = "symbol:cpu"
+    provider.websiteURL = "https://example.org"
+    do {
+        let data = try JSONEncoder().encode(provider)
+        let restored = try JSONDecoder().decode(AIProvider.self, from: data)
+        expect(restored.customIcon == provider.customIcon && restored.websiteURL == provider.websiteURL,
+               "provider icon preferences survive persistence")
+        expect(!String(decoding: data, as: UTF8.self).contains("api-secret"), "icon preferences never serialize API keys")
+        let legacy = try JSONDecoder().decode(AIProvider.self, from: Data("{\"id\":\"old\",\"baseURL\":\"https://api.example.com/v1\"}".utf8))
+        expect(legacy.customIcon == nil && legacy.websiteURL.isEmpty, "legacy providers default to automatic website icons")
+        let imported = AppSettings.providersForImportedConfiguration([provider], keyResolver: { _ in "" })
+        expect(imported.first?.customIcon == provider.customIcon && imported.first?.websiteURL == provider.websiteURL,
+               "configuration migration retains website and reusable icon references")
+        let settings = AppSettings()
+        settings.sidebarOrder = ["actions", "provider", "model", "history", "general", "permission"]
+        let restoredSettings = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        expect(restoredSettings.sidebarOrder == settings.sidebarOrder, "sidebar order survives saving and reopening")
+        let legacySettings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        expect(legacySettings.sidebarOrder == SettingsSection.allCases.map(\.rawValue), "legacy settings retain familiar navigation order")
+    } catch { expect(false, "icon settings migration failed: \(error)") }
+}

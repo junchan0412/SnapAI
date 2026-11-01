@@ -4,16 +4,20 @@ SnapAI 是一个 macOS 菜单栏 AI 助手。你可以在支持取词的应用�
 
 ![SnapAI 2.0 结果工作区](docs/screenshots/snapai-result-light.png)
 
-## 当前版本：2.1.0
+## 当前版本：2.2.0
 
+- 侧栏导航、供应商与动作支持拖动排序，顺序自动保存。
+- 供应商默认读取网站图标，支持网站地址、自定义图片和可复用的本地图标库。
+- 主面板与快捷面板使用透景玻璃材质；全新 light/dark 图标随外观切换。
+- Dock 随设置主面板打开显示、关闭隐藏，菜单栏和快捷键继续常驻。
 - 取词、快捷提问、截图与 OCR 三种输入模式，支持区域/窗口截图和发送前裁剪。
 - 流式输出与逐字展示分离；Markdown 表格、代码阅读与长文按需布局。
 - 真正独立的双模型对照、Shortcuts 正文返回、token/TTFT/估算费用与预算提醒。
 - 本机会话恢复、分支与可撤销摘要压缩；恢复会话不绑定旧文档写回目标。
 - 共享逻辑统一在 `SnapAILogic`；唯一第三方依赖为固定版本 Sparkle 2.9.6。新增依赖须说明理由，并接入 `scripts/run-supply-chain-scan.sh`。
 
-见 [2.1.0 发布说明](docs/releases/RELEASE_NOTES_2.1.0.md) 与 [验收记录及已知限制](docs/reports/RELEASE_ACCEPTANCE_2.1.0.md)。
-开发资料从 [文档索引](docs/README.md) 进入；当前检查结论见 [项目报告](docs/reports/PROJECT_HEALTH_2026-10-25.md)，后续安排见 [路线图](docs/roadmap/ROADMAP_2026-10-25.md)。历次版本记录见 [归档索引](docs/archive/README.md)。
+见 [2.2.0 发布说明](docs/releases/RELEASE_NOTES_2.2.0.md) 与 [验收记录及已知限制](docs/reports/RELEASE_ACCEPTANCE_2.2.0.md)。
+开发资料从 [文档索引](docs/README.md) 进入；上一轮工程检查见 [项目报告](docs/reports/PROJECT_HEALTH_2026-10-25.md)，后续安排见 [路线图](docs/roadmap/ROADMAP_2026-10-25.md)。历次版本记录见 [归档索引](docs/archive/README.md)。
 
 ![SnapAI 历史记录](docs/screenshots/snapai-history-light.png)
 

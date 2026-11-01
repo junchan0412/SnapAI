@@ -1,0 +1,77 @@
+Window: "SnapAI 设置", App: SnapAI Preview.
+0 标准窗口 SnapAI 设置, ID: SnapAI.SettingsWindow, Secondary Actions: Raise
+	1 分离组
+		2 container
+			3 图像 SnapAI
+			4 text SnapAI 你的随身 AI 工作台
+			5 滚动区
+				6 列表 边栏
+					7 row (selectable, expanded) Description: 拖动以调整顺序, Secondary Actions: Collapse
+					8 row (selectable) AI 模型
+					9 row (selected) AI 供应商
+					10 row (selectable) 动作
+					11 row (selectable) 历史
+					12 row (selectable) 通用
+					13 row (selectable) 权限
+			14 text 当前模型 gpt-4.1 OpenAI 快捷提问 快捷键 ⌥Space
+		15 分离器 (disabled, settable, float) 217
+		16 container
+			17 文本 AI 供应商
+			18 按钮 Description: 设置窗口未置顶, Help: 未置顶:点击置顶设置窗口, Value: 未置顶, ID: pin
+			19 文本 供应商、Key、模型列表
+			20 滚动区 Secondary Actions: Scroll Up, Scroll Down
+				21 text 供应商总览 2/3 可请求 待处理: 本地模型: 缺少 API Key。展开对应卡片按提示修复。 供应商
+				22 按钮 图标库
+				23 菜单按钮 添加, ID: plus
+				24 图像 Description: 拖动排序 OpenAI, Help: 拖动以调整 OpenAI 的顺序
+				25 按钮 (selected) 收起供应商 OpenAI
+				26 开关按钮 Description: 启用供应商 OpenAI, Value: on
+				27 文本 图标
+				28 图像 OpenAI 图标
+				29 按钮 选择图标…
+				30 text 自定义图标 名称
+				31 文本栏 (settable) Value: OpenAI, Placeholder: 供应商名称
+				32 文本 协议
+				33 弹出式按钮 OpenAI 兼容
+				34 文本 端点
+				35 文本栏 (settable) Value: http://127.0.0.1:9/v1, Placeholder: api.openai.com 或 localhost:11434
+				36 文本 API Key
+				37 安全文本栏 (settable) Value: , Details: 包含安全文本, Placeholder: API Key
+				38 文本 状态
+				39 图像 (selected) Description: 已选择, ID: checkmark.circle.fill
+				40 text 就绪,可测试连接或获取模型 模型
+				41 按钮 Description: 获取模型, Help: 获取模型列表
+				42 滚动区
+					43 列表 Secondary Actions: AXScrollToTop, AXScrollToBottom
+						44 开关按钮 on
+						45 文本 gpt-4.1
+						46 图像 (selected) Description: 已选择, ID: checkmark.circle.fill
+						47 按钮 Description: 编辑模型 gpt-4.1 的能力与价格, Help: 查看与编辑模型能力、价格和来源, ID: info.circle
+						48 按钮 Description: 从供应商 OpenAI 移除模型 gpt-4.1, Help: 移除模型, ID: xmark.circle
+				49 文本 添加
+				50 文本栏 (settable) 手动添加模型名,回车确认
+				51 按钮 (disabled) Description: 为供应商 OpenAI 添加模型, Help: 添加模型
+				52 显示三角形 Description: 高级参数, Value: off
+				53 按钮 测试连接
+				54 按钮 Description: 删除此供应商, Help: 删除该供应商(需确认,会同时清除 API Key)
+				55 图像 Description: 拖动排序 Anthropic, Help: 拖动以调整 Anthropic 的顺序
+				56 按钮 展开供应商 Anthropic
+				57 开关按钮 Description: 启用供应商 Anthropic, Value: on
+				58 图像 Description: 拖动排序 本地模型, Help: 拖动以调整 本地模型 的顺序
+				59 按钮 展开供应商 本地模型
+				60 开关按钮 Description: 启用供应商 本地模型, Value: on
+				61 滚动条 (settable, float) 0
+					62 值指示器 (settable, float) 0
+					63 增箭头按钮
+					64 减箭头按钮
+					65 增页面按钮
+					66 减页面按钮
+	67 菜单按钮 窗口共享
+68 menu bar
+	69 SnapAI
+	70 编辑
+
+Selected:
+	9 row (selected)
+
+Note: Pay special attention to the content selected by the user. If the user asks a question or refers to the content they are looking at on-screen, they might be referring to the selected content (but they might be referring to something else that's visible, too).

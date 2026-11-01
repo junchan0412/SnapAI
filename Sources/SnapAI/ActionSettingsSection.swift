@@ -13,6 +13,7 @@ struct ActionSettingsSection: View {
 
     private let labelWidth: CGFloat = 76
     @State private var pendingRestoreHotKeys = false
+    @State private var dropTargetActionID: String?
     @State private var pendingDeleteAction: AIAction?
     @StateObject private var actionLibraryNotice = SnapAITransientState<ResultOperationFeedback>()
 
@@ -31,6 +32,11 @@ struct ActionSettingsSection: View {
                     ForEach(settings.actions) { action in
                         actionCard(action)
                             .id(action.id)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                                    .stroke(Color.accentColor.opacity(dropTargetActionID == action.id ? 0.8 : 0), lineWidth: 2)
+                                    .allowsHitTesting(false)
+                            }
                     }
                 }
                 .padding(SnapAIUI.edgePadding)
@@ -193,6 +199,7 @@ struct ActionSettingsSection: View {
         let isExpanded = ui.expandedActionID == action.id
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 16) {
+                SettingsDragHandle(name: action.name, id: action.id, contentType: .snapAISettingsAction)
                 Button {
                     ui.expandedActionID = isExpanded ? nil : action.id
                 } label: {
@@ -239,6 +246,11 @@ struct ActionSettingsSection: View {
         .padding(16)
         .snapAIGlassCard()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .modifier(SettingsReorderDropModifier(
+            id: action.id,
+            items: $settings.actions, contentType: .snapAISettingsAction,
+            dropTargetID: $dropTargetActionID, commit: commit))
     }
 
     @ViewBuilder
@@ -412,25 +424,6 @@ struct ActionSettingsSection: View {
 
     private func deleteActionRow(_ action: AIAction) -> some View {
         HStack {
-            // 排序与删除同属「管理此动作」,合并到底部一行,标题行因此更清爽。
-            Button {
-                moveAction(action.id, up: true)
-            } label: {
-                Label("上移", systemImage: "chevron.up")
-            }
-            .controlSize(.small)
-            .disabled(settings.actions.first?.id == action.id)
-            .help("上移到上一行")
-            .accessibilityLabel("将动作 \(action.name) 上移")
-            Button {
-                moveAction(action.id, up: false)
-            } label: {
-                Label("下移", systemImage: "chevron.down")
-            }
-            .controlSize(.small)
-            .disabled(settings.actions.last?.id == action.id)
-            .help("下移到下一行")
-            .accessibilityLabel("将动作 \(action.name) 下移")
             Spacer()
             Button(role: .destructive) {
                 pendingDeleteAction = action
@@ -528,14 +521,6 @@ struct ActionSettingsSection: View {
         } catch {
             flashNotice("写入文件失败", isError: true)
         }
-    }
-
-    private func moveAction(_ id: String, up: Bool) {
-        guard let idx = settings.actions.firstIndex(where: { $0.id == id }) else { return }
-        let target = up ? idx - 1 : idx + 1
-        guard target >= 0, target < settings.actions.count else { return }
-        settings.actions.swapAt(idx, target)
-        commit()
     }
 
     private func hotkeyConflictDetail(for action: AIAction) -> HotKeyConflictDetector.Conflict? {

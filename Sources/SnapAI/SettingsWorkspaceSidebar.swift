@@ -3,6 +3,8 @@ import SnapAILogic
 
 struct SettingsWorkspaceSidebar: View {
     @Binding var selection: SettingsSection
+    @ObservedObject var settings: AppSettings
+    let commit: () -> Void
     let providerName: String?
     let modelName: String
     let shortcut: String
@@ -10,12 +12,7 @@ struct SettingsWorkspaceSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 11) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(.tint)
-                    .frame(width: 36, height: 36)
-                    .background(SnapAIUI.Surface.selected,
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                SnapAIAppIcon(size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("SnapAI")
                         .font(.system(size: 18, weight: .semibold))
@@ -32,15 +29,16 @@ struct SettingsWorkspaceSidebar: View {
                 get: { selection },
                 set: { if let section = $0 { selection = section } }
             )) {
-                Section("工作空间") {
-                    sidebarRow(.model)
-                    sidebarRow(.provider)
-                    sidebarRow(.actions)
-                    sidebarRow(.history)
-                }
-                Section("偏好设置") {
-                    sidebarRow(.general)
-                    sidebarRow(.permission)
+                Section("拖动以调整顺序") {
+                    ForEach(orderedSections) { section in
+                        sidebarRow(section)
+                    }
+                    .onMove { indices, destination in
+                        var sections = orderedSections
+                        sections.move(fromOffsets: indices, toOffset: destination)
+                        settings.sidebarOrder = sections.map(\.rawValue)
+                        commit()
+                    }
                 }
             }
             .listStyle(.sidebar)
@@ -77,6 +75,12 @@ struct SettingsWorkspaceSidebar: View {
         }
         .snapAISidebarGlass()
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
+    }
+
+    private var orderedSections: [SettingsSection] {
+        var seen = Set<SettingsSection>()
+        return (settings.sidebarOrder.compactMap(SettingsSection.init(rawValue:)) + SettingsSection.allCases)
+            .filter { seen.insert($0).inserted }
     }
 
     private func sidebarRow(_ section: SettingsSection) -> some View {

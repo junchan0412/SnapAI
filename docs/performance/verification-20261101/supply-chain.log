@@ -1,0 +1,5 @@
+Starting filesystem walk for root: /
+Scanned /Users/qidewei/Developer/SnapAI/Package.resolved file and found 1 package
+End status: 0 dirs visited, 1 inodes visited, 1 Extract calls, 1.199958ms elapsed, 1.2ms wall time
+
+No issues found

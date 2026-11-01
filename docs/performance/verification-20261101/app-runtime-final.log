@@ -1,0 +1,11 @@
+FAIL App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, settings and Dock lifecycle, provider icons and reorder, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape
+FAIL: the unpinned result window is active before opening details
+FAIL: the real result details button appears in the accessibility tree
+FAIL: the visible result window exposes its real details button
+FAIL: the size-test window closes
+FAIL: the size-test window closes
+DIAG: escape-active visible=true alpha=0.0 occluded=true key=false active=false hostVM=true
+DIAG: escape-details visible=true alpha=0.0 occluded=true key=false active=false hostVM=true
+DIAG: legacy-size visible=true alpha=0.0 occluded=true key=false active=false hostVM=true
+DIAG: custom-size visible=true alpha=0.0 occluded=true key=false active=false hostVM=true
+2026-11-02 04:59:35.229 SnapAIRuntimeSmoke[17620:4641915] SnapAI: history store failure: The file “history-failure-blocker” couldn’t be saved in the folder “fixtures” because a file with the same name already exists.

@@ -86,7 +86,8 @@ package final class AppSettings: ObservableObject, Codable {
 
     // 行为
     @Published package var useAXFirst: Bool = true   // 优先用辅助功能取词
-    @Published package var showDockIcon: Bool = true // 在 Dock 显示图标(可点击打开设置)
+    @Published package var showDockIcon: Bool = true // 兼容旧配置；Dock 现在跟随主面板
+    @Published package var sidebarOrder: [String] = SettingsSection.allCases.map(\.rawValue)
     @Published package var typewriterSpeed: TypewriterSpeed = .normal // 打字机动画速度
     @Published package var autoRouteEnabled: Bool = false
     @Published package var fallbackEnabled: Bool = true
@@ -211,7 +212,7 @@ package final class AppSettings: ObservableObject, Codable {
         case temperature, settingsSchemaVersion
         case askHotKey, translateHotKey, quickPanelHotKey
         case actions
-        case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon
+        case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon, sidebarOrder
         case typewriterSpeed
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
@@ -264,6 +265,7 @@ package final class AppSettings: ObservableObject, Codable {
         }
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
+        sidebarOrder = (try? c.decode([String].self, forKey: .sidebarOrder)) ?? SettingsSection.allCases.map(\.rawValue)
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
         autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
         fallbackEnabled = (try? c.decode(Bool.self, forKey: .fallbackEnabled)) ?? true
@@ -413,6 +415,7 @@ package final class AppSettings: ObservableObject, Codable {
         try c.encode(systemPrompt, forKey: .systemPrompt)
         try c.encode(useAXFirst, forKey: .useAXFirst)
         try c.encode(showDockIcon, forKey: .showDockIcon)
+        try c.encode(sidebarOrder, forKey: .sidebarOrder)
         try c.encode(typewriterSpeed, forKey: .typewriterSpeed)
         try c.encode(autoRouteEnabled, forKey: .autoRouteEnabled)
         try c.encode(fallbackEnabled, forKey: .fallbackEnabled)

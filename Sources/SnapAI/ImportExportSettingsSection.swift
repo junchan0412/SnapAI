@@ -140,6 +140,7 @@ struct ConfigMigrationSettingsSection: View {
         settings.systemPrompt = imported.systemPrompt
         settings.useAXFirst = imported.useAXFirst
         settings.showDockIcon = imported.showDockIcon
+        settings.sidebarOrder = imported.sidebarOrder
         settings.typewriterSpeed = imported.typewriterSpeed
         settings.autoRouteEnabled = imported.autoRouteEnabled
         settings.fallbackEnabled = imported.fallbackEnabled

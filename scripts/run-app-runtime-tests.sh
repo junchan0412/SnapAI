@@ -5,9 +5,24 @@ cd "$(dirname "$0")/.."
 source scripts/configure-swift-toolchain.sh
 
 SNAPAI_APP_TEST_DIR="$(mktemp -d "${TMPDIR:-/tmp}/snapai-app-tests.XXXXXX")"
-trap 'rm -rf "$SNAPAI_APP_TEST_DIR"' EXIT
 SNAPAI_TEST_BUNDLE="$SNAPAI_APP_TEST_DIR/SnapAIRuntimeSmoke.app"
-mkdir -p "$SNAPAI_TEST_BUNDLE/Contents/MacOS" "$SNAPAI_APP_TEST_DIR/fixtures"
+cleanup() {
+  local pid
+  if [ -s "$SNAPAI_APP_TEST_DIR/fixtures/runtime.pid" ] &&
+     read -r pid < "$SNAPAI_APP_TEST_DIR/fixtures/runtime.pid" &&
+     [[ "$pid" =~ ^[1-9][0-9]*$ ]] &&
+     [ "$(ps -ww -p "$pid" -o comm= 2>/dev/null || true)" = "$SNAPAI_TEST_BUNDLE/Contents/MacOS/SnapAIRuntimeSmoke" ]; then
+    kill -TERM "$pid" 2>/dev/null || true
+  fi
+  rm -rf "$SNAPAI_APP_TEST_DIR"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+mkdir -p "$SNAPAI_TEST_BUNDLE/Contents/MacOS" "$SNAPAI_TEST_BUNDLE/Contents/Resources" "$SNAPAI_APP_TEST_DIR/fixtures"
+for asset in AppIconLight.icns AppIconDark.icns AppIconLight.png AppIconDark.png; do
+  cp "Resources/$asset" "$SNAPAI_TEST_BUNDLE/Contents/Resources/"
+done
 
 swiftc -O -whole-module-optimization -parse-as-library -enable-testing \
   -package-name snapai -module-name SnapAILogic \
@@ -57,11 +72,23 @@ cat > "$SNAPAI_TEST_BUNDLE/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIdentifier</key><string>com.snapai.runtime-tests</string>
   <key>CFBundleName</key><string>SnapAI Runtime Tests</string>
   <key>CFBundleExecutable</key><string>SnapAIRuntimeSmoke</string>
+  <key>CFBundleIconFile</key><string>AppIconLight.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
 </dict></plist>
 PLIST
+python3 - "$SNAPAI_TEST_BUNDLE/Contents/Info.plist" Resources/Info.plist <<'PY'
+import plistlib
+import sys
+with open(sys.argv[1], "rb") as file:
+    bundle = plistlib.load(file)
+with open(sys.argv[2], "rb") as file:
+    source = plistlib.load(file)
+bundle["UTExportedTypeDeclarations"] = source["UTExportedTypeDeclarations"]
+with open(sys.argv[1], "wb") as file:
+    plistlib.dump(bundle, file, sort_keys=False)
+PY
 
 xcrun strip -S -x "$SNAPAI_TEST_BUNDLE/Contents/MacOS/SnapAIRuntimeSmoke"
 mkdir -p "$SNAPAI_TEST_BUNDLE/Contents/Frameworks"

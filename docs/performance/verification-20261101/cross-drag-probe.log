@@ -1,0 +1,14 @@
+2026-11-01 16:04:45 +0000 ready content=620x440 A=(130,320)->(490,320) B=(130,100)->(490,100)
+2026-11-01 16:05:23 +0000 A Native entered types=["public.utf8-plain-text", "NSStringPboardType"] string=fixture-swiftui sourceMask=1 location=(490.0, 320.0)
+2026-11-01 16:05:23 +0000 A Native updated types=["public.utf8-plain-text", "NSStringPboardType"] string=fixture-swiftui sourceMask=1 location=(490.0, 320.0)
+2026-11-01 16:05:23 +0000 A Native updated types=["public.utf8-plain-text", "NSStringPboardType"] string=fixture-swiftui sourceMask=1 location=(490.0, 320.0)
+2026-11-01 16:05:23 +0000 A Native prepare types=["public.utf8-plain-text", "NSStringPboardType"] string=fixture-swiftui sourceMask=1 location=(490.0, 320.0)
+2026-11-01 16:05:23 +0000 A Native performDrop types=["public.utf8-plain-text", "NSStringPboardType"] string=fixture-swiftui sourceMask=1 location=(490.0, 320.0)
+2026-11-01 16:06:16 +0000 Native mouseDown source=true local=(110.0, 80.0)
+2026-11-01 16:06:16 +0000 Native mouseDragged source=true
+2026-11-01 16:06:16 +0000 B Native beginDraggingSession
+2026-11-01 16:06:16 +0000 B SwiftUI isTargeted=true
+2026-11-01 16:06:16 +0000 B SwiftUI isTargeted=false
+2026-11-01 16:06:16 +0000 B SwiftUI performDrop items=["fixture-native"] point=(110.0, 80.0)
+2026-11-01 16:06:16 +0000 B Native endedAt=(1140.0, 559.0) operation=1
+2026-11-01 16:07:23 +0000 willTerminate

@@ -42,14 +42,13 @@ struct GeneralSettingsSection: View {
                 )
             )
             compactDivider
-            settingsToggleRow(
-                title: "Dock 图标",
-                description: "关闭后仅保留菜单栏图标；开启时可从 Dock 打开设置。",
-                isOn: Binding(
-                    get: { settings.showDockIcon },
-                    set: { settings.showDockIcon = $0; commit() }
-                )
-            )
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Dock 跟随主面板").font(.callout.weight(.medium))
+                    Text("打开主面板时显示；关闭后自动隐藏，菜单栏与快捷键继续运行。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } icon: { Image(systemName: "dock.rectangle").foregroundStyle(.secondary) }
             compactDivider
             resultPanelDismissRow
         }

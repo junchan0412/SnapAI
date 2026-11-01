@@ -1,0 +1,28 @@
+Window: "", App: SnapAI Preview.
+0 表单 Secondary Actions: Raise
+	1 container
+		2 文本 图标库
+		3 按钮 完成
+		4 文本 为 Anthropic 选择图标
+		5 文本栏 (settable) 网站地址（留空则根据 API 端点获取）
+		6 按钮 使用网站图标
+		7 文本 自动读取网站声明的 favicon，失败时显示通用图标。请求不携带 API Key；本地图标只保存在这台 Mac。
+		8 滚动区
+			9 集合 Secondary Actions: AXScrollToTop, AXScrollToBottom
+				10 按钮 network
+				11 按钮 server.rack
+				12 按钮 desktopcomputer
+				13 按钮 cpu
+				14 按钮 brain
+				15 按钮 bolt.fill
+				16 按钮 leaf.fill
+				17 按钮 cloud.fill
+				18 按钮 (selected) 自定义图标
+				19 按钮 Description: 删除自定义图标, Help: 删除图标, ID: minus.circle.fill
+		20 按钮 导入图片…
+		21 文本 PNG、JPEG、HEIC、TIFF、ICO 等系统支持的图片
+22 menu bar
+	23 SnapAI
+	24 编辑
+
+The focused UI element is 5 文本栏 (settable) 网站地址（留空则根据 API 端点获取）

@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-11-01T21:07:24.181738+00:00",
+  "IOConsoleLocked": "Yes",
+  "CGSSessionScreenIsLocked": [
+    "Yes"
+  ],
+  "runtimeStatus": "FAIL while session is locked; no assertions skipped",
+  "runtimeAdjustment": "temporary policy/order experiments reverted; GUI handoff test source restored"
+}

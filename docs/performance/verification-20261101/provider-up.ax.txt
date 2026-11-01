@@ -1,0 +1,43 @@
+Window: "SnapAI 设置", App: SnapAI Preview.
+0 标准窗口 SnapAI 设置, ID: SnapAI.SettingsWindow, Secondary Actions: Raise
+	1 分离组
+		2 container
+			3 图像 SnapAI
+			4 text SnapAI 你的随身 AI 工作台
+			5 滚动区
+				6 列表 边栏
+					7 row (selectable, expanded) Description: 拖动以调整顺序, Secondary Actions: Collapse
+					8 row (selectable) AI 模型
+					9 row (selected) AI 供应商
+					10 row (selectable) 动作
+					11 row (selectable) 历史
+					12 row (selectable) 通用
+					13 row (selectable) 权限
+			14 text 当前模型 gpt-4.1 OpenAI 快捷提问 快捷键 ⌥Space
+		15 分离器 (disabled, settable, float) 217
+		16 container
+			17 文本 AI 供应商
+			18 按钮 Description: 设置窗口未置顶, Help: 未置顶:点击置顶设置窗口, Value: 未置顶, ID: pin
+			19 文本 供应商、Key、模型列表
+			20 滚动区
+				21 text 供应商总览 2/3 可请求 待处理: 本地模型: 缺少 API Key。展开对应卡片按提示修复。 供应商
+				22 按钮 图标库
+				23 菜单按钮 添加, ID: plus
+				24 图像 Description: 拖动排序 OpenAI, Help: 拖动以调整 OpenAI 的顺序
+				25 按钮 (selected) 展开供应商 OpenAI
+				26 开关按钮 Description: 启用供应商 OpenAI, Value: on
+				27 图像 Description: 拖动排序 Anthropic, Help: 拖动以调整 Anthropic 的顺序
+				28 按钮 展开供应商 Anthropic
+				29 开关按钮 Description: 启用供应商 Anthropic, Value: on
+				30 图像 Description: 拖动排序 本地模型, Help: 拖动以调整 本地模型 的顺序
+				31 按钮 展开供应商 本地模型
+				32 开关按钮 Description: 启用供应商 本地模型, Value: on
+	33 菜单按钮 窗口共享
+34 menu bar
+	35 SnapAI
+	36 编辑
+
+Selected:
+	9 row (selected)
+
+Note: Pay special attention to the content selected by the user. If the user asks a question or refers to the content they are looking at on-screen, they might be referring to the selected content (but they might be referring to something else that's visible, too).

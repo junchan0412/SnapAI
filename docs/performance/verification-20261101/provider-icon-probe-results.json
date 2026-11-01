@@ -1,0 +1,95 @@
+{
+  "activation_policy": "prohibited",
+  "checks": [
+    {
+      "duration_ms": 13,
+      "name": "quoted_relative_link",
+      "passed": true
+    },
+    {
+      "duration_ms": 5,
+      "name": "homepage_and_icon_redirects",
+      "passed": true
+    },
+    {
+      "duration_ms": 8,
+      "name": "favicon_after_seven_invalid_links",
+      "passed": true
+    },
+    {
+      "duration_ms": 2,
+      "name": "failed_site_returns_nil_twice",
+      "passed": true
+    },
+    {
+      "duration_ms": 316,
+      "name": "concurrent_fetches_share_one_image",
+      "passed": true
+    },
+    {
+      "duration_ms": 0,
+      "name": "positive_cache_available_without_network",
+      "passed": true
+    },
+    {
+      "duration_ms": 0,
+      "name": "privacy_mode_suppresses_new_network",
+      "passed": true
+    },
+    {
+      "name": "at_least_one_public_website",
+      "passed": true
+    }
+  ],
+  "failures": [],
+  "http_checks": {
+    "concurrent_positive_cache_coalesces_requests": true,
+    "fallback_always_requested": true,
+    "homepage_and_icon_redirects_followed": true,
+    "negative_cache_prevents_repeat_requests": true,
+    "no_authorization_or_cookie_headers": true,
+    "privacy_has_no_requests": true,
+    "relative_icon_resolved": true
+  },
+  "metadata": {
+    "build_products": "/Users/qidewei/Developer/SnapAI/.build/out/Products/Debug",
+    "fixture": "localhost HTTP only",
+    "git_head": "db85b646419e80d1c8c56ee7cb8b5d5d6eeb317c",
+    "implementation_sha256": "822e83ed2cf36202d2daf8dc22cfb2021bfab3df759c7aa7a12898f6cb34f033",
+    "logic_object_sha256": "35ba13a5ac9c28de1f6f8a5eb3f975cb5c7e1fcac33b520627143451e3a5b29c",
+    "module_sha256": "e40cea724284a56d3efb114e46e4c4b389367d93bff35835b051c4a8bc57311e",
+    "probe_sha256": "b501a888875ed0e798293830ee05eda8cb7d7de2ed47949c4b89d6e054a2d67f",
+    "timestamp": "2026-11-01T18:54:57.780286+08:00"
+  },
+  "passed": true,
+  "public_websites": [
+    {
+      "duration_ms": 205,
+      "fetched": true,
+      "url": "https://www.apple.com/"
+    }
+  ],
+  "request_counts": {
+    "/concurrent/": 1,
+    "/concurrent/icon.png": 1,
+    "/fallback/": 1,
+    "/fallback/broken-0.png": 1,
+    "/fallback/broken-1.png": 1,
+    "/fallback/broken-2.png": 1,
+    "/fallback/broken-3.png": 1,
+    "/fallback/broken-4.png": 1,
+    "/fallback/broken-5.png": 1,
+    "/fallback/broken-6.png": 1,
+    "/fallback/favicon.ico": 1,
+    "/images/redirect.png": 1,
+    "/missing/": 1,
+    "/missing/favicon.ico": 1,
+    "/redirect/": 1,
+    "/redirected/assets/icon.png": 1,
+    "/redirected/page/": 1,
+    "/relative/": 1,
+    "/relative/assets/icon.png": 1
+  },
+  "snapai_logic_tests_environment": "unset",
+  "windows_shown": 0
+}

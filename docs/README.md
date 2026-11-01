@@ -1,16 +1,16 @@
 # SnapAI 文档索引
 
-更新：2026-10-25。当前源码版本为 **2.1.0**，版本以 `Resources/Info.plist` 为准。
+更新：2026-11-02。当前源码版本为 **2.2.0**，版本以 `Resources/Info.plist` 为准；各项验证状态见本版验收记录。
 
 ## 从这里开始
 
 | 目的 | 文档 |
 | --- | --- |
 | 安装、使用与开发命令 | [项目 README](../README.md) |
-| 了解当前工程状态、检查结果和优化判断 | [项目检查与清理报告](reports/PROJECT_HEALTH_2026-10-25.md) |
+| 了解上一轮工程检查结果和优化判断 | [项目检查与清理报告](reports/PROJECT_HEALTH_2026-10-25.md) |
 | 查看下一阶段优先级与验收标准 | [当前路线图](roadmap/ROADMAP_2026-10-25.md) |
-| 查看当前版本交付内容 | [2.1.0 发布说明](releases/RELEASE_NOTES_2.1.0.md) |
-| 区分已经验证和仍待验证的能力 | [2.1.0 验收记录](reports/RELEASE_ACCEPTANCE_2.1.0.md) |
+| 查看当前版本交付内容 | [2.2.0 发布说明](releases/RELEASE_NOTES_2.2.0.md) |
+| 区分已经验证和仍待验证的能力 | [2.2.0 验收记录](reports/RELEASE_ACCEPTANCE_2.2.0.md) |
 
 ## 分类导航
 
@@ -22,7 +22,7 @@
 | `reports/` | 当前检查报告、版本验收及按日期保留的评估/实施过程 |
 | `roadmap/` | 当前路线图，以及 [固定任务验收设计](roadmap/ROADMAP_ACCEPTANCE_2026-10-04.md)、[性能测量方法与历史记录](roadmap/ROADMAP_PERFORMANCE_2026-10-04.md) |
 | `baselines/` | [启动基线](baselines/STARTUP_BASELINE.md)、[运行时内存基线](baselines/RUNTIME_MEMORY_BASELINE.md)，需按各自日期、build 配置和设备理解 |
-| `performance/` | 采样 JSON、测试日志、实机观察等原始证据；[2.1.0 证据](performance/verification-20261025/) |
+| `performance/` | 采样 JSON、测试日志、实机观察等原始证据；[2.2.0 证据](performance/verification-20261101/)、[2.1.0 证据](performance/verification-20261025/) |
 | `benchmarks/` | 2.0.0 存储与流式处理的原始对照数据 |
 | `screenshots/` | README、发布说明和重构报告引用的演示截图 |
 | `archive/` | [历史版本、旧方案及旧素材](archive/README.md) |

@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: - Dock / 激活策略 / 前台 App
 
     func applyActivationPolicy() {
-        NSApp.setActivationPolicy(settings.showDockIcon ? .regular : .accessory)
+        NSApp.setActivationPolicy(windowCoordinator?.hasOpenMainWindow == true ? .regular : .accessory)
     }
 
     func applyAppIcon() {

@@ -1,0 +1,3 @@
+NOTE: idle gap beyond request timeout disconnects the stream (gap=head, error=The request timed out.); see timeout hint in provider settings
+Markdown coalescing: 502 refreshes, 2 builds, 1 publication; idle typewriter: 0 active timers
+Streaming runtime smoke passed: cancellation, restart, request snapshot, slow-gap timeout probe, partial failure, idle timers, Markdown coalescing

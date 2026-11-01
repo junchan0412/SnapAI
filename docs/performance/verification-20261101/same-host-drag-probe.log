@@ -1,0 +1,9 @@
+2026-11-01 16:10:01 +0000 ready content=620x200 source=(130,100) target=(490,100)
+2026-11-01 16:12:03 +0000 Native mouseDown source=true local=(110.0, 80.0)
+2026-11-01 16:12:03 +0000 Native mouseDragged source=true
+2026-11-01 16:12:03 +0000 B Native beginDraggingSession
+2026-11-01 16:12:03 +0000 SameHost isTargeted=true
+2026-11-01 16:12:03 +0000 SameHost isTargeted=false
+2026-11-01 16:12:03 +0000 SameHost performDrop items=["fixture-native"] point=(110.0, 80.0)
+2026-11-01 16:12:04 +0000 B Native endedAt=(1140.0, 739.0) operation=1
+2026-11-01 16:14:37 +0000 willTerminate

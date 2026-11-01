@@ -88,11 +88,11 @@ feed、签名、下载、版本号都能自动化校验,但**窗口有没有弹�
 ## 本机:签名发布(唯一写入口)
 
 ```bash
-# 1. 云端先绿:Actions 手动触发 CI,通过后再继续
-# 2. 先提交已验收的代码与版本说明，再跑本机全量预检
+# 1. 提交已验收的代码、证据与版本说明，并推送 main
+# 2. 确认同一 HEAD 的 push CI 与手动触发 CI 均通过，再跑本机全量预检
 #    SBOM 会记录当前 HEAD；预检后如有新提交，必须重新打包，使 SBOM 对应发布 tag。
 export SNAPAI_MANIFEST_PRIVATE_KEY="$HOME/.snapai/snapai-manifest-private.pem"
-scripts/preflight-release.sh
+scripts/preflight-release.sh --require-clean --require-synced
 # 3. tag + 推送（工作区干净，SBOM 的 git.commit 等于当前 HEAD）
 git tag -a vX.Y.Z -m "SnapAI X.Y.Z:..." && git push origin main vX.Y.Z
 # 4. GitHub Release(附 zip / appcast / manifest / 签名 / SBOM)

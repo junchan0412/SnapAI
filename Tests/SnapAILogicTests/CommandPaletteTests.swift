@@ -1573,17 +1573,14 @@ func testResultPinCommandReflectsCurrentState() {
 }
 
 func testDisplayBehaviorCommandFactoryReflectsCurrentState() {
-    let descriptors = DisplayBehaviorCommandFactory.descriptors(showDockIcon: true,
-                                                                loginItemEnabled: false,
+    let descriptors = DisplayBehaviorCommandFactory.descriptors(loginItemEnabled: false,
                                                                 typewriterSpeeds: typewriterSpeedCommandInputs(currentID: "标准"))
 
-    expect(descriptors.count == 2 + typewriterSpeedCommandInputs(currentID: "标准").count,
-           "display behavior commands include dock, login item, and typewriter speeds")
-    expect(descriptors[0].id == "dock-icon-toggle", "dock command is first")
-    expect(descriptors[0].title == "隐藏 Dock 图标", "dock command reflects visible state")
-    expect(descriptors[0].action == .setDockIcon(false), "dock command toggles off")
-    expect(descriptors[1].title == "开启开机启动", "login item command reflects disabled state")
-    expect(descriptors[1].action == .setLoginItem(true), "login item command toggles on")
+    expect(descriptors.count == 1 + typewriterSpeedCommandInputs(currentID: "标准").count,
+           "display behavior commands include login item and typewriter speeds")
+    expect(!descriptors.contains(where: { $0.id == "dock-icon-toggle" }), "automatic Dock lifecycle has no manual toggle")
+    expect(descriptors[0].title == "开启开机启动", "login item command reflects disabled state")
+    expect(descriptors[0].action == .setLoginItem(true), "login item command toggles on")
 
     guard let currentSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed("标准") }),
           let fastSpeed = descriptors.first(where: { $0.action == .setTypewriterSpeed("快") }) else {

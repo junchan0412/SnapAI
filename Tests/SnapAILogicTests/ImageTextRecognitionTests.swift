@@ -86,7 +86,9 @@ func testImageTextRecognitionCancelsRunningAndPrestartRequests() {
     let result = OSAllocatedUnfairLock<SnapAIImageTextRecognition.Outcome?>(initialState: nil)
     let task = Task.detached {
         ready.signal()
-        gate.wait()
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async { gate.wait(); continuation.resume() }
+        }
         result.withLock { $0 = SnapAIImageTextRecognition.recognizeText(in: Data()) }
         finished.signal()
     }

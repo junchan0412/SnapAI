@@ -9,6 +9,7 @@ import html
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urljoin
 
 
 def inline(value: str) -> str:
@@ -117,4 +118,8 @@ if __name__ == "__main__":
     if target is None or not target.is_file():
         print("<p>详见 GitHub Release 页。</p>")
     else:
-        print(convert(target.read_text(encoding="utf-8")))
+        body = convert(target.read_text(encoding="utf-8"))
+        if len(sys.argv) > 2:
+            body = re.sub(r'href="([^"]+)"', lambda match:
+                          'href="%s"' % html.escape(urljoin(sys.argv[2], html.unescape(match[1])), quote=True), body)
+        print(body)

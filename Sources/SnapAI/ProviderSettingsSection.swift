@@ -1,5 +1,6 @@
 import SnapAILogic
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProviderSettingsSection: View {
     @ObservedObject var settings: AppSettings
@@ -12,6 +13,9 @@ struct ProviderSettingsSection: View {
 
     private let labelWidth: CGFloat = 76
     @State private var pendingDeleteProvider: AIProvider?
+    @State private var iconProvider: AIProvider?
+    @State private var showIconLibrary = false
+    @State private var dropTargetProviderID: String?
     private struct ModelSelection: Identifiable {
         let providerID: String
         let entry: AIModelEntry
@@ -26,16 +30,28 @@ struct ProviderSettingsSection: View {
                 HStack {
                     Text("供应商").font(.headline)
                     Spacer()
+                    Button("图标库", systemImage: "square.grid.2x2") { showIconLibrary = true }
                     addProviderMenu
                 }
                 ForEach(settings.providers) { provider in
                     providerCard(provider)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                                .stroke(Color.accentColor.opacity(dropTargetProviderID == provider.id ? 0.8 : 0), lineWidth: 2)
+                                .allowsHitTesting(false)
+                        }
                 }
             }
             .padding(SnapAIUI.edgePadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .snapAIScrollEdge()
+        .sheet(isPresented: $showIconLibrary) {
+            ProviderIconPicker(provider: nil, settings: settings, commit: commit)
+        }
+        .sheet(item: $iconProvider) { provider in
+            ProviderIconPicker(provider: provider, settings: settings, commit: commit)
+        }
         .sheet(item: $editingModel) { selection in
             if let provider = settings.providers.first(where: { $0.id == selection.providerID }) {
                 ModelMetadataEditor(provider: provider, entry: selection.entry) { metadata in
@@ -132,14 +148,12 @@ struct ProviderSettingsSection: View {
         let isExpanded = ui.expandedProviderID == provider.id
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
+                SettingsDragHandle(name: provider.name, id: provider.id, contentType: .snapAISettingsProvider)
                 Button {
                     ui.expandedProviderID = isExpanded ? nil : provider.id
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: provider.isLocalEndpoint ? "desktopcomputer" : "network")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28)
+                        ProviderIconView(provider: provider, size: 30, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(provider.name.isEmpty ? "未命名供应商" : provider.name)
                                 .font(SnapAIUI.Typography.sectionTitle)
@@ -169,16 +183,7 @@ struct ProviderSettingsSection: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .accessibilityLabel("启用供应商 \(provider.name)")
-                Menu {
-                    Button("上移", systemImage: "arrow.up") { moveProvider(provider.id, up: true) }
-                        .disabled(settings.providers.first?.id == provider.id)
-                    Button("下移", systemImage: "arrow.down") { moveProvider(provider.id, up: false) }
-                        .disabled(settings.providers.last?.id == provider.id)
-                } label: { Image(systemName: "ellipsis") }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .frame(width: 24)
-                .accessibilityLabel("调整供应商 \(provider.name) 的排序")
+
             }
             if isExpanded {
                 providerEditor(provider).padding(.top, 16)
@@ -190,14 +195,28 @@ struct ProviderSettingsSection: View {
             if provider.id == settings.activeProviderID {
                 RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
                     .stroke(Color.accentColor.opacity(0.34), lineWidth: 1)
+                    .allowsHitTesting(false)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .modifier(SettingsReorderDropModifier(
+            id: provider.id,
+            items: $settings.providers, contentType: .snapAISettingsProvider,
+            dropTargetID: $dropTargetProviderID, commit: commit))
     }
 
     @ViewBuilder
     private func providerEditor(_ provider: AIProvider) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            editorRow("图标") {
+                HStack(spacing: 12) {
+                    ProviderIconView(provider: provider, size: 36, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
+                    Button("选择图标…") { iconProvider = provider }
+                    Text(provider.customIcon == nil ? "自动从网站获取" : "自定义图标")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             connectionGroup(provider)
             providerModelLoaderRow(provider)
             editorRow("") {
@@ -572,16 +591,6 @@ struct ProviderSettingsSection: View {
         settings.normalizeActive()
         commit()
     }
-
-    private func moveProvider(_ id: String, up: Bool) {
-        guard let idx = settings.providers.firstIndex(where: { $0.id == id }) else { return }
-        let target = up ? idx - 1 : idx + 1
-        guard target >= 0, target < settings.providers.count else { return }
-        settings.providers.swapAt(idx, target)
-        commit()
-    }
-
-
 
     private func editorRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 12) {

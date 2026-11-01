@@ -65,7 +65,7 @@ struct QuickInputView: View {
             footer
         }
         .frame(minWidth: 480, idealWidth: 560, minHeight: 300)
-        .background(SnapAIUI.Surface.canvas)
+        .background(SnapAIVisualEffect(material: .hudWindow).allowsHitTesting(false).ignoresSafeArea())
         .sheet(isPresented: $model.isCropping) {
             if let preview = model.imagePreview {
                 QuickInputCropView(image: preview,

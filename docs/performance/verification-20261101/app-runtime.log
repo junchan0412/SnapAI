@@ -1,0 +1,1 @@
+PASS App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, settings and Dock lifecycle, provider icons and reorder, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape

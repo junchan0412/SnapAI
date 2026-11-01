@@ -1,0 +1,27 @@
+Building for debugging...
+Build complete! (0.38秒)
+Test Suite 'Selected tests' started at 2026-11-01 23:38:21.377.
+Test Suite 'SnapAILogicTests.xctest' started at 2026-11-01 23:38:21.379.
+Test Suite 'SnapAILogicTests' started at 2026-11-01 23:38:21.379.
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' started.
+2026-11-01 23:38:23.163 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-37AC3919-2A5D-4952-B82F-D0C604BBC3A2”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 23:38:23.164 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-37AC3919-2A5D-4952-B82F-D0C604BBC3A2”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 23:38:23.168 xctest[590:4430995] SnapAI: history store failure: history write failed: fixture stop
+2026-11-01 23:38:23.171 xctest[590:4430995] SnapAI: history store failure: history store requires a newer app version
+2026-11-01 23:38:23.177 xctest[590:4430995] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-0D4DB9EC-D357-4A56-9516-7DF3D1E106AC”中，因为已存在同名文件。
+2026-11-01 23:38:23.177 xctest[590:4430995] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-0D4DB9EC-D357-4A56-9516-7DF3D1E106AC”中，因为已存在同名文件。
+2026-11-01 23:38:23.179 xctest[590:4430995] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-11-01 23:38:23.205 xctest[590:4430995] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-DD889B7F-4517-42FB-B08B-AEC70F1783F0”中，因为已存在同名文件。
+2026-11-01 23:38:23.206 xctest[590:4430995] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-DD889B7F-4517-42FB-B08B-AEC70F1783F0”中，因为已存在同名文件。
+2026-11-01 23:38:23.210 xctest[590:4430995] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-DD889B7F-4517-42FB-B08B-AEC70F1783F0”中，因为已存在同名文件。
+2026-11-01 23:38:24.863 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-D84722DF-DF32-4E39-8FCB-BBA4F6045711”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 23:38:24.864 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-D84722DF-DF32-4E39-8FCB-BBA4F6045711”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 23:38:24.864 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-D84722DF-DF32-4E39-8FCB-BBA4F6045711”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 23:38:24.865 xctest[590:4430995] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-D84722DF-DF32-4E39-8FCB-BBA4F6045711”保存在文件夹“T”中，因为已存在同名文件。
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' passed (5.095 seconds).
+Test Suite 'SnapAILogicTests' passed at 2026-11-01 23:38:26.474.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.095 (5.095) seconds
+Test Suite 'SnapAILogicTests.xctest' passed at 2026-11-01 23:38:26.474.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.095 (5.095) seconds
+Test Suite 'Selected tests' passed at 2026-11-01 23:38:26.474.
+	 Executed 1 test, with 0 failures (0 unexpected) in 5.095 (5.097) seconds

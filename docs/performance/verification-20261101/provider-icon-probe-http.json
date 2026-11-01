@@ -1,0 +1,116 @@
+[
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/relative/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/relative/assets/icon.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/redirect/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/redirected/page/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/redirected/assets/icon.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/images/redirect.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-0.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-1.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-2.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-3.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-4.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-5.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/broken-6.png"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/fallback/favicon.ico"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/missing/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/missing/favicon.ico"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/concurrent/"
+  },
+  {
+    "authorization_present": false,
+    "cookie_present": false,
+    "method": "GET",
+    "path": "/concurrent/icon.png"
+  }
+]

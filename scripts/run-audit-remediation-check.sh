@@ -211,7 +211,7 @@ require_match "release pipeline doc" '本机:签名发布' docs/releases/RELEASE
 require_match "glass toolbar group" 'struct SnapAIGlassToolbarGroup' Sources/SnapAI/SnapAILiquidGlass.swift
 require_no_match "legacy opaque card surface" '\.snapAISurface\(' Sources/SnapAI
 require_no_match "legacy chrome color block" 'Surface\.chrome' Sources/SnapAI
-require_no_match "legacy material fallback" 'regularMaterial' Sources/SnapAI
+require_match "native frosted glass fallback" '\.background\(\.regularMaterial,' Sources/SnapAI/SnapAILiquidGlass.swift
 require_match "endpoint host display helper" 'var displayHost' Sources/SnapAILogic/Provider.swift
 require_match "endpoint host regression" 'testProviderDisplayHostShowsOnlyHost\(\)' Tests/SnapAILogicTests/main.swift
 require_match "provider page section" 'case provider' Sources/SnapAILogic/SettingsSection.swift

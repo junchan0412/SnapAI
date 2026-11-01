@@ -380,7 +380,7 @@ package enum TextCapture {
                                             attribute,
                                             &value) == .success,
               let value, isAXUIElementRef(value) else { return nil }
-        return value as! AXUIElement
+        return (value as! AXUIElement)
     }
 
     private static func captureViaAX(targetApp: NSRunningApplication? = nil) -> String? {

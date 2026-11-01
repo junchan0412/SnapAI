@@ -31,9 +31,17 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         let arguments = ProcessInfo.processInfo.arguments
         let dark = arguments.contains("dark")
         NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        NSApp.applicationIconImage = NSImage(named: dark ? "AppIconDark" : "AppIconLight")
         let surface = arguments.drop(while: { $0 != "--preview" }).dropFirst().first ?? "settings"
         settings.providers = [AIProvider(id: "preview-provider", name: "OpenAI", baseURL: "http://127.0.0.1:9/v1",
                                          apiKey: "preview-only", models: [AIModelEntry(name: "gpt-4.1")])]
+        if surface == "provider" {
+            settings.providers.append(AIProvider(id: "preview-anthropic", name: "Anthropic", apiProtocol: .anthropic,
+                                                  baseURL: "http://127.0.0.1:9/v1", apiKey: "preview-only",
+                                                  models: [AIModelEntry(name: "claude-sonnet-4-6")]))
+            settings.providers.append(AIProvider(id: "preview-local", name: "本地模型", baseURL: "http://127.0.0.1:9/v1",
+                                                  models: [AIModelEntry(name: "qwen3")]))
+        }
         settings.secretStoreCache = ["preview-provider": "preview-only"]
         settings.activeProviderID = "preview-provider"
         settings.activeModel = "gpt-4.1"

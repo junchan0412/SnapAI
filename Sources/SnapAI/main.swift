@@ -84,5 +84,5 @@ if let launchSmoke {
 #endif
 }
 app.delegate = delegate
-// 激活策略由 AppDelegate 按用户设置(是否显示 Dock 图标)决定
+// 激活策略由主面板的打开与关闭状态决定
 app.run()

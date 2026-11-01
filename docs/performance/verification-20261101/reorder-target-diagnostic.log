@@ -1,0 +1,11 @@
+2026-11-01 17:03:26 +0000 target=preview-local isTargeted=true
+2026-11-01 17:03:26 +0000 target=preview-local isTargeted=false
+2026-11-01 17:18:36 +0000 target=preview-anthropic isTargeted=true
+2026-11-01 17:18:37 +0000 target=preview-anthropic isTargeted=false
+2026-11-01 18:03:24 +0000 target=preview-local isTargeted=true
+2026-11-01 18:03:25 +0000 target=preview-local isTargeted=false
+2026-11-01 18:28:57 +0000 native payload=["com.snapai.settings-provider:preview-provider"] target=preview-local ids=["preview-provider", "preview-anthropic", "preview-local"]
+2026-11-01 19:21:06 +0000 native payload=["com.snapai.settings-provider:preview-provider"] target=preview-local ids=["preview-provider", "preview-anthropic", "preview-local"]
+2026-11-01 19:22:03 +0000 native payload=["com.snapai.settings-provider:preview-provider"] target=preview-anthropic ids=["preview-anthropic", "preview-local", "preview-provider"]
+2026-11-01 19:27:25 +0000 native payload=["com.snapai.settings-action:91D20A26-A5D9-49A8-BDEC-EBA430940EE9"] target=8AA2C7F5-77B8-4729-9243-A07875DAB86D ids=["91D20A26-A5D9-49A8-BDEC-EBA430940EE9", "F99C142A-0960-4ECA-9CD9-FB4ECA8545B9", "8AA2C7F5-77B8-4729-9243-A07875DAB86D", "F23BAD84-5817-46B0-865A-EBEB730C93D5", "B8358DEC-AF88-4C18-A6FC-81A4685B9015"]
+2026-11-01 19:28:10 +0000 native payload=["com.snapai.settings-action:91D20A26-A5D9-49A8-BDEC-EBA430940EE9"] target=F99C142A-0960-4ECA-9CD9-FB4ECA8545B9 ids=["F99C142A-0960-4ECA-9CD9-FB4ECA8545B9", "8AA2C7F5-77B8-4729-9243-A07875DAB86D", "91D20A26-A5D9-49A8-BDEC-EBA430940EE9", "F23BAD84-5817-46B0-865A-EBEB730C93D5", "B8358DEC-AF88-4C18-A6FC-81A4685B9015"]

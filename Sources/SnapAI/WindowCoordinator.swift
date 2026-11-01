@@ -26,6 +26,10 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         super.init()
     }
 
+    var hasOpenMainWindow: Bool {
+        [settingsWindow, onboardingWindow].compactMap { $0 }.contains { $0.isVisible || $0.isMiniaturized }
+    }
+
     var selectedSettingsSection: SettingsSection {
         settingsNavigation.selectedSection
     }
@@ -34,17 +38,24 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         settingsWindowPinned
     }
 
+    func closeMainWindows() {
+        settingsWindow?.close()
+        onboardingWindow?.close()
+    }
+
     func openSettings() {
         showSettings(section: settingsNavigation.selectedSection)
     }
 
     func showSettings(section: SettingsSection) {
+        NSApp.setActivationPolicy(.regular)
         settingsNavigation.select(section)
         if let window = settingsWindow {
             if window.contentViewController == nil {
                 window.contentViewController = makeSettingsContentController()
             }
             applySettingsWindowPinnedState(to: window)
+            if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
@@ -57,11 +68,10 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        // 全 Liquid Glass：窗口非不透明 + clear 背景,让侧栏 behind-window 毛玻璃
-        // 透出桌面;标题栏透明并融入内容,详情区由内容自身的不透明基底兜底。
+        // 窗口与内容均使用 behind-window 材质，让桌面真实透出。
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.delegate = self
@@ -94,10 +104,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     func showOnboarding() {
+        NSApp.setActivationPolicy(.regular)
         if let window = onboardingWindow {
             if window.contentViewController == nil {
                 window.contentViewController = makeOnboardingContentController()
             }
+            if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -105,7 +117,10 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         let window = NSWindow(contentViewController: makeOnboardingContentController())
         window.title = "欢迎使用 SnapAI"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.setContentSize(NSSize(width: 700, height: 620))
         window.minSize = NSSize(width: 600, height: 560)
         window.isReleasedWhenClosed = false
@@ -119,12 +134,15 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let closedWindow = notification.object as? NSWindow else { return }
         guard closedWindow === settingsWindow || closedWindow === onboardingWindow else { return }
+        let otherMainWindowOpen = [settingsWindow, onboardingWindow].compactMap { $0 }
+            .contains { $0 !== closedWindow && ($0.isVisible || $0.isMiniaturized) }
         // 引导窗口被关闭(含红色关闭按钮)即视为完成引导,避免下次启动重复弹出。
         if closedWindow === onboardingWindow && !settings.onboardingDone {
             settings.onboardingDone = true
             settings.save()
             onSettingsChange()
         }
+        NSApp.setActivationPolicy(otherMainWindowOpen ? .regular : .accessory)
         DispatchQueue.main.async { [weak self, weak closedWindow] in
             guard let self, let closedWindow else { return }
             guard closedWindow === self.settingsWindow || closedWindow === self.onboardingWindow else { return }

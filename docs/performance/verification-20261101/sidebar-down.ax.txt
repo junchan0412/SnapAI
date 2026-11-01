@@ -1,0 +1,55 @@
+Window: "SnapAI 设置", App: SnapAI Preview.
+0 标准窗口 SnapAI 设置, ID: SnapAI.SettingsWindow, Secondary Actions: Raise
+	1 分离组
+		2 container
+			3 图像 SnapAI
+			4 text SnapAI 你的随身 AI 工作台
+			5 滚动区
+				6 列表 边栏
+					7 row (selectable, expanded) Description: 拖动以调整顺序, Secondary Actions: Collapse
+					8 row (selectable) AI 供应商
+					9 row (selectable) 动作
+					10 row (selected) AI 模型
+					11 row (selectable) 历史
+					12 row (selectable) 通用
+					13 row (selectable) 权限
+			14 text 当前模型 gpt-4.1 OpenAI 快捷提问 快捷键 ⌥Space
+		15 分离器 (disabled, settable, float) 217
+		16 container
+			17 文本 AI 模型
+			18 按钮 Description: 设置窗口未置顶, Help: 未置顶:点击置顶设置窗口, Value: 未置顶, ID: pin
+			19 文本 当前模型、路由策略
+			20 滚动区 Secondary Actions: Scroll Up, Scroll Down
+				21 text 当前工作模型 固定模型 Fallback 开启
+				22 图像 Description: 服务器机架, ID: server.rack
+				23 text gpt-4.1 OpenAI · 127.0.0.1
+				24 菜单按钮 OpenAI
+				25 菜单按钮 gpt-4.1
+				26 文本 自动路由
+				27 弹出式按钮 优先偏好, Value: 均衡
+				28 转换 根据动作与内容自动选择模型, Value: off
+				29 转换 请求失败时尝试备用模型, Value: on
+				30 显示三角形 Description: 路由诊断, Value: off
+				31 文本 使用统计
+				32 按钮 刷新
+				33 text 暂无请求记录，完成一次提问后可查看用量。 本月 · 0 次请求尝试（含取消） API 返回 token：输入 0 / 输出 0 · 0/0 次有完整用量 估算费用：US$0.0000 0/0 次可计价 月预算 USD
+				34 文本栏 (settable) Description: 月预算，美元, Placeholder: 未设置
+				35 按钮 保存
+				36 text 费用按请求时的手工单价估算，含缓存的输入按普通输入价计算；不是账单。缺少 usage 或单价的请求不计入费用，预算仅作提醒。按日记录保留 400 天，不保存请求正文。 Temperature: 0.30
+				37 滑块 Description: Temperature, Value: 0.3, Secondary Actions: Increment, Decrement
+					38 值指示器 0.3
+				39 滚动条 (settable, float) 0
+					40 值指示器 (settable, float) 0
+					41 增箭头按钮
+					42 减箭头按钮
+					43 增页面按钮
+					44 减页面按钮
+	45 菜单按钮 窗口共享
+46 menu bar
+	47 SnapAI
+	48 编辑
+
+Selected:
+	10 row (selected)
+
+Note: Pay special attention to the content selected by the user. If the user asks a question or refers to the content they are looking at on-screen, they might be referring to the selected content (but they might be referring to something else that's visible, too).

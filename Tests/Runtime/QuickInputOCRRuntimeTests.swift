@@ -47,7 +47,7 @@ func runQuickInputOCRRuntimeTests() async -> [String] {
             state.withLock { $0.cancelled = Task.isCancelled; $0.finished = true }
             return .recognized(.init(text: "Previous image recognized text", confidence: 1))
         })
-        weak var weakModel = model
+        weak let weakModel = model
         var publishedText: [String] = []
         let observation = model!.$imageInput.sink { input in
             if case .ready(let text) = input.recognition { publishedText.append(text) }

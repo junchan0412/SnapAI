@@ -1,0 +1,11 @@
+2026-11-01 12:40:43 +0000 ready content=560x240 sourceCenter=(120,120) targetCenter=(430,120)
+2026-11-01 12:45:51 +0000 mouseDown source=true local=(100.0, 80.0)
+2026-11-01 12:45:51 +0000 mouseUp source=true local=(100.0, 80.0)
+2026-11-01 12:45:51 +0000 mouseDown source=true local=(100.0, 80.0)
+2026-11-01 12:45:51 +0000 mouseDragged source=true local=(100.0, 80.0)
+2026-11-01 12:45:51 +0000 beginDraggingSession
+2026-11-01 12:45:51 +0000 draggingEntered location=(430.0, 120.0)
+2026-11-01 12:45:51 +0000 draggingUpdated location=(430.0, 120.0)
+2026-11-01 12:45:51 +0000 prepareDrop
+2026-11-01 12:45:51 +0000 performDrop value=snapai-native-drag-fixture
+2026-11-01 12:45:51 +0000 source endedAt=(1110.0, 729.0) operation=1

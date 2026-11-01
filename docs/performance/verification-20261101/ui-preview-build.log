@@ -1,0 +1,12 @@
+Building for debugging...
+[1 / 1]
+[2 / 6] SnapAI-product
+[6 / 10] SnapAI-product
+[11 / 15] SnapAI-product
+[12 / 15] SnapAI-product
+[13 / 16] SnapAI-product
+[15 / 16] SnapAI-product
+Build complete! (3.49秒)
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/install_name_tool: warning: changes being made to the file will invalidate the code signature in: /Users/qidewei/Developer/SnapAI/dist/SnapAI Preview.app/Contents/MacOS/SnapAI
+/Users/qidewei/Developer/SnapAI/dist/SnapAI Preview.app: replacing existing signature
+SnapAI Preview: build=debug-preview, fixture=yes, network=no, surface=provider, appearance=light

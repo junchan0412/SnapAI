@@ -1,0 +1,59 @@
+Window: "SnapAI 设置", App: SnapAI Preview.
+0 标准窗口 SnapAI 设置, ID: SnapAI.SettingsWindow, Secondary Actions: Raise
+	1 分离组
+		2 container
+			3 图像 SnapAI
+			4 text SnapAI 你的随身 AI 工作台
+			5 滚动区
+				6 列表 边栏
+					7 row (selectable, expanded) Description: 拖动以调整顺序, Secondary Actions: Collapse
+					8 row (selectable) AI 模型
+					9 row (selectable) AI 供应商
+					10 row (selected) 动作
+					11 row (selectable) 历史
+					12 row (selectable) 通用
+					13 row (selectable) 权限
+			14 text 当前模型 gpt-4.1 OpenAI 快捷提问 快捷键 ⌥Space
+		15 分离器 (disabled, settable, float) 217
+		16 container
+			17 文本 动作
+			18 按钮 Description: 设置窗口未置顶, Help: 未置顶:点击置顶设置窗口, Value: 未置顶, ID: pin
+			19 文本 动作模板、快捷键、写回行为
+			20 滚动区 Secondary Actions: Scroll Up, Scroll Down
+				21 列表 Secondary Actions: AXScrollToTop, AXScrollToBottom
+					22 文本 5 个已启用，共 5 个动作
+					23 菜单按钮 管理, ID: ellipsis.circle
+					24 菜单按钮 添加动作, ID: plus
+					25 text 快捷提问 直接打开输入面板，无需先选中文字。
+					26 按钮 Description: 快捷提问的全局快捷键, Help: 点击录制;按 Esc 取消,Delete 清除。建议使用 ⌥ 或 ⌃⌥ 组合,避开系统保留快捷键。
+					27 显示三角形 Description: 全局提示词, Value: off
+					28 图像 Description: 拖动排序 翻译, Help: 拖动以调整 翻译 的顺序
+					29 按钮 编辑动作 翻译
+					30 开关按钮 Description: 启用翻译, Value: on
+					31 图像 Description: 拖动排序 润色, Help: 拖动以调整 润色 的顺序
+					32 按钮 编辑动作 润色
+					33 开关按钮 Description: 启用润色, Value: on
+					34 图像 Description: 拖动排序 提问, Help: 拖动以调整 提问 的顺序
+					35 按钮 编辑动作 提问
+					36 开关按钮 Description: 启用提问, Value: on
+					37 图像 Description: 拖动排序 总结, Help: 拖动以调整 总结 的顺序
+					38 按钮 编辑动作 总结
+					39 开关按钮 Description: 启用总结, Value: on
+					40 图像 Description: 拖动排序 解释代码, Help: 拖动以调整 解释代码 的顺序
+					41 按钮 编辑动作 解释代码
+					42 开关按钮 Description: 启用解释代码, Value: on
+				43 滚动条 (settable, float) 0
+					44 值指示器 (settable, float) 0
+					45 增箭头按钮
+					46 减箭头按钮
+					47 增页面按钮
+					48 减页面按钮
+	49 菜单按钮 窗口共享
+50 menu bar
+	51 SnapAI
+	52 编辑
+
+Selected:
+	10 row (selected)
+
+Note: Pay special attention to the content selected by the user. If the user asks a question or refers to the content they are looking at on-screen, they might be referring to the selected content (but they might be referring to something else that's visible, too).

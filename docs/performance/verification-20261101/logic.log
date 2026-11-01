@@ -1,0 +1,75 @@
+Building for debugging...
+[Pre-planning 28 / 183]
+[Planning deferred tasks]
+[32 / 79] SnapAI_SnapAI
+[43 / 79]
+[45 / 81] SnapAIUpdater-product
+[55 / 117]
+[57 / 117]
+[67 / 174]
+[69 / 174]
+[70 / 174]
+[77 / 174]
+[80 / 174]
+[88 / 174]
+[93 / 174]
+[94 / 174]
+[105 / 174]
+[112 / 174]
+[114 / 174]
+[121 / 174]
+[127 / 174]
+[128 / 174]
+[138 / 174] SnapAILogic
+[141 / 174] SnapAILogic
+[147 / 174] SnapAILogic
+[152 / 175]
+[152 / 175] SnapAIUpdater-product
+[154 / 175] SnapAILogic
+[161 / 197]
+[165 / 197]
+[173 / 197] SnapAI-product
+[174 / 197] SnapAI-product
+[176 / 197] SnapAILogic
+[177 / 197] SnapAI-product
+[183 / 198] SnapAILogicTests-product
+[185 / 214]
+[187 / 214]
+[188 / 214]
+[192 / 214] SnapAILogicTests-product
+[193 / 214] SnapAILogicTests-product
+[194 / 214] SnapAILogicTests-product
+[196 / 214] SnapAILogicTests-product
+[198 / 214] SnapAILogicTests-product
+[202 / 214] SnapAILogicTests-product
+[204 / 214] AllIncludingTests
+[204 / 214] SnapAI-product
+[204 / 214] SnapAILogicTests-product
+[206 / 214] SnapAILogicTests-product
+[212 / 214] SnapAI-product
+Build complete! (16.65秒)
+Test Suite 'Selected tests' started at 2026-11-01 18:49:45.946.
+Test Suite 'SnapAILogicTests.xctest' started at 2026-11-01 18:49:45.948.
+Test Suite 'SnapAILogicTests' started at 2026-11-01 18:49:45.948.
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' started.
+2026-11-01 18:49:48.027 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-957CEAAE-9914-42EC-845F-A3098FF4EDE6”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 18:49:48.028 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryStore-Blocked-957CEAAE-9914-42EC-845F-A3098FF4EDE6”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 18:49:48.031 xctest[86378:4160673] SnapAI: history store failure: history write failed: fixture stop
+2026-11-01 18:49:48.035 xctest[86378:4160673] SnapAI: history store failure: history store requires a newer app version
+2026-11-01 18:49:48.041 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-70038525-004D-45EA-8BCA-84008333589E”中，因为已存在同名文件。
+2026-11-01 18:49:48.041 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“blocked”保存在文件夹“SnapAI-StorageTests-70038525-004D-45EA-8BCA-84008333589E”中，因为已存在同名文件。
+2026-11-01 18:49:48.043 xctest[86378:4160673] SnapAI: history store failure: failed to open history store: unable to open database file
+2026-11-01 18:49:48.066 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-79113ADD-FE70-40E9-821E-AD7012BC939A”中，因为已存在同名文件。
+2026-11-01 18:49:48.066 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-79113ADD-FE70-40E9-821E-AD7012BC939A”中，因为已存在同名文件。
+2026-11-01 18:49:48.070 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“migration”保存在文件夹“SnapAI-StorageTests-79113ADD-FE70-40E9-821E-AD7012BC939A”中，因为已存在同名文件。
+2026-11-01 18:50:16.625 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-DD14FC2D-1215-4D20-BE41-5429FFBD7E43”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 18:50:16.626 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-DD14FC2D-1215-4D20-BE41-5429FFBD7E43”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 18:50:16.626 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-DD14FC2D-1215-4D20-BE41-5429FFBD7E43”保存在文件夹“T”中，因为已存在同名文件。
+2026-11-01 18:50:16.627 xctest[86378:4160673] SnapAI: history store failure: 未能将文件“SnapAI-HistoryMutation-Blocked-DD14FC2D-1215-4D20-BE41-5429FFBD7E43”保存在文件夹“T”中，因为已存在同名文件。
+Test Case '-[SnapAILogicTests.SnapAILogicTests testLogicSuite]' passed (32.268 seconds).
+Test Suite 'SnapAILogicTests' passed at 2026-11-01 18:50:18.217.
+	 Executed 1 test, with 0 failures (0 unexpected) in 32.268 (32.268) seconds
+Test Suite 'SnapAILogicTests.xctest' passed at 2026-11-01 18:50:18.217.
+	 Executed 1 test, with 0 failures (0 unexpected) in 32.268 (32.268) seconds
+Test Suite 'Selected tests' passed at 2026-11-01 18:50:18.217.
+	 Executed 1 test, with 0 failures (0 unexpected) in 32.268 (32.270) seconds

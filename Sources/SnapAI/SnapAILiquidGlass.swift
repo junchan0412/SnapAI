@@ -8,7 +8,7 @@ import SnapAILogic
 // 1. 结构性 chrome（窗口标题栏、工具栏、footer、历史列表列）一律透明——只留
 //    内容，由窗口/面板自身的材质提供 backdrop。禁止再引入新的不透明色块。
 // 2. 需要抬升的内容（卡片、输入框、代码块）走 glassCard/gfield 修饰符：
-//    macOS 26+ 用 Liquid Glass，低版本回退到现有 Surface 语义色。
+//    macOS 26+ 用 Liquid Glass，低版本卡片回退到原生毛玻璃。
 // 3. 信息密度处理：供应商端点只显示 host；API Key 健康只显示计数摘要，
 //    永不显示 Key 明文/掩码（见 AIProvider.displayHost、Diagnostics.apiKeyHealth）。
 // 4. 数据面 Divider 一律删除；仅保留控件内部/菜单内部的语义分隔。
@@ -34,7 +34,7 @@ private struct SnapAIGlassCardModifier: ViewModifier {
                 )
         } else {
             content
-                .background(SnapAIUI.Surface.content,
+                .background(.regularMaterial,
                             in: RoundedRectangle(cornerRadius: radius, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -79,7 +79,7 @@ private struct SnapAIGlassPillModifier: ViewModifier {
 
 extension View {
     /// 需要抬升的内容卡片（设置卡片、历史行、更新说明卡、onboarding 步骤）。
-    /// macOS 26+ 为 Liquid Glass，低版本回退到 Surface.content + 边框。
+    /// macOS 26+ 为 Liquid Glass，低版本回退到 regularMaterial + 边框。
     func snapAIGlassCard(radius: CGFloat = SnapAIUI.cardRadius,
                          interactive: Bool = false) -> some View {
         modifier(SnapAIGlassCardModifier(radius: radius, interactive: interactive))
@@ -151,15 +151,19 @@ struct SnapAIGlassToolbarGroup<Content: View>: View {
 // MARK: - 侧栏毛玻璃（behind-window vibrancy）
 //
 // 参考 macOS 系统设置：左侧栏是 behind-window 的 .sidebar 毛玻璃（桌面透过来），
-// 右侧详情区是不透明基底。SwiftUI 的 NavigationSplitView 侧栏本应自动获得该材质，
+// 右侧详情区也使用原生材质。SwiftUI 的 NavigationSplitView 侧栏本应自动获得该材质，
 // 但当宿主 NSWindow 不透明时无法透出桌面。此处显式铺一层 behind-window 材质，
 // 并由 WindowCoordinator 把设置窗口设为 isOpaque=false + clear 背景，保证真实透明。
+private final class SnapAIBackdropView: NSVisualEffectView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 struct SnapAIVisualEffect: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .sidebar
     var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
+        let view = SnapAIBackdropView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
@@ -176,6 +180,6 @@ struct SnapAIVisualEffect: NSViewRepresentable {
 extension View {
     /// 侧栏 behind-window 毛玻璃底。铺在侧栏内容最底层，桌面透过窗口显现。
     func snapAISidebarGlass() -> some View {
-        background(SnapAIVisualEffect(material: .sidebar).ignoresSafeArea())
+        background(SnapAIVisualEffect(material: .sidebar).allowsHitTesting(false).ignoresSafeArea())
     }
 }

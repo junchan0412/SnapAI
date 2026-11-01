@@ -438,7 +438,7 @@ package struct PermissionHealthSnapshot {
             accessibilityGranted: TextCapture.hasAccessibilityPermission(),
             screenCaptureGranted: CGPreflightScreenCaptureAccess(),
             launchAtLogin: LoginItem.isEnabled,
-            showDockIcon: settings.showDockIcon,
+            showDockIcon: NSRunningApplication.current.activationPolicy == .regular,
             installDirectoryWritable: installDirectoryWritable(for: appURL),
             quarantineStatus: quarantineSummary(for: appURL),
             latestInstallLogPath: installLogStatus.diagnosticPath,

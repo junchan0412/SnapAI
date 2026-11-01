@@ -1,0 +1,78 @@
+Window: "SnapAI 设置", App: SnapAI Preview.
+0 标准窗口 SnapAI 设置, ID: SnapAI.SettingsWindow, Secondary Actions: Raise
+	1 分离组
+		2 container
+			3 图像 SnapAI
+			4 text SnapAI 你的随身 AI 工作台
+			5 滚动区
+				6 列表 边栏
+					7 row (selectable, expanded) Description: 拖动以调整顺序, Secondary Actions: Collapse
+					8 row (selectable) AI 模型
+					9 row (selectable) AI 供应商
+					10 row (selected) 动作
+					11 row (selectable) 历史
+					12 row (selectable) 通用
+					13 row (selectable) 权限
+			14 text 当前模型 gpt-4.1 OpenAI 快捷提问 快捷键 ⌥Space
+		15 分离器 (disabled, settable, float) 217
+		16 container
+			17 文本 动作
+			18 按钮 Description: 设置窗口未置顶, Help: 未置顶:点击置顶设置窗口, Value: 未置顶, ID: pin
+			19 文本 动作模板、快捷键、写回行为
+			20 滚动区 Secondary Actions: Scroll Up, Scroll Down
+				21 列表 Secondary Actions: AXScrollToTop, AXScrollToBottom
+					22 文本 5 个已启用，共 5 个动作
+					23 菜单按钮 管理, ID: ellipsis.circle
+					24 菜单按钮 添加动作, ID: plus
+					25 text 快捷提问 直接打开输入面板，无需先选中文字。
+					26 按钮 Description: 快捷提问的全局快捷键, Help: 点击录制;按 Esc 取消,Delete 清除。建议使用 ⌥ 或 ⌃⌥ 组合,避开系统保留快捷键。
+					27 显示三角形 Description: 全局提示词, Value: off
+					28 图像 Description: 拖动排序 提问, Help: 拖动以调整 提问 的顺序
+					29 按钮 收起动作 提问
+					30 开关按钮 Description: 启用提问, Value: on
+					31 文本 名称
+					32 文本栏 (settable) Value: 提问, Placeholder: 动作名称
+					33 文本 动作提示词
+					34 滚动区 Secondary Actions: Scroll Up, Scroll Down
+						35 文本输入区 (settable) Description: 提问的 Prompt, Value: 请简洁、准确地回答关于以下内容的问题或解释它:
+
+{{text}}
+						36 滚动条 (disabled, settable, float) 0
+					37 text 使用 {{text}} 引用选中文字，{{lang}} 引用目标语言。 快捷键
+					38 按钮 ⌥A, Description: 快捷键, Help: 点击后录制全局快捷键。Esc 取消,Delete 清除。 当前为 ⌥A。
+					39 按钮 清除
+					40 文本 点击录制;按 Esc 取消,Delete 清除。建议使用 ⌥ 或 ⌃⌥ 组合,避开系统保留快捷键。
+					41 复选框 Description: 翻译类动作(显示语言切换), Value: 0
+					42 复选框 Description: 完成后进入替换确认, Value: 0
+					43 文本 先展示差异预览，确认后才写回原应用。
+					44 复选框 Description: 保存到历史记录, Value: 1
+					45 文本 关闭后，此动作的结果不会进入历史记录。
+					46 显示三角形 Description: 更多选项 · 图标、分组、模型与推理, Value: off
+					47 按钮 删除动作
+					48 图像 Description: 拖动排序 翻译, Help: 拖动以调整 翻译 的顺序
+					49 按钮 编辑动作 翻译
+					50 开关按钮 Description: 启用翻译, Value: on
+					51 图像 Description: 拖动排序 润色, Help: 拖动以调整 润色 的顺序
+					52 按钮 编辑动作 润色
+					53 开关按钮 Description: 启用润色, Value: on
+					54 图像 Description: 拖动排序 总结, Help: 拖动以调整 总结 的顺序
+					55 按钮 编辑动作 总结
+					56 开关按钮 Description: 启用总结, Value: on
+					57 图像 Description: 拖动排序 解释代码, Help: 拖动以调整 解释代码 的顺序
+					58 按钮 编辑动作 解释代码
+					59 开关按钮 Description: 启用解释代码, Value: on
+				60 滚动条 (settable, float) 0.3842010771992819
+					61 值指示器 (settable, float) 0.3842010771992819
+					62 增箭头按钮
+					63 减箭头按钮
+					64 增页面按钮
+					65 减页面按钮
+	66 菜单按钮 窗口共享
+67 menu bar
+	68 SnapAI
+	69 编辑
+
+Selected:
+	10 row (selected)
+
+Note: Pay special attention to the content selected by the user. If the user asks a question or refers to the content they are looking at on-screen, they might be referring to the selected content (but they might be referring to something else that's visible, too).

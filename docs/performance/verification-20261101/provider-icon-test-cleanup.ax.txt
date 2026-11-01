@@ -1,0 +1,23 @@
+Window: "", App: SnapAI Preview.
+0 表单 Secondary Actions: Raise
+	1 container
+		2 文本 图标库
+		3 按钮 完成
+		4 文本 管理本机图标，可供所有供应商复用
+		5 滚动区
+			6 集合 Secondary Actions: AXScrollToTop, AXScrollToBottom
+				7 图像 network
+				8 图像 server.rack
+				9 图像 desktopcomputer
+				10 图像 cpu
+				11 图像 brain
+				12 图像 bolt.fill
+				13 图像 leaf.fill
+				14 图像 cloud.fill
+		15 按钮 导入图片…
+		16 文本 PNG、JPEG、HEIC、TIFF、ICO 等系统支持的图片
+17 menu bar
+	18 SnapAI
+	19 编辑
+
+The focused UI element is 0 表单 Secondary Actions: Raise

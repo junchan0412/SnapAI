@@ -280,8 +280,7 @@ extension AppDelegate {
                                         title: speed.rawValue,
                                         isCurrent: settings.typewriterSpeed == speed)
         }
-        for descriptor in DisplayBehaviorCommandFactory.descriptors(showDockIcon: settings.showDockIcon,
-                                                                    loginItemEnabled: LoginItem.isEnabled,
+        for descriptor in DisplayBehaviorCommandFactory.descriptors(loginItemEnabled: LoginItem.isEnabled,
                                                                     typewriterSpeeds: typewriterSpeeds) {
             items.append(CommandPaletteItem(
                 id: descriptor.id,

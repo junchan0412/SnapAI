@@ -52,7 +52,7 @@ fi
 LENGTH=$(wc -c < "$ZIP" | tr -d ' ')
 URL="https://github.com/${REPO}/releases/download/${TAG}/$(basename "$ZIP")"
 PUBDATE=$(date -R)
-DESCRIPTION=$(python3 scripts/support/release-notes-html.py "$NOTES")
+DESCRIPTION=$(python3 scripts/support/release-notes-html.py "$NOTES" "https://github.com/${REPO}/blob/${TAG}/${NOTES#./}")
 
 mkdir -p "$(dirname "$OUTPUT")"
 cat > "$OUTPUT" <<XML

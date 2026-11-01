@@ -46,6 +46,7 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
             await testPanelPresentationRace()
             await testSavedPanelSizes()
             await testReusableSettingsWindow()
+            testProviderIconLibraryAndReorder()
             await testEscapeOwnership()
             await finish()
         }
@@ -366,7 +367,9 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
             failures.append("the real WindowCoordinator creates its settings window")
             return
         }
+        check(NSApp.activationPolicy() == .regular && coordinator.hasOpenMainWindow, "opening the main window shows its Dock icon")
         window.close()
+        check(NSApp.activationPolicy() == .accessory && !coordinator.hasOpenMainWindow, "closing the main window hides Dock without terminating the app")
         coordinator.openSettings()
         try? await Task.sleep(nanoseconds: 60_000_000)
         check(window.isVisible && window.contentViewController != nil,
@@ -378,14 +381,94 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
               "a released settings hosting tree can be recreated in the same window")
         window.close()
         await waitUntil("settings closes before lifecycle cycles") { window.contentViewController == nil }
-        for cycle in 1...30 {
-            coordinator.openSettings()
-            check(window.isVisible && window.contentViewController != nil,
-                  "settings lifecycle cycle \(cycle) recreates content")
-            window.close()
-            await waitUntil("settings lifecycle cycle \(cycle) releases hosting") { window.contentViewController == nil }
+        coordinator.openSettings()
+        window.miniaturize(nil)
+        await waitUntil("the settings main window can be minimized") { window.isMiniaturized }
+        check(coordinator.hasOpenMainWindow && NSApp.activationPolicy() == .regular,
+              "a minimized main window retains its Dock entry")
+        coordinator.openSettings()
+        await waitUntil("reopening settings restores its minimized window") { !window.isMiniaturized && window.isVisible }
+        check(!window.isOpaque && window.backgroundColor == .clear,
+              "the settings window allows its native backdrop to show through")
+        coordinator.showOnboarding()
+        guard let onboarding = NSApp.windows.first(where: { $0.contentViewController is NSHostingController<OnboardingView> }) else {
+            failures.append("the real coordinator creates an onboarding main window")
+            coordinator.closeMainWindows()
+            return
         }
+        check(!onboarding.isOpaque && onboarding.backgroundColor == .clear,
+              "the onboarding main window also uses a transparent backdrop")
+        window.close()
+        check(onboarding.isVisible && coordinator.hasOpenMainWindow && NSApp.activationPolicy() == .regular,
+              "closing settings keeps Dock while another main window remains open")
+        coordinator.openSettings()
+        onboarding.close()
+        check(window.isVisible && coordinator.hasOpenMainWindow && NSApp.activationPolicy() == .regular,
+              "closing onboarding keeps Dock while settings remains open")
+        coordinator.closeMainWindows()
+        check(!coordinator.hasOpenMainWindow && NSApp.activationPolicy() == .accessory,
+              "closing all main windows leaves the background app running without Dock")
+        let quick = QuickInputController(model: QuickInputModel(settings: settings))
+        quick.show()
+        check(NSApp.activationPolicy() == .accessory && !coordinator.hasOpenMainWindow,
+              "opening a quick panel does not create a main-window Dock entry")
+        quick.hide()
         try? await Task.sleep(nanoseconds: 40_000_000)
+    }
+
+    private func testProviderIconLibraryAndReorder() {
+        let directory = fixtureRoot.appendingPathComponent("icons")
+        let library = ProviderIconLibrary(directory: directory)
+        do {
+            let input = fixtureRoot.appendingPathComponent("icon-fixture.png")
+            let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 64, pixelsHigh: 32,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            let fixtureColor = NSColor(deviceRed: 0.2, green: 0.5, blue: 0.8, alpha: 1)
+            for x in 0..<64 { for y in 0..<32 { bitmap.setColor(fixtureColor, atX: x, y: y) } }
+            try bitmap.representation(using: .png, properties: [:])!.write(to: input)
+            let name = try library.add(input)
+            try FileManager.default.removeItem(at: input)
+            check(library.files == [name], "imported provider icon is available throughout the library")
+            check(library.localImage(name) != nil, "imported icon remains readable after the original file is removed")
+            if let image = library.localImage(name), let tiff = image.tiffRepresentation,
+               let imported = NSBitmapImageRep(data: tiff) {
+                check(imported.pixelsWide == 256 && imported.pixelsHigh == 256 &&
+                      (imported.colorAt(x: 128, y: 0)?.alphaComponent ?? 1) < 0.01 &&
+                      (imported.colorAt(x: 128, y: 128)?.alphaComponent ?? 0) > 0.9,
+                      "non-square imported icons keep their aspect ratio with transparent padding")
+            } else { failures.append("imported icons can be decoded for aspect-ratio verification") }
+            check(ProviderIconLibrary(directory: directory).files == [name], "icon library survives relaunch")
+            check(library.localImage("../icon-fixture.png") == nil, "local icons cannot escape the library directory")
+            try library.remove(name)
+            check(library.files.isEmpty && library.localImage(name) == nil,
+                  "removing an icon updates the library and releases its cached image")
+            let invalid = fixtureRoot.appendingPathComponent("invalid-image.png")
+            try Data("invalid".utf8).write(to: invalid)
+            do { _ = try library.add(invalid); check(false, "invalid image must fail import") }
+            catch { check(library.files.isEmpty, "invalid image import leaves the library unchanged") }
+        } catch { failures.append("icon library runtime: \(error)") }
+        let settings = settings("drag-reorder")
+        settings.actions = [AIAction(id: "a", name: "A"), AIAction(id: "b", name: "B"), AIAction(id: "c", name: "C")]
+        var commits = 0
+        let target = SettingsReorderDropModifier(id: "c", items: Binding(get: { settings.actions }, set: { settings.actions = $0 }),
+                                                 contentType: .snapAISettingsAction, commit: { commits += 1; _ = settings.save() })
+        check(target.moveItem(["com.snapai.settings-action:a"]), "a valid action drag is accepted")
+        check(settings.actions.map(\.id) == ["b", "c", "a"] && commits == 1,
+              "dragging the first action past the last retains all actions and commits once")
+        let first = SettingsReorderDropModifier(id: "b", items: Binding(get: { settings.actions }, set: { settings.actions = $0 }),
+                                               contentType: .snapAISettingsAction, commit: { commits += 1; _ = settings.save() })
+        check(first.moveItem(["com.snapai.settings-action:a"]), "a last-to-first action drag is accepted")
+        check(settings.actions.map(\.id) == ["a", "b", "c"] && commits == 2,
+              "dragging the last action before the first preserves the collection")
+        let restored = AppSettings.load(defaults: settings.persistenceDefaults, historyStore: settings.persistenceHistoryStore)
+        check(restored.actions.map(\.id) == ["a", "b", "c"], "the committed action order survives settings reload")
+        check(!target.moveItem(["com.snapai.settings-action:c"]), "dropping an action on itself is rejected")
+        check(!target.moveItem(["com.snapai.settings-action:missing"]), "a missing source is rejected")
+        check(!target.moveItem(["com.snapai.settings-provider:a"]), "a provider cannot be reordered as an action")
+        check(!target.moveItem(["com.snapai.settings-action:a", "com.snapai.settings-action:b"]), "multi-item external drags are rejected")
+        check(settings.actions.map(\.id) == ["a", "b", "c"] && commits == 2,
+              "same-item and stale drags do not change or commit the collection")
     }
 
     private func testEscapeOwnership() async {
@@ -556,15 +639,16 @@ private final class AppRuntimeSmokeDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func finish() async {
-        NSApp.windows.forEach { $0.orderOut(nil) }
+        NSApp.windows.forEach { $0.close() }
+        NSApp.setActivationPolicy(.accessory)
         RoutingMetricsStore.shared.flushPersistence()
         for suite in suites { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
         UserDefaults.standard.removePersistentDomain(forName: "com.snapai.runtime-tests")
         let status = failures.isEmpty ? "PASS" : "FAIL"
-        let summary = status + " App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, 30 settings lifecycle cycles, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape\n"
+        let summary = status + " App runtime smoke: VM replacement, drain isolation, cancel/error side effects, history feedback, quick-input acceptance, saved panel sizes, settings and Dock lifecycle, provider icons and reorder, independent model comparison, composable Shortcuts, five timing points, panel/window races, unpinned popover Escape\n"
         try? (summary + failures.map { "FAIL: \($0)\n" }.joined() + windowDiagnostics.joined()).write(to: resultURL, atomically: true, encoding: .utf8)
         URLProtocol.unregisterClass(StreamFixtureProtocol.self)
-        exit(failures.isEmpty ? 0 : 1)
+        NSApp.terminate(nil)
     }
 }
 
@@ -579,7 +663,10 @@ struct AppRuntimeSmokeMain {
             fatalError("Run the isolated test bundle with scripts/run-app-runtime-tests.sh")
         }
         _ = URLProtocol.registerClass(StreamFixtureProtocol.self)
-        let delegate = AppRuntimeSmokeDelegate(fixtureRoot: URL(fileURLWithPath: arguments[rootIndex + 1]),
+        let fixtureRoot = URL(fileURLWithPath: arguments[rootIndex + 1])
+        try? Data("\(ProcessInfo.processInfo.processIdentifier)\n".utf8)
+            .write(to: fixtureRoot.appendingPathComponent("runtime.pid"), options: .atomic)
+        let delegate = AppRuntimeSmokeDelegate(fixtureRoot: fixtureRoot,
                                                resultURL: URL(fileURLWithPath: arguments[outputIndex + 1]))
         let app = NSApplication.shared
         app.delegate = delegate

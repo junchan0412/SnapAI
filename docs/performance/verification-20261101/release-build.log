@@ -1,0 +1,42 @@
+==> SwiftPM release build (macOS 14+)
+Another instance of SwiftPM (PID: 93915) is already running using '/Users/qidewei/Developer/SnapAI/.build', waiting until that process has finished execution...Building for production...
+[Planning deferred tasks]
+[24 / 47]
+[29 / 47]
+[31 / 49] SnapAIUpdater-product
+[41 / 84]
+[44 / 84]
+[55 / 131]
+[58 / 131]
+[65 / 131]
+[68 / 131]
+[76 / 131]
+[78 / 131]
+[81 / 131]
+[82 / 131]
+[97 / 131]
+[100 / 131]
+[107 / 131]
+[113 / 131]
+[114 / 131] SnapAIUpdater-product
+[116 / 131]
+[117 / 131] SnapAIUpdater-product
+[119 / 131] SnapAILogic
+[127 / 132] SnapAI-product
+[139 / 144]
+[140 / 144] SnapAI-product
+[142 / 144] SnapAI-product
+[143 / 144] SnapAI-product
+Build complete! (32.06秒)
+==> 嵌入 Sparkle.framework
+==> 提取 App Intents 元数据
+2026-11-01 21:04:24.363 appintentsmetadataprocessor[94533:4297136] Starting App Intents metadata extraction
+2026-11-01 21:04:24.462 appintentsmetadataprocessor[94533:4297136] Writing Metadata.appintents
+2026-11-01 21:04:24.462 appintentsmetadataprocessor[94533:4297136] Metadata root: /var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.qEEMSN/SnapAI.app/Contents/Resources/Metadata.appintents
+==> 精简发行符号（dSYM 保留在 SwiftPM 构建目录）
+==> 签名 (SnapAI Local Signing)
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.qEEMSN/SnapAI.app/Contents/Frameworks/Sparkle.framework: replacing existing signature
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.qEEMSN/SnapAI.app/Contents/Helpers/SnapAIUpdater: replacing existing signature
+/var/folders/dp/stn1d8h114x2wz9dnk4r0bjh0000gn/T//snapai-bundle.qEEMSN/SnapAI.app: replacing existing signature
+
+构建完成: /Users/qidewei/Developer/SnapAI/SnapAI.app

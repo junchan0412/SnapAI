@@ -30,18 +30,9 @@ public struct DisplayBehaviorCommandDescriptor: Equatable {
 }
 
 public enum DisplayBehaviorCommandFactory {
-    public static func descriptors(showDockIcon: Bool,
-                                   loginItemEnabled: Bool,
+    public static func descriptors(loginItemEnabled: Bool,
                                    typewriterSpeeds: [TypewriterSpeedCommandInput]) -> [DisplayBehaviorCommandDescriptor] {
         var result = [
-            DisplayBehaviorCommandDescriptor(
-                id: "dock-icon-toggle",
-                title: showDockIcon ? "隐藏 Dock 图标" : "显示 Dock 图标",
-                subtitle: showDockIcon ? "当前已显示" : "当前仅菜单栏常驻",
-                systemImage: "dock.rectangle",
-                keywords: "settings dock icon menu bar display 显示 Dock 图标 菜单栏",
-                action: .setDockIcon(!showDockIcon)
-            ),
             DisplayBehaviorCommandDescriptor(
                 id: "login-item-toggle",
                 title: loginItemEnabled ? "关闭开机启动" : "开启开机启动",
