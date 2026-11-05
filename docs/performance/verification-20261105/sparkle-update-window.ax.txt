@@ -1,0 +1,12 @@
+Window: "", App: SnapAI.
+0 对话框 Description: 警告, Secondary Actions: Raise
+	1 图像 SnapAI 警告
+	2 text 您使用的就是最新版！ SnapAI 2.2.0是当前的最新版本。
+	3 按钮 好, ID: action-button-1
+4 menu bar
+	5 SnapAI
+	6 操作
+	7 编辑
+	8 窗口
+
+The focused UI element is 0 对话框 Description: 警告, Secondary Actions: Raise

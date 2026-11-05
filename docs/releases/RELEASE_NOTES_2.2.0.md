@@ -1,6 +1,6 @@
 # SnapAI 2.2.0
 
-日期：2026-11-02。
+日期：2026-11-03。
 
 本版改善设置工作台的排序、图标与窗口行为。
 
@@ -15,4 +15,4 @@
 
 发行包面向 Apple Silicon，最低系统为 macOS 14。继续使用已有稳定自签名身份及 Sparkle EdDSA 更新通道；首次安装按 [README](../../README.md) 的说明清除 quarantine 后打开。macOS 14/15 的真机材质回退、双设备 iCloud 和完整跨应用写回仍缺完整实测证据。
 
-供应商、动作与侧栏的双向重排，以及图标库导入、复用和删除已通过本机 GUI 验收；已有逻辑、流式 runtime、窗口生命周期和网站图标获取记录。最终签名构建、发布预检与同 HEAD CI 在发布前核对。测试范围、状态和构建来源见 [2.2.0 验收记录](../reports/RELEASE_ACCEPTANCE_2.2.0.md)。
+供应商、动作与侧栏的双向重排，以及图标库导入、复用和删除已通过本机 GUI 验收；已有逻辑、流式 runtime、窗口生命周期和网站图标获取记录。本机完整发布预检、真实 OCR、最终 App runtime、稳定代码签名、ZIP/manifest/SBOM 和 Sparkle appcast 校验均已通过；发布源码同 HEAD 的 push 和手动 CI 均通过。测试范围、状态和构建来源见 [2.2.0 验收记录](../reports/RELEASE_ACCEPTANCE_2.2.0.md)。

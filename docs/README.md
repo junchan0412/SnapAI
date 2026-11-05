@@ -1,6 +1,6 @@
 # SnapAI 文档索引
 
-更新：2026-11-02。当前源码版本为 **2.2.0**，版本以 `Resources/Info.plist` 为准；各项验证状态见本版验收记录。
+更新：2026-11-05。当前正式发布版本为 **2.2.0**，版本以 `Resources/Info.plist` 为准；各项验证状态见本版验收记录。
 
 ## 从这里开始
 
@@ -22,7 +22,7 @@
 | `reports/` | 当前检查报告、版本验收及按日期保留的评估/实施过程 |
 | `roadmap/` | 当前路线图，以及 [固定任务验收设计](roadmap/ROADMAP_ACCEPTANCE_2026-10-04.md)、[性能测量方法与历史记录](roadmap/ROADMAP_PERFORMANCE_2026-10-04.md) |
 | `baselines/` | [启动基线](baselines/STARTUP_BASELINE.md)、[运行时内存基线](baselines/RUNTIME_MEMORY_BASELINE.md)，需按各自日期、build 配置和设备理解 |
-| `performance/` | 采样 JSON、测试日志、实机观察等原始证据；[2.2.0 证据](performance/verification-20261101/)、[2.1.0 证据](performance/verification-20261025/) |
+| `performance/` | 采样 JSON、测试日志、实机观察等原始证据；2.2.0 的 [GUI 与图标探测](performance/verification-20261101/)、[发布预检](performance/verification-20261103/)、[线上资产与更新通道](performance/verification-20261105/)，以及 [2.1.0 证据](performance/verification-20261025/) |
 | `benchmarks/` | 2.0.0 存储与流式处理的原始对照数据 |
 | `screenshots/` | README、发布说明和重构报告引用的演示截图 |
 | `archive/` | [历史版本、旧方案及旧素材](archive/README.md) |

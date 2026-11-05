@@ -1,21 +1,23 @@
 # SnapAI 2.2.0 验收记录
 
-日期：2026-11-01 至 2026-11-02（Asia/Shanghai）。本版接续 [2026-10-25 项目检查](PROJECT_HEALTH_2026-10-25.md) 中的编译 warning 与实机验证事项；此前能力和历史样本见 [2.1.0 验收记录](RELEASE_ACCEPTANCE_2.1.0.md)。本轮原始证据位于 [verification-20261101](../performance/verification-20261101/)。
+日期：2026-11-01 至 2026-11-05（Asia/Shanghai）。本版接续 [2026-10-25 项目检查](PROJECT_HEALTH_2026-10-25.md) 中的编译 warning 与实机验证事项；此前能力和历史样本见 [2.1.0 验收记录](RELEASE_ACCEPTANCE_2.1.0.md)。GUI 与图标探测证据位于 [verification-20261101](../performance/verification-20261101/)，最终发布预检见 [verification-20261103](../performance/verification-20261103/)，线上资产与更新通道记录见 [verification-20261105](../performance/verification-20261105/)。
 
-## 基线与当前结论
+## 发布基线与结论
 
-开始验证的源码基线为 `db85b646419e80d1c8c56ee7cb8b5d5d6eeb317c` 加本轮 working tree，`Resources/Info.plist` 版本为 **2.2.0**。各日志取得后仍有拖排实现修改，不能把较早构建的通过结果直接归到最终源码。最终交付基线应以 `v2.2.0` tag、release manifest 和 SBOM 记录为准，下表在最终发布后补齐。
+正式版本为 **2.2.0**，发布源码为 `e9414b161e04350bd67b9678bdc453d73a3dcfd7`，与 `v2.2.0` tag 和发行 SBOM 的 `git.commit` 一致。[GitHub Release](https://github.com/junchan0412/SnapAI/releases/tag/v2.2.0) 于 2026-11-03 00:54（Asia/Shanghai）发布。
 
-| 项目 | 当前状态 |
+| 项目 | 结果与证据 |
 | --- | --- |
-| 最终源码 commit / `v2.2.0` tag | 待填 |
-| 最终 release 预检日志 | 待运行、待填 |
-| CI run / commit / 结果 | 待运行、待填 |
-| ZIP、manifest、SBOM、Sparkle appcast 校验 | 待最终打包验证、待填 |
+| 最终源码 commit / `v2.2.0` tag | `e9414b161e04350bd67b9678bdc453d73a3dcfd7` |
+| 最终 release 预检 | 通过；2026-11-03 执行 `scripts/preflight-release.sh --require-clean --require-synced`，见 [完整日志](../performance/verification-20261103/preflight-release.log) |
+| 同发布源码 CI | [push run 41350431521](https://github.com/junchan0412/SnapAI/actions/runs/41350431521) 与 [手动 run 41350569558](https://github.com/junchan0412/SnapAI/actions/runs/41350569558) 均为 success，HEAD 均为上述 commit |
+| ZIP、manifest、SBOM、Sparkle appcast | 最终预检通过签名、版本、安装包、SBOM 来源和 appcast 校验；[11 月 5 日记录](../performance/verification-20261105/release-channel.txt) 确认五项线上资产与本机预检产物逐字节一致，`releases/latest` 返回同一 appcast |
 
-当前原生拖排、侧栏重排与图标库 GUI 验收已通过；逻辑、流式 runtime 和网站图标探测已有通过记录。删除临时诊断 trace 后源码已完成 headless 构建；最终 App runtime、clean release 预检和同 HEAD CI 在发布前继续验证，状态以下表为准。
+供应商和动作原生拖排、侧栏重排与图标库 GUI 验收通过；发布源码的逻辑、真实 OCR、流式 runtime、完整 App runtime 和签名发布预检均通过。
 
 本机 `sw_vers` 返回 macOS **27.2**（build `26B123`）。App runtime 使用项目源码构建的独立测试 app 和隔离 fixture；GUI 记录使用项目 Debug 构建的 `SnapAI Preview`，不是 `/Applications` 中的旧版 SnapAI。测试与预览不借用用户的真实供应商、历史或图标配置。Debug 预览记录也不作为最终 Release 性能或兼容性数据。
+
+11 月 5 日在已安装的 `/Applications/SnapAI.app` 2.2.0 上执行「检查更新…」。其可执行文件、Info.plist、签名资源清单及四项图标资源与发布 ZIP 一致。Sparkle 返回「您使用的就是最新版！SnapAI 2.2.0 是当前的最新版本」，[对话框 AX 记录](../performance/verification-20261105/sparkle-update-window.ax.txt) 已保存，`SULastCheckTime` 更新为 2026-11-05 15:00:46（Asia/Shanghai）。
 
 ## 交付范围
 
@@ -26,32 +28,26 @@
 - 提供 light/dark 双软件图标，接入 Dock、设置侧栏和欢迎界面，随系统外观切换。
 - 修复旧报告指出的 AXUIElement 可选值强转与异步 OCR 测试 semaphore warning，保留类型核验和取消测试。
 
-交付内容说明已实现的范围，验证状态以下文为准；本版不将低版本系统、完整跨应用操作和 iCloud 双机同步归入已通过项。
-
-## 已取得的自动检查证据
+## 自动检查证据
 
 | 检查 | 结果与覆盖范围 | 证据及边界 |
 | --- | --- | --- |
-| SwiftPM 逻辑回归 | 通过；最终聚合 XCTest 0 failures，耗时 5.095 秒，包含真实 OCR 与取消检查，本次日志没有 OCR `SKIP` | [logic-final.log](../performance/verification-20261101/logic-final.log)。日志中的存储失败信息来自故障 fixture，不是测试执行失败；不把一个聚合 XCTest 当作只有一项逻辑检查 |
-| App runtime | 先前构建通过；最终原生 receiver 版本在锁屏会话中重跑未通过，不能替代解锁后的完整验收 | [app-runtime.log](../performance/verification-20261101/app-runtime.log) 来自旧 `DropDelegate`；最终失败对照见下文。窗口创建、Dock 生命周期、图标库和排序算法无失败报告；Escape 焦点/AX 与动画等待需在可激活会话重验 |
-| 流式 runtime | 通过；覆盖取消、重启、请求快照、部分失败、空闲 Timer 与 Markdown 合并 | [streaming.log](../performance/verification-20261101/streaming.log)。slow-gap timeout 为预期探测结果，未承诺所有远端请求成功 |
+| SwiftPM 逻辑回归 | 通过；发布预检的聚合 XCTest 0 failures，耗时 5.172 秒，包含真实 OCR 与取消检查，日志没有 OCR `SKIP` | [最终预检日志](../performance/verification-20261103/preflight-release.log)。本机预检强制 `SNAPAI_REQUIRE_SYSTEM_OCR=1`；存储失败信息来自故障 fixture |
+| App runtime | 通过；发布源码覆盖窗口与 Dock 生命周期、图标库、排序、结果焦点与 Escape、popover、动画等待、独立模型对照和 Shortcuts | [最终预检日志](../performance/verification-20261103/preflight-release.log) 的 `PASS App runtime smoke` |
+| 流式 runtime | 通过；覆盖取消、重启、请求快照、部分失败、空闲 Timer 与 Markdown 合并 | [最终预检日志](../performance/verification-20261103/preflight-release.log)。slow-gap timeout 为预期探测结果 |
 | 网站图标探测 | 通过本地真实 HTTP fixture 与至少一个公开网站获取；Apple 网站本次成功返回可解码图标 | [provider-icon-probe-results.json](../performance/verification-20261101/provider-icon-probe-results.json)、[HTTP 请求记录](../performance/verification-20261101/provider-icon-probe-http.json)。含源码与构建对象 hash；这是图标获取探测，不是模型 API 测试 |
-| 供应链扫描 | 当前依赖扫描未发现问题，SwiftPM 仅 Sparkle 2.9.6 | [supply-chain.log](../performance/verification-20261101/supply-chain.log)。结果限于扫描到的依赖，不代替全面安全审计 |
-| 编译与签名构建 | 较早工作区构建通过，发行构建使用 `SnapAI Local Signing`，声明 macOS 14 deployment target | [swift-build.log](../performance/verification-20261101/swift-build.log)、[release-build.log](../performance/verification-20261101/release-build.log)。不是最终源码的 clean release 预检，也未据此宣布最终 ZIP、更新 feed 已验证 |
+| 供应链扫描 | 发布预检未发现依赖问题，SwiftPM 仅 Sparkle 2.9.6 | [最终预检日志](../performance/verification-20261103/preflight-release.log) |
+| 编译与签名构建 | 发布源码构建通过，发行构建使用 `SnapAI Local Signing`，声明 macOS 14 deployment target；签名及解压安装包校验通过 | [最终预检日志](../performance/verification-20261103/preflight-release.log)，含 App Intents 元数据提取、独立配置启动与正常退出 |
 
 窗口 runtime 已确认：设置与引导并存时，关闭其中一个仍保留 Dock；全部主面板关闭后改为 accessory 且进程继续运行；快捷面板不会单独建立主面板 Dock 入口。这里验证的是项目 AppKit 生命周期和 activation policy，不将它替代所有用户操作路径的 GUI 验收。
 
 图标库 runtime 覆盖导入后原文件删除仍可读取、重新创建库后可复用、非正方形图片保持比例并留透明边、删除释放缓存及无效图片拒绝。网站探测覆盖相对 favicon URL、页面和图片重定向、多次无效声明后的 `/favicon.ico` 回退、并发请求合并、正/负缓存及隐私模式不发新请求。本地 HTTP 请求记录未见 Authorization 或 Cookie header；网站仍可观察普通图标资源请求。本地图标只保存文件引用，未在本轮进行双机图片同步验证。
 
-首次 App runtime 失败日志 [app-runtime-initial-failure.log.gz](../performance/verification-20261101/app-runtime-initial-failure.log.gz) 保留。最终重跑的 [首轮焦点失败](../performance/verification-20261101/app-runtime-final-initial-failure.log.gz)、[regular 前置对照](../performance/verification-20261101/app-runtime-regular-fixture-failure.log.gz) 和 [顺序隔离对照](../performance/verification-20261101/app-runtime-order-isolation-failure.log.gz) 也保留；本机随后确认 `IOConsoleLocked=Yes`、`CGSSessionScreenIsLocked=Yes`，对应结果窗 inactive/key=false/occluded，第三轮动画还停在 alpha=0。未保留无效的测试顺序或 policy 调整，原有焦点、AX、popover 和 Escape 断言不跳过；解锁会话后需重新验证最终 runtime。
-
 ## GUI 验收证据
 
 已有 [供应商页截图](../performance/verification-20261101/provider-light.jpg)、[动作页截图](../performance/verification-20261101/actions-light.jpg) 与 [light](../performance/verification-20261101/app-icon-light-preview.png) / [dark](../performance/verification-20261101/app-icon-dark-preview.png) 图标预览。截图与 AX 树能记录界面状态，不能证明拖排动作改变了顺序。
 
-早期 [供应商拖排记录](../performance/verification-20261101/ui-provider-drag.txt)、[侧栏拖排记录](../performance/verification-20261101/ui-sidebar-drag.txt) 和 [拖排诊断](../performance/verification-20261101/ui-drag-diagnostic.log) 保留为失败诊断，不能归为最终实现的通过证据。独立 [NativeDragProbe.swift](../performance/verification-20261101/NativeDragProbe.swift) 和 [native-drag-probe.log](../performance/verification-20261101/native-drag-probe.log) 也仅用于原生拖放链路对照。
-
-最终供应商和动作采用原生拖动 source 与 receiver，侧栏保留原生 List `onMove`。[gui-native-final-events.log](../performance/verification-20261101/gui-native-final-events.log) 记录了供应商两次、动作两次实际 payload/perform 和 source `end=1`；取消为 `end=0` 且未 perform。GUI 记录取得后仅删除临时 trace，再执行 headless 构建和最终 runtime；未改变重排算法与 Binding 接口。
+供应商和动作采用原生拖动 source 与 receiver，侧栏使用原生 List `onMove`。[gui-native-final-events.log](../performance/verification-20261101/gui-native-final-events.log) 记录了供应商两次、动作两次实际 payload/perform 和 source `end=1`；取消为 `end=0` 且未 perform。
 
 本机测试方法为 `Cua.drag` 后在目标 padding 补一次 `click(duration: 500)` 以稳定释放。AX 前后顺序、实际 payload 和 session end 共同证明上述动作通过；**裸 `Cua.drag` 的释放与指针恢复可靠性仍未证实**，不将工具时序边界记录为正常物理鼠标失败或已验收的裸手势。Preview 使用隔离 fixture，退出后删除自身 suite，不能用它证明正式配置跨进程重启；保存与重新加载的依据来自逻辑和 App runtime。
 
@@ -61,12 +57,14 @@
 | 动作双向拖排、快捷键与编辑对象保持 | 通过；[下排](../performance/verification-20261101/actions-down.ax.txt)、[上排](../performance/verification-20261101/actions-up.ax.txt) 与 [展开](../performance/verification-20261101/actions-expanded.ax.txt)；提问从第一移至第三再恢复，Prompt 与 `⌥A` 保留；不替代硬件快捷键触发测试 |
 | 设置侧栏双向拖排、导航选择与保存 | GUI 通过；[下排](../performance/verification-20261101/sidebar-down.ax.txt)、[上排](../performance/verification-20261101/sidebar-up.ax.txt) 中 AI 模型往返重排，选择与详情仍正确；JSON 保存/重新加载由逻辑回归覆盖 |
 | 图标库导入、跨供应商复用、应用与删除 | 通过；[导入](../performance/verification-20261101/provider-icon-import.ax.txt)、[复用](../performance/verification-20261101/provider-icon-reuse.ax.txt)、[应用](../performance/verification-20261101/provider-custom-icon-applied.ax.txt)、[清理](../performance/verification-20261101/provider-icon-test-cleanup.ax.txt)；只删除测试副本并恢复默认图标 |
-| light/dark 图标在 Dock、侧栏、欢迎界面接入 | 素材与本机 Preview 显示已有记录；发行 bundle 四资源一致性在最终预检核对，不宣称低版本或所有视觉路径专项测试完成 |
+| light/dark 图标在 Dock、侧栏、欢迎界面接入 | 素材与本机 Preview 显示已有记录；发布 ZIP 与已安装 2.2.0 的四项 light/dark 图标资源一致 |
 | 主面板开/关、最小化与后台持续运行 | 由实际 WindowCoordinator/AppKit 生命周期 runtime 验证；不替代全部用户操作路径的专项 GUI 走查 |
 | 透景材质与系统降低透明度偏好 | 本机 Preview 截图及透明窗口配置已有验证；Reduce Transparency 和 macOS 14/15 回退仍未完成专项实测 |
-| 当前排序实现的 App runtime 重跑 | 锁屏会话下重跑未通过；除 Escape 焦点/AX 及动画等待外无失败报告，解锁后须重新完整验证，不将局部结果记作整体验收通过 |
+| 发布源码的完整 App runtime | 通过；[最终预检日志](../performance/verification-20261103/preflight-release.log) 覆盖排序、图标库、Dock、焦点、动画等待与 Escape |
 
 ## 兼容性与未验证范围
+
+发布后的更新检查已确认 feed 返回、最新版判断、对话框 AX 状态和检查时间；窗口的屏幕可见性待人工确认。
 
 最低系统声明仍为 macOS 14，预编译发行包面向 Apple Silicon。macOS 14/15 真机毛玻璃回退未测；本机现代系统结果不能代替低版本兼容性。稳定自签名不等于 Apple Developer ID 或 notarization，首次手动安装继续遵循 [README](../../README.md) 的 quarantine 处理说明。
 

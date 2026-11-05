@@ -1,0 +1,31 @@
+SnapAI 2.2.0 release channel verification
+Date: 2026-11-05 (Asia/Shanghai)
+Release: https://github.com/junchan0412/SnapAI/releases/tag/v2.2.0
+Published: 2026-11-03 00:54:01 +08:00
+Source commit: e9414b161e04350bd67b9678bdc453d73a3dcfd7
+
+The following GitHub assets were downloaded and compared byte-for-byte
+with the local artifacts from the successful 2026-11-03 release preflight:
+  SnapAI-v2.2.0.zip: identical
+  appcast.xml: identical
+  snapai-manifest-v2.2.0.json: identical
+  snapai-manifest-v2.2.0.json.sig: identical
+  snapai-sbom-v2.2.0.json: identical
+
+https://github.com/junchan0412/SnapAI/releases/latest/download/appcast.xml
+returned the same appcast.xml as v2.2.0.
+
+The installed /Applications/SnapAI.app matches the published ZIP for:
+  Contents/MacOS/SnapAI
+  Contents/Info.plist
+  Contents/_CodeSignature/CodeResources
+  Contents/Resources/AppIconLight.icns
+  Contents/Resources/AppIconDark.icns
+  Contents/Resources/AppIconLight.png
+  Contents/Resources/AppIconDark.png
+CFBundleShortVersionString and CFBundleVersion are both 2.2.0.
+
+The installed application's Check for Updates menu command returned:
+  您使用的就是最新版！ SnapAI 2.2.0是当前的最新版本。
+Accessibility dialog state: sparkle-update-window.ax.txt
+SULastCheckTime after the check: 2026-11-05 07:00:46 +0000
