@@ -12,12 +12,13 @@
 | 最终 release 预检 | 通过；2026-11-03 执行 `scripts/preflight-release.sh --require-clean --require-synced`，见 [完整日志](../performance/verification-20261103/preflight-release.log) |
 | 同发布源码 CI | [push run 41350431521](https://github.com/junchan0412/SnapAI/actions/runs/41350431521) 与 [手动 run 41350569558](https://github.com/junchan0412/SnapAI/actions/runs/41350569558) 均为 success，HEAD 均为上述 commit |
 | ZIP、manifest、SBOM、Sparkle appcast | 最终预检通过签名、版本、安装包、SBOM 来源和 appcast 校验；[11 月 5 日记录](../performance/verification-20261105/release-channel.txt) 确认五项线上资产与本机预检产物逐字节一致，`releases/latest` 返回同一 appcast |
+| 发布后更新窗口 | 通过；已安装 2.2.0 返回最新版提示，用户目视确认窗口可见，`SULastCheckTime` 更新；见 [更新通道记录](../performance/verification-20261105/release-channel.txt) |
 
 供应商和动作原生拖排、侧栏重排与图标库 GUI 验收通过；发布源码的逻辑、真实 OCR、流式 runtime、完整 App runtime 和签名发布预检均通过。
 
 本机 `sw_vers` 返回 macOS **27.2**（build `26B123`）。App runtime 使用项目源码构建的独立测试 app 和隔离 fixture；GUI 记录使用项目 Debug 构建的 `SnapAI Preview`，不是 `/Applications` 中的旧版 SnapAI。测试与预览不借用用户的真实供应商、历史或图标配置。Debug 预览记录也不作为最终 Release 性能或兼容性数据。
 
-11 月 5 日在已安装的 `/Applications/SnapAI.app` 2.2.0 上执行「检查更新…」。其可执行文件、Info.plist、签名资源清单及四项图标资源与发布 ZIP 一致。Sparkle 返回「您使用的就是最新版！SnapAI 2.2.0 是当前的最新版本」，[对话框 AX 记录](../performance/verification-20261105/sparkle-update-window.ax.txt) 已保存，`SULastCheckTime` 更新为 2026-11-05 15:00:46（Asia/Shanghai）。
+11 月 5 日在已安装的 `/Applications/SnapAI.app` 2.2.0 上执行「检查更新…」。其可执行文件、Info.plist、签名资源清单及四项图标资源与发布 ZIP 一致。Sparkle 返回「您使用的就是最新版！SnapAI 2.2.0 是当前的最新版本」，用户目视确认提示窗口可见；[对话框 AX 记录](../performance/verification-20261105/sparkle-update-window.ax.txt) 已保存，`SULastCheckTime` 更新为 2026-11-05 15:00:46（Asia/Shanghai）。
 
 ## 交付范围
 
@@ -63,8 +64,6 @@
 | 发布源码的完整 App runtime | 通过；[最终预检日志](../performance/verification-20261103/preflight-release.log) 覆盖排序、图标库、Dock、焦点、动画等待与 Escape |
 
 ## 兼容性与未验证范围
-
-发布后的更新检查已确认 feed 返回、最新版判断、对话框 AX 状态和检查时间；窗口的屏幕可见性待人工确认。
 
 最低系统声明仍为 macOS 14，预编译发行包面向 Apple Silicon。macOS 14/15 真机毛玻璃回退未测；本机现代系统结果不能代替低版本兼容性。稳定自签名不等于 Apple Developer ID 或 notarization，首次手动安装继续遵循 [README](../../README.md) 的 quarantine 处理说明。
 
