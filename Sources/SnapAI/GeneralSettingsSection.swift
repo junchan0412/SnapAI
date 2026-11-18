@@ -2,6 +2,7 @@ import SnapAILogic
 import SwiftUI
 
 struct GeneralSettingsSection: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var settings: AppSettings
     @ObservedObject var permissionState: PermissionState
     @ObservedObject var ui: AISettingsUI
@@ -11,19 +12,23 @@ struct GeneralSettingsSection: View {
 
     var body: some View {
         ScrollView {
-            // 按需构建:与 ActionSettingsSection / HistorySettingsSection 一致,
-            // 屏外子区块不进视图树,设置窗口常驻 footprint 明显下降(见
-            // docs/RUNTIME_MEMORY_BASELINE.md 的「按 section 分布」一节)。
             LazyVStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                 WorkModeSettingsSection(settings: settings) {
                     commit()
                 }
-                launchAndDisplaySection
-                captureSection
-                contextProfilesSection
-                privacySection
-                syncAndAnimationSection
-                ConfigMigrationSettingsSection(settings: settings, commit: commit)
+                appIconSection
+                behaviorAndCaptureSection
+                PrivacySettingsSection(settings: settings,
+                                       ui: ui,
+                                       commit: commit,
+                                       applyCommit: applyCommit)
+                ContextProfileSettingsSection(settings: settings,
+                                              ui: ui,
+                                              commit: commit,
+                                              applyCommit: applyCommit)
+                ConfigMigrationSettingsSection(settings: settings,
+                                               iCloudSyncStatusText: iCloudSyncStatusText,
+                                               commit: commit)
             }
             .padding(SnapAIUI.edgePadding)
         }
@@ -31,158 +36,162 @@ struct GeneralSettingsSection: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var launchAndDisplaySection: some View {
-        settingsSection("启动与显示") {
+    private var appIconSection: some View {
+        let previewIsDark = settings.appIconAppearance.resolvesToDark(systemIsDark: colorScheme == .dark)
+        return SnapAISectionGroup("应用图标", subtitle: "自由切换多套棱镜主题，并独立设置图标的浅色与深色表现（实时同步 Dock 与侧栏）") {
+            Picker("图标外观", selection: $settings.appIconAppearance) {
+                ForEach(AppIconAppearance.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 196)
+            .accessibilityLabel("图标外观模式")
+            .onChange(of: settings.appIconAppearance) { commit() }
+        } content: {
+            HStack(spacing: 10) {
+                ForEach(AppIconStyle.allCases) { style in
+                    appIconThemeCard(style: style, isDark: previewIsDark)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private func appIconThemeCard(style: AppIconStyle, isDark: Bool) -> some View {
+        let isSelected = settings.appIconStyle == style
+        return Button {
+            guard settings.appIconStyle != style else { return }
+            settings.appIconStyle = style
+            commit()
+        } label: {
+            VStack(spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    SnapAIAppIcon(settings: settings,
+                                  size: 56,
+                                  styleOverride: style,
+                                  isDarkOverride: isDark)
+                        .frame(maxWidth: .infinity)
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .background(Circle().fill(.background).padding(2))
+                    }
+                }
+
+                VStack(spacing: 2) {
+                    Text(style.title)
+                        .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(style.subtitle)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? SnapAIUI.Surface.selected : Color.primary.opacity(0.03))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.65) : SnapAIUI.Surface.border,
+                        lineWidth: isSelected ? 1.5 : 0.75
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("应用图标：\(style.title)（\(style.subtitle)）")
+        .accessibilityValue(isSelected ? "当前已选" : "点击切换")
+    }
+
+    private var behaviorAndCaptureSection: some View {
+        SnapAISectionGroup("启动、交互与取词") {
+            EmptyView()
+        } content: {
             settingsToggleRow(
-                title: "开机启动",
-                description: "登录系统时自动在菜单栏常驻。",
+                title: "登录时自动启动",
+                description: "开机后在菜单栏静默待命；Dock 图标仅在打开主窗口时显现。",
+                icon: "power.circle",
+                tint: .green,
                 isOn: Binding(
                     get: { permissionState.launchAtLogin },
                     set: { permissionState.setLaunchAtLogin($0) }
                 )
             )
-            compactDivider
-            Label {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Dock 跟随主面板").font(.callout.weight(.medium))
-                    Text("打开主面板时显示；关闭后自动隐藏，菜单栏与快捷键继续运行。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            } icon: { Image(systemName: "dock.rectangle").foregroundStyle(.secondary) }
-            compactDivider
-            resultPanelDismissRow
-        }
-    }
 
-    private var resultPanelDismissRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("结果窗口失焦行为")
-                    .font(.callout.weight(.medium))
-                Text(settings.resultPanelDismissMode.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 16)
-            Picker("", selection: $settings.resultPanelDismissMode) {
-                ForEach(ResultPanelDismissMode.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 240)
-            .controlSize(.small)
-            .onChange(of: settings.resultPanelDismissMode) { commit() }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
+            SnapAIFormDivider()
 
-    private var captureSection: some View {
-        settingsSection("取词") {
             settingsToggleRow(
-                title: "优先辅助功能取词",
-                description: "更无感地读取当前选中内容；关闭后统一通过模拟 Command-C 取词。",
+                title: "优先辅助功能无感取词",
+                description: "优先直接读取选区而不改动剪贴板；不支持的应用自动回退为模拟 ⌘C。",
+                icon: "contextualmenu.and.cursorarrow",
+                tint: .accentColor,
                 isOn: Binding(
                     get: { settings.useAXFirst },
                     set: { settings.useAXFirst = $0; commit() }
                 )
             )
-        }
-    }
 
-    private var contextProfilesSection: some View {
-        ContextProfileSettingsSection(settings: settings,
-                                      ui: ui,
-                                      commit: commit,
-                                      applyCommit: applyCommit)
-    }
+            SnapAIFormDivider()
 
-    private var privacySection: some View {
-        PrivacySettingsSection(settings: settings,
-                               ui: ui,
-                               commit: commit,
-                               applyCommit: applyCommit)
-    }
-
-    private var syncAndAnimationSection: some View {
-        settingsSection("同步与动效") {
-            settingsToggleRow(
-                title: "iCloud 配置同步",
-                description: "同步供应商配置、动作和快捷键，不包含 API Key。\(iCloudSyncStatusText)",
-                isOn: Binding(
-                    get: { settings.iCloudSyncEnabled },
-                    set: { enabled in
-                        settings.iCloudSyncEnabled = enabled
-                        commit()
-                        if enabled { iCloudSync.shared.upload(settings) }
-                    }
-                )
-            )
-            compactDivider
-            typewriterSpeedRow
-        }
-    }
-
-    private var typewriterSpeedRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("打字机动画")
-                    .font(.callout.weight(.medium))
-                Text("控制 AI 结果逐字显示速度。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            SnapAISettingRow(
+                title: "结果面板失焦行为",
+                subtitle: settings.resultPanelDismissMode.description,
+                icon: "macwindow.on.rectangle",
+                iconTint: .purple
+            ) {
+                Picker("", selection: $settings.resultPanelDismissMode) {
+                    ForEach(ResultPanelDismissMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: 224)
+                .onChange(of: settings.resultPanelDismissMode) { commit() }
             }
-            Spacer(minLength: 16)
-            Picker("", selection: $settings.typewriterSpeed) {
-                ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 210)
-            .controlSize(.small)
-            .onChange(of: settings.typewriterSpeed) { commit() }
-        }
-    }
 
-    private func settingsSection<Content: View>(_ title: String,
-                                                @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            Text(title)
-                .font(SnapAIUI.Typography.sectionLabel)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                content()
+            SnapAIFormDivider()
+
+            SnapAISettingRow(
+                title: "打字机展示节奏",
+                subtitle: "控制流式回答逐字呈现的视觉节奏（遵循系统「减弱动态效果」）。",
+                icon: "character.textbox",
+                iconTint: .orange
+            ) {
+                Picker("", selection: $settings.typewriterSpeed) {
+                    ForEach(TypewriterSpeed.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: 196)
+                .onChange(of: settings.typewriterSpeed) { commit() }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsToggleRow(title: String,
                                    description: String,
+                                   icon: String,
+                                   tint: Color,
                                    isOn: Binding<Bool>) -> some View {
-        HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(SnapAIUI.Typography.bodyText.weight(.medium))
-                Text(description)
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 16)
+        SnapAISettingRow(title: title, subtitle: description, icon: icon, iconTint: tint) {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
-                // 可见标题在左侧独立文本里,开关自身要带上名字,VoiceOver 才能读出「这是哪个开关」。
                 .accessibilityLabel(title)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var compactDivider: some View {
-        Spacer(minLength: SnapAIUI.tightSpacing)
     }
 }

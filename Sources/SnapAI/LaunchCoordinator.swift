@@ -49,6 +49,29 @@ final class LaunchCoordinator {
                 host?.toggleQuickInput()
             }
         )
+        host.windowCoordinator.onReopenHistoryEntry = { [weak host] entry in
+            host?.reopenHistoryEntry(entry)
+        }
+        host.windowCoordinator.onResumeConversation = { [weak host] session in
+            guard let host, !host.resultVM.isGenerating else { return }
+            host.previousApp = nil
+            host.previousSelectionSnapshot = nil
+            host.previousCaptureMethod = nil
+            host.resultVM.restoreConversation(session)
+            host.panelController.show()
+        }
+        host.windowCoordinator.hotKeyFailuresProvider = { [weak host] in
+            host?.hotKeyRegistrationFailures ?? []
+        }
+        host.windowCoordinator.textCaptureStatusProvider = { [weak host] in
+            host?.currentTextCaptureStatusSummary() ?? "none"
+        }
+        host.windowCoordinator.writeBackStatusProvider = { [weak host] in
+            host?.currentWriteBackStatusSummary() ?? "none"
+        }
+        host.windowCoordinator.recentAIRequestStatusProvider = { [weak host] in
+            host?.resultVM?.requestHealthStatusText ?? "none"
+        }
 
         host.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = host.statusItem.button {
@@ -102,9 +125,15 @@ final class LaunchCoordinator {
                                                               action: action,
                                                               messageBuilder: messageBuilder)
         }
-        host.panelController = FloatingPanelController(vm: host.resultVM) { [weak host] in
-            host?.showSettings(section: .model)
-        }
+        host.panelController = FloatingPanelController(
+            vm: host.resultVM,
+            onOpenAISettings: { [weak host] in
+                host?.showSettings(section: .model)
+            },
+            onOpenModelCompare: { [weak host] in
+                host?.openModelCompare()
+            }
+        )
     }
 
     /// 快捷提问、命令面板、历史、双模型对照、权限中心窗口的装配。

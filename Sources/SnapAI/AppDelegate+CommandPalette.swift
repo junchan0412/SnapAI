@@ -96,6 +96,7 @@ extension AppDelegate {
             perform: { [weak self] in self?.openModelCompare() }
         ))
         appendWorkModeCommandPaletteItems(to: &items)
+        appendAppIconCommandPaletteItems(to: &items)
         appendSettingsToggleCommandPaletteItems(to: &items)
         appendDisplayBehaviorCommandPaletteItems(to: &items)
         appendActionTemplateCommandPaletteItems(to: &items)
@@ -104,56 +105,49 @@ extension AppDelegate {
         items.append(contentsOf: [
             CommandPaletteItem(
                 id: "history-window",
-                title: "打开历史记录",
-                subtitle: "搜索、收藏、删除历史",
-                systemImage: "clock",
-                keywords: "history",
+                title: "浏览历史与会话",
+                subtitle: "搜索历史记录、恢复本机会话或管理保留策略",
+                systemImage: "clock.arrow.circlepath",
+                keywords: "history session 历史 会话 统计",
                 perform: { [weak self] in self?.openHistoryWindow() }
             ),
             CommandPaletteItem(
                 id: "settings",
                 title: "打开设置",
-                subtitle: "供应商、动作、隐私、快捷键",
+                subtitle: "管理模型、供应商、动作、隐私与系统权限",
                 systemImage: "gearshape",
-                keywords: "settings preferences",
+                keywords: "settings preferences 设置 偏好",
+                shortcutText: "⌘,",
                 perform: { [weak self] in self?.openSettings() }
             ),
             CommandPaletteItem(
                 id: "settings-ai",
-                title: "打开 AI 模型设置",
-                subtitle: "当前模型、自动路由、fallback",
+                title: "模型与服务设置",
+                subtitle: "当前模型、智能路由、用量统计与供应商配置",
                 systemImage: "cpu",
-                keywords: "settings preferences ai model route fallback 模型 路由",
+                keywords: "settings preferences ai model route fallback 模型 路由 用量",
                 perform: { [weak self] in self?.showSettings(section: .model) }
             ),
             CommandPaletteItem(
                 id: "settings-provider",
-                title: "打开 AI 供应商设置",
-                subtitle: "供应商、API Key、模型列表、连接测试",
+                title: "管理 AI 供应商",
+                subtitle: "配置 API Key、端点地址、拉取模型与连接测试",
                 systemImage: "network",
                 keywords: "settings preferences provider endpoint apikey models connection 供应商 端点 密钥 模型 连接",
                 perform: { [weak self] in self?.showSettings(section: .provider) }
             ),
             CommandPaletteItem(
                 id: "settings-actions",
-                title: "打开动作设置",
-                subtitle: "动作、Prompt、快捷键、默认替换",
-                systemImage: "wand.and.stars",
+                title: "动作与快捷键设置",
+                subtitle: "管理选区动作、提示词模板、全局热键与默认写回",
+                systemImage: "sparkles.rectangle.stack",
                 keywords: "settings preferences action prompt hotkey replace 动作 快捷键",
                 perform: { [weak self] in self?.showSettings(section: .actions) }
             ),
             CommandPaletteItem(
-                id: "settings-history",
-                title: "打开历史设置",
-                subtitle: "历史保留、统计、清理",
-                systemImage: "clock.arrow.circlepath",
-                keywords: "settings preferences history favorite export 历史 统计",
-                perform: { [weak self] in self?.showSettings(section: .history) }
-            ),
-            CommandPaletteItem(
                 id: "settings-general",
-                title: "打开通用设置",
-                subtitle: "隐私、上下文、iCloud、显示",
+                title: "通用与隐私设置",
+                subtitle: "工作模式、取词策略、隐私脱敏、上下文包与云同步",
                 systemImage: "slider.horizontal.3",
                 keywords: "settings preferences general privacy redaction context icloud dock 通用 隐私 脱敏 上下文",
                 perform: { [weak self] in self?.showSettings(section: .general) }
@@ -167,19 +161,11 @@ extension AppDelegate {
                 perform: { [weak self] in self?.toggleSettingsWindowPinnedFromCommandPalette() }
             ),
             CommandPaletteItem(
-                id: "settings-permission",
-                title: "打开权限设置",
-                subtitle: "辅助功能、屏幕录制、开机启动",
-                systemImage: "checkmark.shield",
-                keywords: "settings preferences permission accessibility screen login 权限 辅助功能 屏幕录制",
-                perform: { [weak self] in self?.showSettings(section: .permission) }
-            ),
-            CommandPaletteItem(
                 id: "health",
-                title: "权限健康中心",
-                subtitle: "权限、签名、快捷键诊断",
-                systemImage: "lock.shield",
-                keywords: "permission diagnostics signing hotkey",
+                title: "权限与系统诊断",
+                subtitle: "辅助功能、屏幕录制、热键检测与运行健康状态",
+                systemImage: "checkmark.shield",
+                keywords: "permission diagnostics signing hotkey health 权限 辅助功能 屏幕录制 诊断 健康",
                 perform: { [weak self] in self?.openPermissionHealth() }
             ),
             CommandPaletteItem(
@@ -463,6 +449,43 @@ extension AppDelegate {
         iCloudSync.shared.scheduleUpload(settings)
         buildMenu()
         installMainMenu()
+    }
+
+    func appendAppIconCommandPaletteItems(to items: inout [CommandPaletteItem]) {
+        for style in AppIconStyle.allCases {
+            let isCurrent = settings.appIconStyle == style
+            items.append(CommandPaletteItem(
+                id: "app-icon-style-\(style.rawValue)",
+                title: "切换应用图标：\(style.title)",
+                subtitle: isCurrent ? "当前使用 · \(style.subtitle)" : style.subtitle,
+                systemImage: isCurrent ? "checkmark.seal.fill" : "app.badge.sparkles",
+                keywords: style.keywords,
+                perform: { [weak self] in
+                    guard let self else { return }
+                    self.settings.appIconStyle = style
+                    self.settings.save()
+                    iCloudSync.shared.scheduleUpload(self.settings)
+                    self.applyAppIcon()
+                }
+            ))
+        }
+        for mode in AppIconAppearance.allCases {
+            let isCurrent = settings.appIconAppearance == mode
+            items.append(CommandPaletteItem(
+                id: "app-icon-appearance-\(mode.rawValue)",
+                title: "应用图标外观：\(mode.title)",
+                subtitle: isCurrent ? "当前外观策略" : "切换 Dock 与侧栏图标的浅色/深色策略",
+                systemImage: mode == .dark ? "moon.stars" : (mode == .light ? "sun.max" : "circle.lefthalf.filled"),
+                keywords: "icon appearance light dark system 图标 外观 浅色 深色 跟随系统 \(mode.title)",
+                perform: { [weak self] in
+                    guard let self else { return }
+                    self.settings.appIconAppearance = mode
+                    self.settings.save()
+                    iCloudSync.shared.scheduleUpload(self.settings)
+                    self.applyAppIcon()
+                }
+            ))
+        }
     }
 
     func appendResultCommandPaletteItems(to items: inout [CommandPaletteItem]) {

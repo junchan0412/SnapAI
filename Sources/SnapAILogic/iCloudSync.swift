@@ -187,6 +187,8 @@ package struct CloudSettingsPayload: Codable {
     package var systemPrompt: String
     package var useAXFirst: Bool
     package var showDockIcon: Bool
+    package var appIconStyle: AppIconStyle
+    package var appIconAppearance: AppIconAppearance
     package var typewriterSpeed: TypewriterSpeed
     package var autoRouteEnabled: Bool
     package var fallbackEnabled: Bool
@@ -229,6 +231,8 @@ package struct CloudSettingsPayload: Codable {
                                                    maxLength: AppSettings.importedSystemPromptLimit)
         useAXFirst = settings.useAXFirst
         showDockIcon = settings.showDockIcon
+        appIconStyle = settings.appIconStyle
+        appIconAppearance = settings.appIconAppearance
         typewriterSpeed = settings.typewriterSpeed
         autoRouteEnabled = settings.autoRouteEnabled
         fallbackEnabled = settings.fallbackEnabled
@@ -250,7 +254,7 @@ package struct CloudSettingsPayload: Codable {
         case providers, activeProviderID, activeModel, temperature
         case askHotKey, translateHotKey, quickPanelHotKey
         case actions, askPrompt, translatePrompt, systemPrompt
-        case useAXFirst, showDockIcon, typewriterSpeed
+        case useAXFirst, showDockIcon, appIconStyle, appIconAppearance, typewriterSpeed
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
         case imageOCREnabled
@@ -291,6 +295,8 @@ package struct CloudSettingsPayload: Codable {
                                                    maxLength: AppSettings.importedSystemPromptLimit)
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
+        appIconStyle = (try? c.decode(AppIconStyle.self, forKey: .appIconStyle)) ?? .aurora
+        appIconAppearance = (try? c.decode(AppIconAppearance.self, forKey: .appIconAppearance)) ?? .system
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
         autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
         fallbackEnabled = (try? c.decode(Bool.self, forKey: .fallbackEnabled)) ?? true
@@ -337,6 +343,8 @@ package struct CloudSettingsPayload: Codable {
                                                             maxLength: AppSettings.importedSystemPromptLimit)
         settings.useAXFirst = useAXFirst
         settings.showDockIcon = showDockIcon
+        settings.appIconStyle = appIconStyle
+        settings.appIconAppearance = appIconAppearance
         settings.typewriterSpeed = typewriterSpeed
         settings.autoRouteEnabled = autoRouteEnabled
         settings.fallbackEnabled = fallbackEnabled

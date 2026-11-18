@@ -10,6 +10,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let onSettingsChange: () -> Void
     private let onPinStateChange: () -> Void
     private let onTryQuickInput: () -> Void
+    var onReopenHistoryEntry: ((HistoryEntry) -> Void)?
+    var onResumeConversation: ((ConversationSession) -> Void)?
+    var hotKeyFailuresProvider: () -> [String] = { [] }
+    var textCaptureStatusProvider: () -> String = { "就绪" }
+    var writeBackStatusProvider: () -> String = { "就绪" }
+    var recentAIRequestStatusProvider: () -> String = { "none" }
 
     private var settingsWindow: NSWindow?
     private var settingsWindowPinned = false
@@ -63,20 +69,19 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(contentViewController: makeSettingsContentController())
-        window.title = "SnapAI 设置"
+        window.title = "SnapAI"
         window.identifier = NSUserInterfaceItemIdentifier("SnapAI.SettingsWindow")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        // 窗口与内容均使用 behind-window 材质，让桌面真实透出。
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.delegate = self
-        window.setContentSize(NSSize(width: 1000, height: 720))
-        window.minSize = NSSize(width: 840, height: 620)
+        window.setContentSize(NSSize(width: 980, height: 680))
+        window.minSize = NSSize(width: 840, height: 600)
         applySettingsWindowPinnedState(to: window)
         window.center()
         settingsWindow = window
@@ -119,10 +124,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         window.title = "欢迎使用 SnapAI"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.setContentSize(NSSize(width: 700, height: 620))
-        window.minSize = NSSize(width: 600, height: 560)
+        window.setContentSize(NSSize(width: 660, height: 560))
+        window.minSize = NSSize(width: 580, height: 520)
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.center()
@@ -136,7 +142,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         guard closedWindow === settingsWindow || closedWindow === onboardingWindow else { return }
         let otherMainWindowOpen = [settingsWindow, onboardingWindow].compactMap { $0 }
             .contains { $0 !== closedWindow && ($0.isVisible || $0.isMiniaturized) }
-        // 引导窗口被关闭(含红色关闭按钮)即视为完成引导,避免下次启动重复弹出。
         if closedWindow === onboardingWindow && !settings.onboardingDone {
             settings.onboardingDone = true
             settings.save()
@@ -159,7 +164,17 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             pinState: settingsWindowPinState,
             onPinChange: { [weak self] newValue in
                 self?.setSettingsWindowPinned(newValue)
-            }
+            },
+            onReopenHistory: { [weak self] entry in
+                self?.onReopenHistoryEntry?(entry)
+            },
+            onResumeConversation: { [weak self] session in
+                self?.onResumeConversation?(session)
+            },
+            hotKeyFailures: hotKeyFailuresProvider,
+            textCaptureStatus: textCaptureStatusProvider,
+            writeBackStatus: writeBackStatusProvider,
+            recentAIRequestStatus: recentAIRequestStatusProvider
         )
         return NSHostingController(rootView: view)
     }

@@ -2,47 +2,70 @@ import SwiftUI
 import AppKit
 import SnapAILogic
 
-// MARK: - 追问框(#5 支持↑/↓浏览历史)
+// MARK: - 一体化胶囊追问输入框（内嵌发送按钮，支持 ↑/↓ 浏览历史）
 
 struct FollowUpField: View {
     @Binding var text: String
+    var canSend: Bool = false
     var onSubmit: () -> Void
     var onHistoryUp: () -> Void
     var onHistoryDown: () -> Void
     var historyAvailable: Bool = false
     var shouldHandleHistoryNavigation: (String, FollowUpHistoryNavigationDirection) -> Bool
-    @State private var editorHeight: CGFloat = 42
+    @State private var editorHeight: CGFloat = 36
     @State private var isFocused = false
+    @Environment(\.isEnabled) private var isEnabled
 
     private var placeholderText: String {
-        historyAvailable ? "继续追问…  ↑ 浏览历史" : "继续追问，或补充一个要求…"
+        historyAvailable ? "继续追问…（↑ 历史提问）" : "继续追问，或补充要求…"
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            FollowUpTextView(text: $text,
-                             height: $editorHeight,
-                             isFocused: $isFocused,
-                             onSubmit: onSubmit,
-                             onHistoryUp: onHistoryUp,
-                             onHistoryDown: onHistoryDown,
-                             shouldHandleHistoryNavigation: shouldHandleHistoryNavigation)
-                .frame(height: editorHeight)
+        HStack(alignment: .bottom, spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                FollowUpTextView(text: $text,
+                                 height: $editorHeight,
+                                 isFocused: $isFocused,
+                                 onSubmit: onSubmit,
+                                 onHistoryUp: onHistoryUp,
+                                 onHistoryDown: onHistoryDown,
+                                 shouldHandleHistoryNavigation: shouldHandleHistoryNavigation)
+                    .frame(height: editorHeight)
 
-            if text.isEmpty {
-                Text(placeholderText)
-                    .font(SnapAIUI.Typography.bodyText)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 11)
-                    .allowsHitTesting(false)
+                if text.isEmpty {
+                    Text(placeholderText)
+                        .font(SnapAIUI.Typography.bodyText)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 9)
+                        .allowsHitTesting(false)
+                }
             }
+
+            Button(action: onSubmit) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle()
+                            .fill(Color.accentColor.opacity(canSend ? 1.0 : 0.32))
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 5)
+            .padding(.bottom, 5)
+            .keyboardShortcut(.return, modifiers: [.command, .option])
+            .help("发送追问 (↩ 发送，⇧↩ 换行)")
+            .accessibilityLabel(SnapAIL10n.string("Send Follow-up"))
+            .disabled(!canSend)
         }
-        .snapAIGlassField()
+        .snapAIGlassField(radius: 10)
         .overlay {
-            RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                .stroke(isFocused ? SnapAIUI.Surface.focus : .clear,
-                        lineWidth: isFocused ? 2 : 0)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(isFocused ? SnapAIUI.Surface.focus : .clear,
+                              lineWidth: isFocused ? 1.5 : 0)
+                .allowsHitTesting(false)
         }
         .help(FollowUpInputBehavior.helpText)
         .accessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
@@ -81,11 +104,11 @@ private struct FollowUpTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
-        textView.textContainerInset = NSSize(width: 9, height: 10)
+        textView.textContainerInset = NSSize(width: 7, height: 8)
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0,
                                                        height: CGFloat.greatestFiniteMagnitude)
-        textView.font = NSFont.systemFont(ofSize: 14)
+        textView.font = NSFont.systemFont(ofSize: 13)
         textView.string = text
         textView.toolTip = FollowUpInputBehavior.helpText
         textView.setAccessibilityLabel(FollowUpInputBehavior.accessibilityLabel)
@@ -141,7 +164,7 @@ private struct FollowUpTextView: NSViewRepresentable {
                   let layout = textView.layoutManager else { return }
             layout.ensureLayout(for: container)
             let measured = ceil(layout.usedRect(for: container).height + textView.textContainerInset.height * 2)
-            let nextHeight = min(CGFloat(FollowUpInputBehavior.maxHeight), max(42, measured))
+            let nextHeight = min(CGFloat(FollowUpInputBehavior.maxHeight), max(36, measured))
             if abs(parent.height - nextHeight) > 0.5 {
                 parent.height = nextHeight
             }

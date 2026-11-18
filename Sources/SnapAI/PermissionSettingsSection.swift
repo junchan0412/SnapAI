@@ -2,105 +2,67 @@ import SwiftUI
 import AppKit
 import SnapAILogic
 
+/// 主窗口「权限与诊断」页：整合原「权限」页与「权限健康中心」独立窗口，一站查看授权、热键与诊断状态。
 struct PermissionSettingsSection: View {
+    @ObservedObject var settings: AppSettings
     @ObservedObject var permissionState: PermissionState
-    @State private var screenCaptureGranted = ScreenCapturePermission.isGranted()
+    @ObservedObject var navigation: SettingsNavigationModel
+    var hotKeyFailures: () -> [String] = { [] }
+    var textCaptureStatus: () -> String = { "就绪" }
+    var writeBackStatus: () -> String = { "就绪" }
+    var recentAIRequestStatus: () -> String = { "none" }
+
+    @StateObject private var healthHolder: PermissionHealthModelHolder
+
+    init(settings: AppSettings,
+         permissionState: PermissionState,
+         navigation: SettingsNavigationModel,
+         hotKeyFailures: @escaping () -> [String] = { [] },
+         textCaptureStatus: @escaping () -> String = { "就绪" },
+         writeBackStatus: @escaping () -> String = { "就绪" },
+         recentAIRequestStatus: @escaping () -> String = { "none" }) {
+        self.settings = settings
+        self.permissionState = permissionState
+        self.navigation = navigation
+        self.hotKeyFailures = hotKeyFailures
+        self.textCaptureStatus = textCaptureStatus
+        self.writeBackStatus = writeBackStatus
+        self.recentAIRequestStatus = recentAIRequestStatus
+        _healthHolder = StateObject(wrappedValue: PermissionHealthModelHolder(
+            settings: settings,
+            hotKeyFailures: hotKeyFailures,
+            textCaptureStatus: textCaptureStatus,
+            writeBackStatus: writeBackStatus,
+            recentAIRequestStatus: recentAIRequestStatus
+        ))
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
-                permissionGroup
-                screenCaptureGroup
+        PermissionHealthView(
+            model: healthHolder.model,
+            embeddedInWorkspace: true,
+            onNavigateToModels: {
+                navigation.select(.provider)
             }
-            .padding(SnapAIUI.edgePadding)
-        }
-        .snapAIScrollEdge()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear(perform: refreshPermissions)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshPermissions()
-        }
+        )
     }
+}
 
-    private var permissionGroup: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            Text("辅助功能")
-                .font(SnapAIUI.Typography.sectionLabel)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                permissionStatusRow
-                permissionActionsRow.padding(.top, 4)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
+@MainActor
+private final class PermissionHealthModelHolder: ObservableObject {
+    let model: PermissionHealthModel
 
-    private var permissionStatusRow: some View {
-        HStack(spacing: SnapAIUI.standardSpacing) {
-            Image(systemName: permissionState.axGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.title3)
-                .foregroundStyle(permissionState.axGranted ? .green : .red)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(permissionState.axGranted ? "已授予辅助功能权限" : "未授予辅助功能权限")
-                    .font(SnapAIUI.Typography.bodyText.weight(.medium))
-                Text("用于读取选中文字和写回结果。直接输入文字不需要此权限。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    private var permissionActionsRow: some View {
-        HStack(spacing: SnapAIUI.tightSpacing) {
-            Button("打开系统设置") {
-                NSWorkspace.shared.open(SystemPrivacySettings.accessibilityURL)
-            }
-            Button("重新检测") {
-                refreshPermissions()
-            }
-            Spacer()
-        }
-    }
-
-    private var screenCaptureGroup: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            Text("屏幕录制")
-                .font(SnapAIUI.Typography.sectionLabel)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                HStack(spacing: SnapAIUI.standardSpacing) {
-                    Image(systemName: screenCaptureGranted ? "checkmark.circle.fill" : "camera")
-                        .font(.title3)
-                        .foregroundStyle(screenCaptureGranted ? SnapAIUI.StatusColor.success : Color.secondary)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(screenCaptureGranted ? "已授予屏幕录制权限" : "需要截图时再授权")
-                            .font(SnapAIUI.Typography.bodyText.weight(.medium))
-                        Text("仅用于截取屏幕并附加到提问。粘贴图片不需要此权限。")
-                            .font(SnapAIUI.Typography.metaText)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                HStack(spacing: SnapAIUI.tightSpacing) {
-                    Button("打开屏幕录制设置") {
-                        NSWorkspace.shared.open(SystemPrivacySettings.screenCaptureURL)
-                    }
-                    Button("重新检测", action: refreshPermissions)
-                    Spacer()
-                }
-            }
-            .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
-        }
-    }
-
-    private func refreshPermissions() {
-        permissionState.refresh()
-        screenCaptureGranted = ScreenCapturePermission.isGranted()
+    init(settings: AppSettings,
+         hotKeyFailures: @escaping () -> [String],
+         textCaptureStatus: @escaping () -> String,
+         writeBackStatus: @escaping () -> String,
+         recentAIRequestStatus: @escaping () -> String) {
+        self.model = PermissionHealthModel(
+            settings: settings,
+            hotKeyFailures: hotKeyFailures,
+            textCaptureStatus: textCaptureStatus,
+            writeBackStatus: writeBackStatus,
+            recentAIRequestStatus: recentAIRequestStatus
+        )
     }
 }

@@ -1791,3 +1791,47 @@ func testProviderIconsAndSidebarMigration() {
         expect(legacySettings.sidebarOrder == SettingsSection.allCases.map(\.rawValue), "legacy settings retain familiar navigation order")
     } catch { expect(false, "icon settings migration failed: \(error)") }
 }
+
+func testAppIconPreferencesRoundTripThroughSettingsAndCloudPayload() {
+    expect(AppIconStyle.allCases.count == 4, "ships four curated app icon themes")
+    expect(AppIconAppearance.system.resourceName(for: .aurora, systemIsDark: false) == "AppIcon-Aurora-Light",
+           "system appearance resolves light aurora icon")
+    expect(AppIconAppearance.system.resourceName(for: .aurora, systemIsDark: true) == "AppIcon-Aurora-Dark",
+           "system appearance resolves dark aurora icon")
+    expect(AppIconAppearance.light.resourceName(for: .obsidian, systemIsDark: true) == "AppIcon-Obsidian-Light",
+           "explicit light appearance overrides dark system appearance")
+    expect(AppIconAppearance.dark.resourceName(for: .emerald, systemIsDark: false) == "AppIcon-Emerald-Dark",
+           "explicit dark appearance overrides light system appearance")
+
+    let settings = AppSettings()
+    expect(settings.appIconStyle == .aurora && settings.appIconAppearance == .system,
+           "new settings default to aurora icon and system appearance")
+
+    settings.appIconStyle = .sunset
+    settings.appIconAppearance = .dark
+    guard let encoded = try? JSONEncoder().encode(settings),
+          let decoded = try? JSONDecoder().decode(AppSettings.self, from: encoded) else {
+        expect(false, "app icon settings encode and decode")
+        return
+    }
+    expect(decoded.appIconStyle == .sunset && decoded.appIconAppearance == .dark,
+           "app icon style and appearance round-trip through AppSettings Codable")
+
+    guard let legacy = try? JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8)) else {
+        expect(false, "legacy empty settings decode")
+        return
+    }
+    expect(legacy.appIconStyle == .aurora && legacy.appIconAppearance == .system,
+           "legacy settings without icon keys fall back to aurora and system")
+
+    let cloud = CloudSettingsPayload(settings: settings)
+    guard let cloudData = try? JSONEncoder().encode(cloud),
+          let decodedCloud = try? JSONDecoder().decode(CloudSettingsPayload.self, from: cloudData) else {
+        expect(false, "cloud payload encodes and decodes app icon preferences")
+        return
+    }
+    let target = AppSettings()
+    decodedCloud.apply(to: target)
+    expect(target.appIconStyle == .sunset && target.appIconAppearance == .dark,
+           "cloud payload applies app icon style and appearance")
+}

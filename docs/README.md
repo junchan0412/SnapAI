@@ -1,6 +1,6 @@
 # SnapAI 文档索引
 
-更新：2026-11-05。当前正式发布版本为 **2.2.0**，版本以 `Resources/Info.plist` 为准；各项验证状态见本版验收记录。
+更新：2026-11-18。当前正式发布版本为 **2.3.0**，版本以 `Resources/Info.plist` 为准；各项验证状态见发布说明与验收记录。
 
 ## 从这里开始
 
@@ -9,8 +9,8 @@
 | 安装、使用与开发命令 | [项目 README](../README.md) |
 | 了解上一轮工程检查结果和优化判断 | [项目检查与清理报告](reports/PROJECT_HEALTH_2026-10-25.md) |
 | 查看下一阶段优先级与验收标准 | [当前路线图](roadmap/ROADMAP_2026-10-25.md) |
-| 查看当前版本交付内容 | [2.2.0 发布说明](releases/RELEASE_NOTES_2.2.0.md) |
-| 区分已经验证和仍待验证的能力 | [2.2.0 验收记录](reports/RELEASE_ACCEPTANCE_2.2.0.md) |
+| 查看当前版本交付内容 | [2.3.0 发布说明](releases/RELEASE_NOTES_2.3.0.md) |
+| 区分历史版本验收记录 | [2.2.0 验收记录](reports/RELEASE_ACCEPTANCE_2.2.0.md) |
 
 ## 分类导航
 

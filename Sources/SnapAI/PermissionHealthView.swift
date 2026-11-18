@@ -25,16 +25,28 @@ final class PermissionHealthModel: ObservableObject {
                                                  textCaptureStatus: textCaptureStatus(),
                                                  writeBackStatus: writeBackStatus(),
                                                  recentAIRequestStatus: recentAIRequestStatus(),
-                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus)
+                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus,
+                                                 includeSigningSummary: false)
     }
 
-    func refresh() {
+    func refresh(includeSigningSummary: Bool = false) {
         snapshot = PermissionHealthSnapshot.make(settings: settings,
                                                  hotKeyFailures: hotKeyFailures(),
                                                  textCaptureStatus: textCaptureStatus(),
                                                  writeBackStatus: writeBackStatus(),
                                                  recentAIRequestStatus: recentAIRequestStatus(),
-                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus)
+                                                 installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus,
+                                                 includeSigningSummary: includeSigningSummary)
+    }
+
+    func fullSnapshot() -> PermissionHealthSnapshot {
+        PermissionHealthSnapshot.make(settings: settings,
+                                      hotKeyFailures: hotKeyFailures(),
+                                      textCaptureStatus: textCaptureStatus(),
+                                      writeBackStatus: writeBackStatus(),
+                                      recentAIRequestStatus: recentAIRequestStatus(),
+                                      installLogStatus: UpdateChecker.latestInstallLogStatus().permissionHealthStatus,
+                                      includeSigningSummary: true)
     }
 }
 
@@ -75,10 +87,10 @@ final class PermissionHealthController: NSObject, NSWindowDelegate {
         let view = PermissionHealthView(model: model)
         let hosting = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hosting)
-        window.title = "权限健康中心"
+        window.title = "权限与诊断"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 720, height: 640))
+        window.setContentSize(NSSize(width: 740, height: 640))
         window.minSize = NSSize(width: 620, height: 520)
         window.delegate = self
         window.center()
@@ -95,12 +107,16 @@ final class PermissionHealthController: NSObject, NSWindowDelegate {
 struct PermissionHealthView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: PermissionHealthModel
+    var embeddedInWorkspace: Bool = false
+    var onNavigateToModels: (() -> Void)? = nil
+
     private var snapshot: PermissionHealthSnapshot { model.snapshot }
     private let healthColumns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
     ]
     @StateObject private var copyNotice = SnapAITransientState<String>()
+    @State private var showSystemDetails = false
 
     private func flashCopy(_ message: String) {
         copyNotice.show(message, autoDismiss: 1.4)
@@ -108,99 +124,28 @@ struct PermissionHealthView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            if !embeddedInWorkspace {
+                standaloneHeader
+                SnapAIFormDivider(inset: 0)
+            }
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    LazyVGrid(columns: healthColumns, alignment: .leading, spacing: 12) {
-                        healthCard("辅助功能", snapshot.accessibilityGranted,
-                                   "读取选中文字、模拟复制/粘贴",
-                                   actionTitle: snapshot.accessibilityGranted ? "查看" : "去授权") {
-                            openPrivacyPane(.accessibility)
-                        }
-                        healthCard("屏幕录制", snapshot.screenCaptureGranted,
-                                   "快捷提问中的截图能力",
-                                   optional: true,
-                                   actionTitle: snapshot.screenCaptureGranted ? "查看" : "去授权") {
-                            openPrivacyPane(.screenCapture)
-                        }
-                        healthCard("开机启动", snapshot.launchAtLogin,
-                                   "登录后自动常驻菜单栏",
-                                   optional: true,
-                                   actionTitle: snapshot.launchAtLogin ? "关闭" : "开启") {
-                            LoginItem.setEnabled(!snapshot.launchAtLogin)
-                            model.refresh()
-                        }
-                        healthCard("快捷键注册", snapshot.hotKeyFailures.isEmpty,
-                                   snapshot.hotKeyFailures.isEmpty ? "全部正常" : snapshot.hotKeyFailures.joined(separator: "；"),
-                                   actionTitle: "重新检测") {
-                            model.refresh()
-                        }
-                        healthCard("API Key", snapshot.enabledProviderCount > 0 && snapshot.enabledProviderMissingAPIKeyCount == 0,
-                                   apiKeyHealthText,
-                                   actionTitle: "打开 AI 设置") {
-                            openSettingsSection("provider")
-                        }
-                        healthCard("AI 请求", snapshot.requestReadyProviderCount > 0,
-                                   requestReadinessText,
-                                   actionTitle: "打开 AI 设置") {
-                            openSettingsSection("provider")
-                        }
-                    }
+                VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
+                    permissionsGroup
+                    runtimeHealthGroup
 
                     if !snapshot.recoverySuggestions.isEmpty {
                         recoverySuggestionPanel
                     }
 
-                    Text("详细诊断")
-                        .font(SnapAIUI.Typography.sectionTitle)
-                    detailSection("应用与版本") {
-                        detailLine("版本", snapshot.appVersion)
-                        detailLine("macOS", snapshot.macOSVersion)
-                        detailLine("Bundle ID", snapshot.bundleID)
-                        detailLine("安装位置", snapshot.installPath)
-                        detailLine("安装目录可写", snapshot.installDirectoryWritable ? "是" : "否")
-                        detailLine("Quarantine", snapshot.quarantineStatus)
-                        installLogLine()
-                    }
-                    detailSection("AI 配置") {
-                        detailLine("当前模型", snapshot.activeModel)
-                        detailLine("工作模式", workModeStatusText)
-                        detailLine("AI 请求", requestReadinessDetailText)
-                        detailLine("最近请求", snapshot.recentAIRequestStatus, lineLimit: 3)
-                        detailLine("API Key", apiKeyDetailText)
-                        detailLine("本地密钥", snapshot.secretStoreStatus, lineLimit: 2)
-                        detailLine("修复建议", snapshot.recoverySuggestionStatusLine)
-                        detailLine("上下文", contextStatusText)
-                        detailLine("提示长度", promptLengthText)
-                    }
-                    detailSection("取词与写回") {
-                        detailLine("取词状态", snapshot.textCaptureStatus)
-                        detailLine("写回状态", snapshot.writeBackStatus)
-                    }
-                    detailSection("历史与隐私") {
-                        detailLine("隐私预览", snapshot.privacyPreviewEnabled ? "开启" : "关闭")
-                        detailLine("本地脱敏", redactionStatusText)
-                        detailLine("历史内容", snapshot.historyContentStorage.rawValue)
-                        detailLine("历史数据库", snapshot.historyStoreStatus, lineLimit: 2)
-                    }
-                    detailSection("同步与签名") {
-                        detailLine("iCloud 同步", snapshot.iCloudSyncStatus, lineLimit: 3)
-                        detailLine("签名", snapshot.signingSummary, lineLimit: 3)
-                    }
+                    diagnosticsDisclosureGroup
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
+                .padding(SnapAIUI.edgePadding)
             }
             .snapAIScrollEdge()
         }
-        .background(SnapAIUI.Surface.canvas)
-        .frame(minWidth: 620,
-               idealWidth: 720,
-               maxWidth: .infinity,
-               minHeight: 520,
-               idealHeight: 640,
-               maxHeight: .infinity)
+        .background(embeddedInWorkspace ? Color.clear : SnapAIUI.Surface.canvas)
         .overlay(alignment: .bottom) {
             if let notice = copyNotice.value {
                 Label(notice, systemImage: "checkmark.circle.fill")
@@ -215,39 +160,38 @@ struct PermissionHealthView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: copyNotice.value)
-    }
-
-    private func detailSection<Content: View>(_ title: String,
-                                              @ViewBuilder content: @escaping () -> Content) -> some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 12) { content() }
-                .font(SnapAIUI.Typography.metaText)
-                .padding(.top, 12)
-        } label: {
-            Text(title)
-                .font(SnapAIUI.Typography.sectionTitle)
+        .onAppear { model.refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.refresh()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .snapAIGlassCard()
     }
 
-    private var header: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("权限健康中心")
+    private var standaloneHeader: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("权限与系统诊断")
                     .font(SnapAIUI.Typography.windowTitle)
-                Text("检查权限、模型与本地运行状态。")
+                Text("检查系统授权、全局快捷键与本地服务状态。")
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            toolbarActions
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .snapAIChrome()
+    }
+
+    private var toolbarActions: some View {
+        HStack(spacing: 8) {
             Button {
                 model.refresh()
             } label: {
                 Label("重新检测", systemImage: "arrow.clockwise")
             }
-            .controlSize(.small)
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+
             Menu {
                 Button("复制精简诊断", systemImage: "doc.on.clipboard") {
                     copyDiagnostics(full: false)
@@ -258,89 +202,192 @@ struct PermissionHealthView: View {
             } label: {
                 Label("复制诊断", systemImage: "doc.on.clipboard")
             }
-            .menuStyle(.borderlessButton)
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
             .fixedSize()
-            .controlSize(.small)
         }
-        .padding(24)
-        .snapAIChrome()
+    }
+
+    // MARK: - 系统权限组
+
+    private var permissionsGroup: some View {
+        SnapAISectionGroup("macOS 系统授权") {
+            if embeddedInWorkspace {
+                toolbarActions
+            }
+        } content: {
+            SnapAISettingRow(
+                title: "辅助功能权限",
+                subtitle: "用于无感读取选中文字与将润色结果写回原应用；快捷提问无需此权限。",
+                icon: snapshot.accessibilityGranted ? "checkmark.shield.fill" : "exclamationmark.shield.fill",
+                iconTint: snapshot.accessibilityGranted ? SnapAIUI.StatusColor.success : SnapAIUI.StatusColor.warning
+            ) {
+                HStack(spacing: 8) {
+                    SnapAISemanticPill(title: snapshot.accessibilityGranted ? "已授权" : "未授权",
+                                       systemImage: snapshot.accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.circle",
+                                       tone: snapshot.accessibilityGranted ? .success : .warning)
+                    Button(snapshot.accessibilityGranted ? "查看设置" : "前往授权") {
+                        openPrivacyPane(.accessibility)
+                    }
+                    .buttonStyle(snapshot.accessibilityGranted
+                                 ? AnyButtonStyle(SnapAISecondaryButtonStyle(compact: true))
+                                 : AnyButtonStyle(SnapAIPrimaryButtonStyle(compact: true)))
+                }
+            }
+
+            SnapAIFormDivider()
+
+            SnapAISettingRow(
+                title: "屏幕录制权限（按需可选）",
+                subtitle: "仅在使用快捷提问的截图功能时需要；剪贴板粘贴图片无需此权限。",
+                icon: "camera.viewfinder",
+                iconTint: snapshot.screenCaptureGranted ? SnapAIUI.StatusColor.success : .secondary
+            ) {
+                HStack(spacing: 8) {
+                    SnapAISemanticPill(title: snapshot.screenCaptureGranted ? "已授权" : "按需授权",
+                                       systemImage: snapshot.screenCaptureGranted ? "checkmark.circle.fill" : "minus.circle",
+                                       tone: snapshot.screenCaptureGranted ? .success : .neutral)
+                    Button("打开设置") {
+                        openPrivacyPane(.screenCapture)
+                    }
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                }
+            }
+        }
+    }
+
+    // MARK: - 运行健康概览网格
+
+    private var runtimeHealthGroup: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("运行健康检测")
+                .font(SnapAIUI.Typography.sectionTitle)
+                .padding(.horizontal, 2)
+
+            LazyVGrid(columns: healthColumns, alignment: .leading, spacing: 10) {
+                healthCard("全局快捷键",
+                           snapshot.hotKeyFailures.isEmpty,
+                           snapshot.hotKeyFailures.isEmpty ? "所有已启用动作快捷键均正常生效" : snapshot.hotKeyFailures.joined(separator: "；"),
+                           actionTitle: "重新检测") {
+                    model.refresh()
+                }
+                healthCard("AI 服务就绪",
+                           snapshot.requestReadyProviderCount > 0,
+                           requestReadinessText,
+                           actionTitle: "配置模型与服务") {
+                    if let onNavigateToModels {
+                        onNavigateToModels()
+                    } else {
+                        openSettingsSection("provider")
+                    }
+                }
+                healthCard("API 密钥存储",
+                           snapshot.enabledProviderCount > 0 && snapshot.enabledProviderMissingAPIKeyCount == 0,
+                           apiKeyHealthText,
+                           actionTitle: "管理密钥") {
+                    if let onNavigateToModels {
+                        onNavigateToModels()
+                    } else {
+                        openSettingsSection("provider")
+                    }
+                }
+                healthCard("登录自启动",
+                           snapshot.launchAtLogin,
+                           snapshot.launchAtLogin ? "登录系统后自动常驻菜单栏" : "当前未开启开机自启",
+                           optional: true,
+                           actionTitle: snapshot.launchAtLogin ? "关闭自启" : "开启自启") {
+                    LoginItem.setEnabled(!snapshot.launchAtLogin)
+                    model.refresh()
+                }
+            }
+        }
+    }
+
+    private var recoverySuggestionPanel: some View {
+        SnapAISectionGroup("建议优先处理") {
+            Button {
+                copyRecoverySuggestions()
+            } label: {
+                Label("复制建议", systemImage: "doc.on.clipboard")
+            }
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+        } content: {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(snapshot.recoverySuggestions, id: \.self) { suggestion in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "wrench.and.screwdriver")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(SnapAIUI.StatusColor.warning)
+                            .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(suggestion.title)
+                                .font(SnapAIUI.Typography.bodyText.weight(.medium))
+                            Text(suggestion.detail)
+                                .font(SnapAIUI.Typography.metaText)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(14)
+        }
+    }
+
+    private var diagnosticsDisclosureGroup: some View {
+        SnapAISectionGroup("技术诊断详情（不含原文与密钥）") {
+            EmptyView()
+        } content: {
+            DisclosureGroup(isExpanded: $showSystemDetails) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SnapAIFormDivider(inset: 0)
+                    detailLine("应用版本", "\(snapshot.appVersion) · macOS \(snapshot.macOSVersion)")
+                    detailLine("安装路径", "\(snapshot.installPath)（可写：\(snapshot.installDirectoryWritable ? "是" : "否")）")
+                    detailLine("隔离与签名", "\(snapshot.quarantineStatus) · \(snapshot.signingSummary)", lineLimit: 3)
+                    detailLine("当前模型", "\(snapshot.activeModel) · \(workModeStatusText)")
+                    detailLine("最近请求", snapshot.recentAIRequestStatus, lineLimit: 3)
+                    detailLine("取词 / 写回", "取词：\(snapshot.textCaptureStatus) · 写回：\(snapshot.writeBackStatus)")
+                    detailLine("隐私与数据库", "脱敏：\(redactionStatusText) · 历史库：\(snapshot.historyStoreStatus)", lineLimit: 2)
+                    installLogLine()
+                }
+                .font(SnapAIUI.Typography.metaText)
+                .padding(.top, 8)
+            } label: {
+                Text("展开查看版本、签名、数据库与最近请求状态")
+                    .font(SnapAIUI.Typography.bodyText)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .onChange(of: showSystemDetails) { _, expanded in
+                if expanded {
+                    model.refresh(includeSigningSummary: true)
+                }
+            }
+        }
     }
 
     private var redactionStatusText: String {
         let state = snapshot.redactionEnabled ? "开启" : "关闭"
-        return "\(state) · 规则 \(snapshot.redactionRuleCount) 条 · 异常 \(snapshot.invalidRedactionRuleCount) 条"
+        return "\(state)（\(snapshot.redactionRuleCount) 条）"
     }
 
     private var apiKeyHealthText: String {
         snapshot.apiKeyHealthStatusLine
     }
 
-    private var apiKeyDetailText: String {
-        snapshot.apiKeyHealthDetailLine
-    }
-
     private var requestReadinessText: String {
         snapshot.requestReadinessStatusLine
     }
 
-    private var requestReadinessDetailText: String {
-        snapshot.requestReadinessDetailLine
-    }
-
     private var workModeStatusText: String {
-        "\(snapshot.workModeTitle) · \(snapshot.workModeDetail)"
-    }
-
-    private var contextStatusText: String {
-        let activeName = snapshot.activeContextProfileName == "none" ? "无" : snapshot.activeContextProfileName
-        return "\(activeName) · 可用 \(snapshot.usableContextProfileCount)/\(snapshot.contextProfileCount) · 当前 \(snapshot.activeContextCharacterCount) 字"
-    }
-
-    private var promptLengthText: String {
-        "全局 \(snapshot.globalSystemPromptCharacterCount) 字 · 实际 \(snapshot.effectiveSystemPromptCharacterCount) 字"
-    }
-
-    private var recoverySuggestionPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label(snapshot.recoverySuggestionStatusLine, systemImage: "lightbulb")
-                    .font(SnapAIUI.Typography.sectionTitle)
-                    .foregroundStyle(.primary)
-                Spacer()
-                Button {
-                    copyRecoverySuggestions()
-                } label: {
-                    Label("复制建议", systemImage: "doc.on.clipboard")
-                }
-                .controlSize(.small)
-            }
-            ForEach(snapshot.recoverySuggestions, id: \.self) { suggestion in
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "arrow.turn.down.right")
-                        .font(SnapAIUI.Typography.metaText)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 14)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(suggestion.title)
-                            .font(.system(size: 13, weight: .medium))
-                        Text(suggestion.detail)
-                            .font(SnapAIUI.Typography.metaText)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-        .padding(16)
-        .snapAIGlassCard()
+        "\(snapshot.workModeTitle)"
     }
 
     private func copyDiagnostics(full: Bool) {
-        // 诊断文本仅含计数摘要（已配置 x/y、缺失 n），不含 Key 明文/掩码，可安全复制外发。
+        let targetSnapshot = full ? model.fullSnapshot() : snapshot
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(full ? snapshot.diagnosticText : snapshot.briefDiagnosticText, forType: .string)
-        flashCopy(full ? "完整诊断已复制（不含密钥）" : "精简诊断已复制（不含密钥）")
+        NSPasteboard.general.setString(full ? targetSnapshot.diagnosticText : targetSnapshot.briefDiagnosticText, forType: .string)
+        flashCopy(full ? "完整诊断已复制" : "精简诊断已复制")
     }
 
     private func copyRecoverySuggestions() {
@@ -377,13 +424,13 @@ struct PermissionHealthView: View {
                             optional: Bool = false,
                             actionTitle: String,
                             action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: ok ? "checkmark.circle.fill" : optional ? "minus.circle" : "exclamationmark.circle")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: ok ? "checkmark.circle.fill" : optional ? "minus.circle" : "exclamationmark.circle.fill")
                     .foregroundStyle(ok ? SnapAIUI.StatusColor.success : optional ? .secondary : SnapAIUI.StatusColor.warning)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
                 Text(title)
-                    .font(SnapAIUI.Typography.sectionTitle)
+                    .font(SnapAIUI.Typography.bodyText.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -394,18 +441,18 @@ struct PermissionHealthView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(minHeight: 30, alignment: .topLeading)
             Button(actionTitle, action: action)
-                .controlSize(.small)
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(16)
+        .padding(13)
         .snapAIGlassCard()
     }
 
     private func detailLine(_ title: String, _ value: String, lineLimit: Int = 2) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             Text(title)
                 .foregroundStyle(.secondary)
-                .frame(width: 88, alignment: .leading)
+                .frame(width: 82, alignment: .leading)
             Text(value)
                 .textSelection(.enabled)
                 .lineLimit(lineLimit)
@@ -415,24 +462,33 @@ struct PermissionHealthView: View {
     }
 
     private func installLogLine() -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Text("安装日志")
+        HStack(alignment: .center, spacing: 8) {
+            Text("更新日志")
                 .foregroundStyle(.secondary)
-                .frame(width: 88, alignment: .leading)
+                .frame(width: 82, alignment: .leading)
             Text(snapshot.latestInstallLogPath)
                 .textSelection(.enabled)
-                .lineLimit(2)
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button("复制路径") {
-                copyInstallLogPath()
+            if snapshot.latestInstallLogAvailable {
+                Button("复制路径") { copyInstallLogPath() }
+                    .buttonStyle(.link)
+                Button("在访达中显示") { revealInstallLog() }
+                    .buttonStyle(.link)
             }
-            .controlSize(.small)
-            .disabled(!snapshot.latestInstallLogAvailable)
-            Button("显示") {
-                revealInstallLog()
-            }
-            .controlSize(.small)
-            .disabled(!snapshot.latestInstallLogAvailable)
         }
+    }
+}
+
+private struct AnyButtonStyle: ButtonStyle {
+    private let _makeBody: (Configuration) -> AnyView
+
+    init<S: ButtonStyle>(_ style: S) {
+        _makeBody = { AnyView(style.makeBody(configuration: $0)) }
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        _makeBody(configuration)
     }
 }

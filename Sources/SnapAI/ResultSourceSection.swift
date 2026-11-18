@@ -14,43 +14,63 @@ struct ResultSourceSection: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 10) {
-                TextEditor(text: $text)
-                    .font(SnapAIUI.Typography.bodyText)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .frame(minHeight: 76, maxHeight: 160)
-                    .snapAIGlassField()
-                    .disabled(isStreaming)
-                    .accessibilityLabel("编辑原文")
-                HStack {
-                    Text(isStreaming ? "生成完成后可修改原文" : (hasImage ? "重新处理时会保留原图片。" : "修改原文后，使用当前动作重新处理。"))
-                        .font(SnapAIUI.Typography.metaText)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: hasImage ? "photo.badge.plus" : "quote.opening")
+                        .font(.system(size: 10.5, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    Button(action: onResend) {
-                        Label("重新发送", systemImage: "arrow.up")
+                    Text("原文")
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    if !isExpanded {
+                        Text(preview.isEmpty ? (hasImage ? "含图片附件，点击查看或补充说明" : "点击展开输入原文") : preview)
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    .controlSize(.small)
-                    .disabled(isStreaming || (!hasImage && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    Spacer(minLength: 4)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundStyle(.tertiary)
                 }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
-            .padding(.top, 12)
-        } label: {
-            HStack(spacing: 8) {
-                Text("原文")
-                    .font(SnapAIUI.Typography.sectionLabel)
-                if !isExpanded {
-                    Text(preview.isEmpty ? "展开以添加文字" : preview)
-                        .font(SnapAIUI.Typography.metaText)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "收起原文" : "展开原文")
+
+            if isExpanded {
+                SnapAIFormDivider(inset: 11)
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: $text)
+                        .font(SnapAIUI.Typography.bodyText)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .frame(minHeight: 72, maxHeight: 150)
+                        .snapAIGlassField(radius: 6)
+                        .disabled(isStreaming)
+                        .accessibilityLabel("编辑原文")
+
+                    HStack {
+                        Text(isStreaming ? "生成完成后可修改并重发" : (hasImage ? "重发时将保留原图片附件" : "修改原文后重新执行当前动作"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button(action: onResend) {
+                            Label("重新发送", systemImage: "arrow.up")
+                        }
+                        .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
+                        .disabled(isStreaming || (!hasImage && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    }
                 }
+                .padding(10)
             }
         }
-        .padding(12)
-        .snapAIGlassCard()
+        .snapAIGlassCard(radius: 9)
     }
 }

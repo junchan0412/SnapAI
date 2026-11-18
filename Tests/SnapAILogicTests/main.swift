@@ -1031,6 +1031,7 @@ testConversationStoreReportsCorruptionAndWriteFailure()
 testHistoryWindowRefreshPolicyDebouncesQueriesAndRejectsStaleResults()
 testResultPersistenceAndWriteBackCoordinator()
 testWriteBackSourceValidationRejectsStaleConfirmation()
+testAppIconPreferencesRoundTripThroughSettingsAndCloudPayload()
 
     return failures
 }

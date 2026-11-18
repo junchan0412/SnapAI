@@ -56,8 +56,9 @@ cp "$BIN_DIR/SnapAI" "$STAGED_APP/Contents/MacOS/SnapAI"
 cp "$BIN_DIR/SnapAIUpdater" "$STAGED_APP/Contents/Helpers/SnapAIUpdater"
 cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SnapAIBuildConfiguration string $CONFIGURATION" "$STAGED_APP/Contents/Info.plist"
-for asset in AppIconLight.png AppIconDark.png AppIconLight.icns AppIconDark.icns ManifestPublicKey.pem; do
-  cp "Resources/$asset" "$STAGED_APP/Contents/Resources/$asset"
+cp Resources/ManifestPublicKey.pem "$STAGED_APP/Contents/Resources/ManifestPublicKey.pem"
+for asset in Resources/AppIcon*.png Resources/AppIcon*.icns; do
+  cp "$asset" "$STAGED_APP/Contents/Resources/$(basename "$asset")"
 done
 for lang in en zh-Hans; do
   mkdir -p "$STAGED_APP/Contents/Resources/$lang.lproj"

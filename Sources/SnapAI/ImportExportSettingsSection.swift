@@ -6,38 +6,63 @@ import SnapAILogic
 struct ConfigMigrationSettingsSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var settings: AppSettings
+    let iCloudSyncStatusText: String
     let commit: () -> Void
     @State private var pendingImportedConfig: AppSettings?
     @State private var isConfirmingImport = false
     @State private var importSaveFailed = false
     @StateObject private var configNotice = SnapAITransientState<ConfigNotice>()
 
+    init(settings: AppSettings, iCloudSyncStatusText: String = "", commit: @escaping () -> Void) {
+        self.settings = settings
+        self.iCloudSyncStatusText = iCloudSyncStatusText
+        self.commit = commit
+    }
+
     private func flashNotice(_ message: String, tone: ConfigNotice.Tone) {
         configNotice.show(ConfigNotice(message: message, tone: tone), autoDismiss: 2.0)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            Text("配置迁移")
-                .font(SnapAIUI.Typography.sectionLabel)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                HStack(spacing: SnapAIUI.tightSpacing) {
-                    Button("导出配置…") { exportConfig() }
-                    Button("导入配置…") { importConfig() }
-                    Spacer()
-                }
-                Text("导出为 JSON，包含供应商、动作、快捷键等；API Key 不会被导出。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        SnapAISectionGroup("云同步与配置备份") {
+            EmptyView()
+        } content: {
+            SnapAISettingRow(
+                title: "iCloud 配置同步",
+                subtitle: "跨 Mac 同步供应商端点、动作与快捷键（API Key 仅保留在本机）\(iCloudSyncStatusText)",
+                icon: "icloud",
+                iconTint: .blue
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.iCloudSyncEnabled },
+                    set: { enabled in
+                        settings.iCloudSyncEnabled = enabled
+                        commit()
+                        if enabled { iCloudSync.shared.upload(settings) }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel("iCloud 配置同步")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
+
+            SnapAIFormDivider()
+
+            SnapAISettingRow(
+                title: "导入与导出配置文件",
+                subtitle: "备份或迁移 JSON 配置（自动剥离 API Key 明文）。",
+                icon: "arrow.up.arrow.down.square",
+                iconTint: .secondary
+            ) {
+                HStack(spacing: 8) {
+                    Button("导出…") { exportConfig() }
+                        .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                    Button("导入…") { importConfig() }
+                        .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(
             "导入配置将覆盖当前设置",
             isPresented: $isConfirmingImport,
@@ -50,7 +75,7 @@ struct ConfigMigrationSettingsSection: View {
                 importSaveFailed = false
             }
         } message: { _ in
-            Text("将用所选文件中的供应商、动作、快捷键、脱敏规则等覆盖当前配置，此操作不可撤销。建议先导出当前配置备份。")
+            Text("将用所选文件中的供应商、动作、快捷键与脱敏规则覆盖当前配置，建议先导出备份。")
         }
         .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
@@ -59,11 +84,11 @@ struct ConfigMigrationSettingsSection: View {
                         Label("导入尚未保存，请检查存储空间或权限。", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(SnapAIUI.StatusColor.error)
                         Button("重试保存") { applyImportedConfig() }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                     }
                     .font(.caption.weight(.medium))
                     .padding(10)
-                    .snapAIGlassCard(radius: 12)
+                    .snapAIGlassCard(radius: 10)
                 }
                 if let notice = configNotice.value {
                     Label(notice.message, systemImage: notice.tone.icon)
@@ -76,7 +101,7 @@ struct ConfigMigrationSettingsSection: View {
                         .accessibilityLabel(notice.message)
                 }
             }
-            .padding(.bottom, 12)
+            .padding(.bottom, 8)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: configNotice.value)
     }
@@ -111,7 +136,6 @@ struct ConfigMigrationSettingsSection: View {
             flashNotice("文件格式无法识别", tone: .error)
             return
         }
-        // 解析成功后再让用户确认覆盖,避免无确认直接覆盖现有配置。
         pendingImportedConfig = imported
         importSaveFailed = false
         configNotice.clear()
@@ -140,6 +164,8 @@ struct ConfigMigrationSettingsSection: View {
         settings.systemPrompt = imported.systemPrompt
         settings.useAXFirst = imported.useAXFirst
         settings.showDockIcon = imported.showDockIcon
+        settings.appIconStyle = imported.appIconStyle
+        settings.appIconAppearance = imported.appIconAppearance
         settings.sidebarOrder = imported.sidebarOrder
         settings.typewriterSpeed = imported.typewriterSpeed
         settings.autoRouteEnabled = imported.autoRouteEnabled

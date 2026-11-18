@@ -6,41 +6,19 @@ struct WorkModeSettingsSection: View {
     var onCommit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SnapAIUI.standardSpacing) {
-            Text("工作模式")
-                .font(SnapAIUI.Typography.sectionLabel)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            VStack(alignment: .leading, spacing: SnapAIUI.tightSpacing) {
-                HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
-                    Image(systemName: settings.matchingWorkModePreset?.systemImage ?? "slider.horizontal.2.square")
-                        .font(.title3)
-                        .foregroundStyle(.tint)
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(settings.workModeStatusTitle)
-                            .font(SnapAIUI.Typography.bodyText.weight(.medium))
-                        Text(settings.workModeStatusDetail)
-                            .font(SnapAIUI.Typography.metaText)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 12)
-                }
-
-                Spacer(minLength: SnapAIUI.tightSpacing)
-
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: SnapAIUI.tightSpacing)], spacing: SnapAIUI.tightSpacing) {
-                    ForEach(WorkModePreset.allCases) { mode in
-                        workModeButton(mode)
-                    }
+        SnapAISectionGroup("工作模式预设", subtitle: settings.workModeStatusDetail) {
+            SnapAIStatusPill(title: settings.workModeStatusTitle,
+                             systemImage: settings.matchingWorkModePreset?.systemImage ?? "slider.horizontal.2.square",
+                             tint: .accentColor,
+                             filled: true)
+        } content: {
+            HStack(spacing: 8) {
+                ForEach(WorkModePreset.allCases) { mode in
+                    workModeButton(mode)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
+            .padding(12)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func workModeButton(_ mode: WorkModePreset) -> some View {
@@ -49,36 +27,42 @@ struct WorkModeSettingsSection: View {
             settings.applyWorkMode(mode)
             onCommit()
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isCurrent ? "checkmark.circle.fill" : mode.systemImage)
-                    .frame(width: 18)
-                VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: mode.systemImage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
                     Text(mode.shortTitle)
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
-                    Text(mode.summary)
-                        .font(.caption2)
-                        .foregroundStyle(isCurrent ? Color.accentColor.opacity(0.8) : .secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if isCurrent {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.accentColor)
+                    }
                 }
-                Spacer(minLength: 0)
+                Text(mode.summary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-            .background {
-                if isCurrent {
-                    RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                        .fill(Color.accentColor.opacity(SnapAIUI.selectedFillOpacity))
-                }
-            }
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
+            .background(
+                isCurrent ? Color.accentColor.opacity(0.10) : SnapAIUI.Surface.quiet,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
             .overlay {
-                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
-                    .stroke(isCurrent ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.08),
-                            lineWidth: isCurrent ? 1.5 : 1)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(isCurrent ? Color.accentColor.opacity(0.38) : SnapAIUI.Surface.border,
+                                  lineWidth: isCurrent ? 1.2 : 0.75)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("切换到「\(mode.shortTitle)」工作模式")
+        .help("切换为「\(mode.shortTitle)」模式")
     }
 }

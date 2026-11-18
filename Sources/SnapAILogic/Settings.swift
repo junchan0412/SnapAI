@@ -84,9 +84,11 @@ package final class AppSettings: ObservableObject, Codable {
     @Published package var translatePrompt: String = AppSettings.defaultTranslatePrompt
     @Published package var systemPrompt: String = AppSettings.defaultSystemPrompt
 
-    // 行为
+    // 行为与外观
     @Published package var useAXFirst: Bool = true   // 优先用辅助功能取词
     @Published package var showDockIcon: Bool = true // 兼容旧配置；Dock 现在跟随主面板
+    @Published package var appIconStyle: AppIconStyle = .aurora
+    @Published package var appIconAppearance: AppIconAppearance = .system
     @Published package var sidebarOrder: [String] = SettingsSection.allCases.map(\.rawValue)
     @Published package var typewriterSpeed: TypewriterSpeed = .normal // 打字机动画速度
     @Published package var autoRouteEnabled: Bool = false
@@ -212,7 +214,7 @@ package final class AppSettings: ObservableObject, Codable {
         case temperature, settingsSchemaVersion
         case askHotKey, translateHotKey, quickPanelHotKey
         case actions
-        case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon, sidebarOrder
+        case askPrompt, translatePrompt, systemPrompt, useAXFirst, showDockIcon, appIconStyle, appIconAppearance, sidebarOrder
         case typewriterSpeed
         case autoRouteEnabled, fallbackEnabled, routingPreference, workModePreset
         case privacyPreviewEnabled, redactionEnabled, redactionRules
@@ -265,6 +267,8 @@ package final class AppSettings: ObservableObject, Codable {
         }
         useAXFirst = (try? c.decode(Bool.self, forKey: .useAXFirst)) ?? true
         showDockIcon = (try? c.decode(Bool.self, forKey: .showDockIcon)) ?? true
+        appIconStyle = (try? c.decode(AppIconStyle.self, forKey: .appIconStyle)) ?? .aurora
+        appIconAppearance = (try? c.decode(AppIconAppearance.self, forKey: .appIconAppearance)) ?? .system
         sidebarOrder = (try? c.decode([String].self, forKey: .sidebarOrder)) ?? SettingsSection.allCases.map(\.rawValue)
         typewriterSpeed = (try? c.decode(TypewriterSpeed.self, forKey: .typewriterSpeed)) ?? .normal
         autoRouteEnabled = (try? c.decode(Bool.self, forKey: .autoRouteEnabled)) ?? false
@@ -415,6 +419,8 @@ package final class AppSettings: ObservableObject, Codable {
         try c.encode(systemPrompt, forKey: .systemPrompt)
         try c.encode(useAXFirst, forKey: .useAXFirst)
         try c.encode(showDockIcon, forKey: .showDockIcon)
+        try c.encode(appIconStyle, forKey: .appIconStyle)
+        try c.encode(appIconAppearance, forKey: .appIconAppearance)
         try c.encode(sidebarOrder, forKey: .sidebarOrder)
         try c.encode(typewriterSpeed, forKey: .typewriterSpeed)
         try c.encode(autoRouteEnabled, forKey: .autoRouteEnabled)

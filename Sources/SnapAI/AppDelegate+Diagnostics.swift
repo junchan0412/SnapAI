@@ -16,7 +16,7 @@ extension AppDelegate {
     }
 
     @objc func openHistoryWindow() {
-        historyWindow.show()
+        showSettings(section: .history)
     }
 
     @objc func openPermissionHealthFromMenu(_ sender: Any?) {
@@ -24,7 +24,7 @@ extension AppDelegate {
     }
 
     @objc func openPermissionHealth() {
-        permissionHealth.show()
+        showSettings(section: .permission)
     }
 
     func copyPermissionDiagnostics() {

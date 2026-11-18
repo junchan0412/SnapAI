@@ -20,8 +20,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir -p "$SNAPAI_TEST_BUNDLE/Contents/MacOS" "$SNAPAI_TEST_BUNDLE/Contents/Resources" "$SNAPAI_APP_TEST_DIR/fixtures"
-for asset in AppIconLight.icns AppIconDark.icns AppIconLight.png AppIconDark.png; do
-  cp "Resources/$asset" "$SNAPAI_TEST_BUNDLE/Contents/Resources/"
+for asset in Resources/AppIcon*.icns Resources/AppIcon*.png; do
+  cp "$asset" "$SNAPAI_TEST_BUNDLE/Contents/Resources/"
 done
 
 swiftc -O -whole-module-optimization -parse-as-library -enable-testing \

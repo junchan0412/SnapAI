@@ -7,21 +7,38 @@ struct ResultThinkingSection: View {
 
     var body: some View {
         if !state.text.isEmpty {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                if isExpanded {
-                    Text(state.text)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(SnapAIUI.compactPadding)
-                        .snapAIGlassCard(radius: SnapAIUI.controlRadius)
-                        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous))
-                }
-            } label: {
-                Label("思考过程", systemImage: "brain")
-                    .font(SnapAIUI.Typography.metaText)
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    isExpanded.toggle()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10.5, weight: .semibold))
+                        Text("推理过程")
+                            .font(.system(size: 11.5, weight: .medium))
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
                     .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    HStack(alignment: .top, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 1, style: .continuous)
+                            .fill(Color.secondary.opacity(0.3))
+                            .frame(width: 2)
+                        Text(state.text)
+                            .font(.system(size: 12))
+                            .lineSpacing(3)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.leading, 4)
+                }
             }
         }
     }
@@ -37,17 +54,13 @@ struct ResultOutputDisplay: View {
         switch ResultContentRenderMode.resolve(text: state.text,
                                                isStreaming: isStreaming) {
         case .waiting:
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("正在准备回答")
-                        .font(SnapAIUI.Typography.sectionTitle)
-                }
-                Text("结果会实时显示在这里。")
-                    .font(SnapAIUI.Typography.metaText)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("正在思考回答…")
+                    .font(SnapAIUI.Typography.bodyText)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 16)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .id("output")
             .transition(.opacity)
@@ -57,9 +70,9 @@ struct ResultOutputDisplay: View {
                 Text(state.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.accentColor.opacity(0.6))
-                    .frame(width: 3, height: 15)
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color.accentColor.opacity(0.75))
+                    .frame(width: 6, height: 14)
                     .accessibilityHidden(true)
             }
             .id("output")
@@ -95,33 +108,43 @@ struct ResultOutputAutoScrollObserver: View {
 struct ResultActionsToolbar: View {
     @ObservedObject var vm: ResultViewModel
     @ObservedObject var outputState: ResultOutputState
+    var onOpenModelCompare: (() -> Void)? = nil
 
     var body: some View {
         let state = commandState
-        HStack(spacing: SnapAIUI.tightSpacing) {
+        HStack(spacing: 6) {
             Button(action: vm.copyOutput) {
-                Label("复制结果", systemImage: "doc.on.doc")
+                Label("复制", systemImage: "doc.on.doc")
             }
-            .buttonStyle(SnapAIPrimaryButtonStyle())
-            .controlSize(.small)
+            .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .help(ResultCommandFactory.helpText(for: .copyOutput, in: state))
+            .accessibilityLabel(ResultCommandFactory.accessibilityLabel(for: .copyOutput, in: state))
             .disabled(!ResultCommandFactory.isEnabled(.copyOutput, in: state))
 
             Button(action: vm.replaceOriginal) {
-                Label("替换原文", systemImage: "arrow.uturn.left.square")
+                Label("替换原文", systemImage: "arrow.uturn.backward")
             }
-            .buttonStyle(SnapAISecondaryButtonStyle())
-            .controlSize(.small)
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
             .keyboardShortcut(.return, modifiers: [.command])
             .help(ResultCommandFactory.helpText(for: .replaceOriginal, in: state))
+            .accessibilityLabel(ResultCommandFactory.accessibilityLabel(for: .replaceOriginal, in: state))
             .disabled(vm.restoredConversation || !ResultCommandFactory.isEnabled(.replaceOriginal, in: state))
 
             Menu {
-                menuButton(.copyMarkdown, action: vm.copyConversationMarkdown,
-                           shortcut: "c", modifiers: [.command, .option], state: state)
                 menuButton(.appendToDocument, action: vm.appendToDocument,
                            shortcut: "\r", modifiers: [.command, .shift], state: state)
+                menuButton(.copyMarkdown, action: vm.copyConversationMarkdown,
+                           shortcut: "c", modifiers: [.command, .option], state: state)
+                if let onOpenModelCompare {
+                    Divider()
+                    Button {
+                        onOpenModelCompare()
+                    } label: {
+                        Label("双模型对照…", systemImage: "rectangle.split.2x1")
+                    }
+                    .disabled(vm.isGenerating)
+                }
                 Divider()
                 menuButton(.exportConversation, action: vm.exportConversation,
                            shortcut: "e", modifiers: [.command], state: state)
@@ -131,21 +154,20 @@ struct ResultActionsToolbar: View {
                            shortcut: "d", modifiers: [.command, .option], state: state)
             } label: {
                 Image(systemName: "ellipsis")
-                    .frame(width: 26, height: 30)
+                    .frame(width: 26, height: 26)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .controlSize(.small)
-            .help("更多操作:复制完整结果、追加到文档、导出对话")
+            .help("更多操作：追加到文档、复制完整对话、导出记录")
             .accessibilityLabel("更多结果操作")
 
             if vm.isPresenting {
                 Button(action: vm.revealFullOutput) {
                     Image(systemName: "forward.end.fill")
                 }
-                .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
-                .help("立即显示全文")
+                .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+                .help("立即显示全文 (Esc)")
                 .accessibilityLabel("立即显示全文")
                 .keyboardShortcut(.cancelAction)
             } else if vm.isGenerating {
@@ -169,8 +191,7 @@ struct ResultActionsToolbar: View {
         Button(action: handler) {
             Image(systemName: ResultCommandFactory.descriptor(for: command, in: state).systemImage)
         }
-        .controlSize(.small)
-        .buttonStyle(SnapAIIconButtonStyle(size: 30, circular: false))
+        .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
         .keyboardShortcut(shortcut)
         .help(ResultCommandFactory.helpText(for: command, in: state))
         .accessibilityLabel(ResultCommandFactory.accessibilityLabel(for: command, in: state))
@@ -199,10 +220,10 @@ struct ResultActionsToolbar: View {
 
     private var commandState: ResultCommandState {
         ResultCommandState(resultText: outputState.text,
-                                  diagnosticsText: vm.requestDiagnosticText,
-                                  isStreaming: vm.isGenerating,
-                                  sourceText: vm.sourceText,
-                                  protectsContentExport: vm.contentExportProtectionEnabled,
-                                  recoveryCode: vm.errorRecoveryCode)
+                           diagnosticsText: vm.requestDiagnosticText,
+                           isStreaming: vm.isGenerating,
+                           sourceText: vm.sourceText,
+                           protectsContentExport: vm.contentExportProtectionEnabled,
+                           recoveryCode: vm.errorRecoveryCode)
     }
 }

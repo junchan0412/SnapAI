@@ -193,9 +193,10 @@ final class QuickInputController: NSObject, NSWindowDelegate {
             hosting.rootView = view
         } else {
             hosting = NSHostingView(rootView: view)
-            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 340))
+            hosting.safeAreaRegions = []
+            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 140))
             panel.contentView = hosting
-            panel.minSize = NSSize(width: 480, height: 300)
+            panel.minSize = NSSize(width: 480, height: 124)
             panel.delegate = self
             self.panel = panel
             self.hostingView = hosting
@@ -203,7 +204,7 @@ final class QuickInputController: NSObject, NSWindowDelegate {
         hosting.layoutSubtreeIfNeeded()
         let fittingSize = hosting.fittingSize
         panel.setContentSize(NSSize(width: max(560, fittingSize.width),
-                                    height: max(340, fittingSize.height)))
+                                    height: max(128, fittingSize.height)))
         if let origin = lastOrigin {
             panel.setFrameOrigin(origin)
         } else if let screen = NSScreen.main {

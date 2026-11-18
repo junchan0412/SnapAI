@@ -55,7 +55,6 @@ final class CommandPaletteModel: ObservableObject {
     }
 
     func filteredItems(from items: [CommandPaletteItem]) -> [CommandPaletteItem] {
-        // 兼容旧调用点;主路径使用缓存的 filteredItems。
         if items.count == sourceItems.count,
            zip(items, sourceItems).allSatisfy({ $0.id == $1.id }) {
             return filteredItems
@@ -134,8 +133,9 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
             hostingView.rootView = view
         } else {
             let hosting = NSHostingView(rootView: view)
-            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480))
-            panel.minSize = NSSize(width: 520, height: 360)
+            hosting.safeAreaRegions = []
+            panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 580, height: 420))
+            panel.minSize = NSSize(width: 500, height: 340)
             panel.contentView = hosting
             panel.delegate = self
             self.panel = panel
@@ -161,7 +161,6 @@ final class CommandPaletteController: NSObject, NSWindowDelegate {
         FloatingPanelPresentation.dismiss(panel)
     }
 
-    // 失焦时关闭
     func windowDidResignKey(_ notification: Notification) {
         hide()
     }
@@ -227,88 +226,53 @@ struct CommandPaletteView: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.secondary)
-                TextField("搜索动作、模型、历史记录或设置…", text: $model.query)
+                TextField("搜索动作、切换模型、历史记录或设置…", text: $model.query)
                     .textFieldStyle(.plain)
                     .accessibilityLabel("搜索动作、模型、历史记录或设置")
-                    .font(.system(size: 18))
+                    .font(.system(size: 16))
                     .onSubmit {
                         model.selectedItem()?.perform()
                     }
-                Button {
-                    onClose()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
+                if !model.query.isEmpty {
+                    Button {
+                        model.query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("关闭命令面板")
+                SnapAIKeycap(text: "Esc")
+                    .onTapGesture { onClose() }
+                    .accessibilityLabel("关闭命令面板")
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            SnapAIFormDivider(inset: 0)
 
             if filteredItems.isEmpty {
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
-                        .font(.largeTitle)
+                        .font(.system(size: 26, weight: .light))
                         .foregroundStyle(.tertiary)
-                    Text("没有匹配项")
+                    Text("没有找到匹配命令")
+                        .font(SnapAIUI.Typography.sectionTitle)
                         .foregroundStyle(.secondary)
-                    Text("试试输入「翻译」「润色」「切换模型」或「清空历史」等关键词。")
-                        .font(.caption)
+                    Text("试试输入「翻译」「润色」「切换模型」或「清空历史」")
+                        .font(SnapAIUI.Typography.metaText)
                         .foregroundStyle(.tertiary)
-                        .frame(maxWidth: 360)
-                        .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 4) {
+                        LazyVStack(spacing: 2) {
                             ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                                Button {
-                                    item.perform()
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: item.systemImage)
-                                            .frame(width: 24)
-                                            .foregroundStyle(.tint)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.title)
-                                                .font(SnapAIUI.Typography.bodyText.weight(.medium))
-                                                .lineLimit(1)
-                                            Text(item.subtitle)
-                                                .font(SnapAIUI.Typography.metaText)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-                                        Spacer()
-                                        if let shortcutText = item.shortcutText, !shortcutText.isEmpty {
-                                            Text(shortcutText)
-                                                .font(.caption.monospaced())
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 3)
-                                                .background {
-                                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                                        .fill(Color.secondary.opacity(0.12))
-                                                }
-                                                .accessibilityLabel("快捷键 \(shortcutText)")
-                                        }
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .contentShape(Rectangle())
-                                    .background {
-                                        if index == selectedIndex {
-                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .fill(Color.accentColor.opacity(0.16))
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
-                                .id(item.id)
+                                paletteRow(item, isSelected: index == selectedIndex)
+                                    .id(item.id)
                             }
                         }
                         .padding(8)
@@ -323,28 +287,85 @@ struct CommandPaletteView: View {
                 }
             }
 
+            SnapAIFormDivider(inset: 0)
+
             HStack(spacing: 14) {
-                Label("↑↓ 选择", systemImage: "arrow.up.arrow.down")
-                Label("↩ 执行", systemImage: "return")
-                Label("Esc 关闭", systemImage: "escape")
+                HStack(spacing: 4) {
+                    SnapAIKeycap(text: "↑↓")
+                    Text("选择")
+                }
+                HStack(spacing: 4) {
+                    SnapAIKeycap(text: "↩")
+                    Text("执行")
+                }
                 Spacer()
                 if let hint = openPaletteHint, !hint.isEmpty {
-                    Text("打开此面板:\(hint)")
+                    Text("唤起快捷键：\(hint)")
                         .foregroundStyle(.tertiary)
+                } else {
+                    Text("\(filteredItems.count) 项可用")
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
                 }
             }
-            .font(.caption2)
+            .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .frame(minWidth: 520, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
-        .background(SnapAIVisualEffect(material: .hudWindow).allowsHitTesting(false).ignoresSafeArea())
+        .frame(minWidth: 500, maxWidth: .infinity, minHeight: 340, maxHeight: .infinity)
+        .snapAIFloatingPanelSurface()
+    }
+
+    private func paletteRow(_ item: CommandPaletteItem, isSelected: Bool) -> some View {
+        Button {
+            item.perform()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: item.systemImage)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : Color.accentColor)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        isSelected ? Color.accentColor : Color.accentColor.opacity(0.11),
+                        in: RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 1.5) {
+                    Text(item.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if !item.subtitle.isEmpty {
+                        Text(item.subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if let shortcutText = item.shortcutText, !shortcutText.isEmpty {
+                    SnapAIKeycap(text: shortcutText)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6.5)
+            .contentShape(Rectangle())
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.13))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func scrollToSelection(with proxy: ScrollViewProxy) {
         guard filteredItems.indices.contains(selectedIndex) else { return }
-        // 键盘导航保留短动画;搜索过滤时由 onChange(query) 触发,动画更短避免列表闪跳。
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.08)) {
             proxy.scrollTo(filteredItems[selectedIndex].id, anchor: .center)
         }

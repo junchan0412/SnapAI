@@ -7,8 +7,8 @@ struct ResultView: View {
     @ObservedObject private var settings: AppSettings
     var onClose: () -> Void
     var onOpenAISettings: () -> Void = {}
+    var onOpenModelCompare: (() -> Void)? = nil
 
-    @State private var showConversation = false
     @State private var showConversationLibrary = false
     @State private var isSourceExpanded = false
     @State private var followsOutput = true
@@ -16,11 +16,28 @@ struct ResultView: View {
 
     init(vm: ResultViewModel,
          onClose: @escaping () -> Void,
-         onOpenAISettings: @escaping () -> Void = {}) {
+         onOpenAISettings: @escaping () -> Void = {},
+         onOpenModelCompare: (() -> Void)? = nil) {
         self.vm = vm
         self.settings = vm.settings
         self.onClose = onClose
         self.onOpenAISettings = onOpenAISettings
+        self.onOpenModelCompare = onOpenModelCompare
+    }
+
+    private var inlineThreadSnapshot: (priorTurns: [ConversationMessage], activeFollowUp: String?) {
+        guard let session = vm.conversationSession else { return ([], nil) }
+        let nonSystem = session.messages.filter { $0.role != .system }
+        guard nonSystem.count > 1 else { return ([], nil) }
+        if nonSystem.last?.role == .assistant {
+            guard nonSystem.count > 2 else { return ([], nil) }
+            let promptMsg = nonSystem[nonSystem.count - 2]
+            let prompt = promptMsg.role == .user ? promptMsg.content : nil
+            return (Array(nonSystem.dropLast(2)), prompt)
+        } else if nonSystem.last?.role == .user {
+            return (Array(nonSystem.dropLast(1)), nonSystem.last?.content)
+        }
+        return ([], nil)
     }
 
     var body: some View {
@@ -29,7 +46,8 @@ struct ResultView: View {
                 action: vm.action,
                 actions: settings.enabledActions,
                 modelName: vm.activeModelName.isEmpty ? settings.model : vm.activeModelName,
-                providerName: vm.activeProviderName,
+                providerName: vm.activeProviderName.isEmpty ? (settings.activeProvider?.name ?? "") : vm.activeProviderName,
+                switchableModels: settings.switchableEntries,
                 isStreaming: vm.isGenerating,
                 isPresenting: vm.isPresenting,
                 hasError: vm.errorMessage != nil,
@@ -37,20 +55,32 @@ struct ResultView: View {
                 targetLanguage: vm.targetLanguage,
                 isPinned: $vm.isPinned,
                 onSwitchAction: vm.switchAction,
+                onSwitchModel: { providerID, model in
+                    settings.activate(providerID: providerID, model: model, recordManualPreference: true)
+                    if !vm.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || vm.hasSourceImage {
+                        vm.regenerate()
+                    }
+                },
                 onChangeLanguage: vm.changeLanguage,
+                onOpenSavedSessions: { showConversationLibrary = true },
+                onOpenModelCompare: onOpenModelCompare,
                 onClose: onClose
             )
+
+            ZStack(alignment: .top) {
+                SnapAIFormDivider(inset: 0)
+                if vm.isGenerating {
+                    SnapAIStreamingProgressBar()
+                }
+            }
+
             scrollContent
+
+            SnapAIFormDivider(inset: 0)
             footer
         }
-        .frame(minWidth: 440, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
-        .background(SnapAIVisualEffect(material: .hudWindow).allowsHitTesting(false).ignoresSafeArea())
-        .overlay(alignment: .top) {
-            if vm.isGenerating {
-                SnapAIStreamingProgressBar()
-            }
-        }
-        .sheet(isPresented: $showConversation) { ResultConversationView(vm: vm) }
+        .frame(minWidth: 460, maxWidth: .infinity, minHeight: 460, maxHeight: .infinity)
+        .snapAIFloatingPanelSurface()
         .sheet(isPresented: $showConversationLibrary) {
             ConversationLibraryView(settings: settings, restore: vm.restoreConversation)
         }
@@ -62,12 +92,25 @@ struct ResultView: View {
     private var scrollContent: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 14) {
                     ResultSourceSection(text: $vm.sourceText,
                                         isExpanded: $isSourceExpanded,
                                         isStreaming: vm.isGenerating,
                                         hasImage: vm.hasSourceImage,
                                         onResend: vm.resendEdited)
+
+                    let thread = inlineThreadSnapshot
+                    if !thread.priorTurns.isEmpty || thread.activeFollowUp != nil || vm.conversationSession?.sourceImageData != nil {
+                        ResultInlineConversationThread(
+                            priorTurns: thread.priorTurns,
+                            activeFollowUpPrompt: thread.activeFollowUp,
+                            sourceImageData: vm.conversationSession?.sourceImageData,
+                            isGenerating: vm.isGenerating,
+                            onCopyCode: vm.copyCodeBlock,
+                            onBranch: vm.branchConversation
+                        )
+                    }
+
                     ResultThinkingSection(state: vm.thinkingState, isExpanded: $vm.showThinking)
 
                     if let reason = vm.incompleteResultReason {
@@ -83,6 +126,7 @@ struct ResultView: View {
                     if let error = vm.errorMessage {
                         errorBlock(error)
                     }
+
                     ResultOutputDisplay(
                         state: vm.outputState,
                         isStreaming: vm.isStreaming,
@@ -96,12 +140,13 @@ struct ResultView: View {
                     )
                     .background(ResultReadingAnchorObserver(anchor: readingAnchor,
                         isStreaming: vm.isStreaming, followsOutput: followsOutput))
-                    .font(.system(size: 15))
-                    .lineSpacing(4)
+                    .font(SnapAIUI.Typography.readingText)
+                    .lineSpacing(4.5)
                 }
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(SnapAIUI.edgePadding)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .background(ResultScrollActivityObserver {
                     readingAnchor.cancel()
                     followsOutput = false
@@ -136,83 +181,71 @@ struct ResultView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 9) {
             ResultOperationFeedbackHost(coordinator: vm.operationCoordinator)
 
-            SnapAIGlassToolbarGroup(spacing: 8) {
+            SnapAIGlassToolbarGroup(spacing: 6) {
                 Button { vm.showRouteDetails.toggle() } label: {
                     Image(systemName: vm.showRouteDetails ? "info.circle.fill" : "info.circle")
                         .foregroundStyle(vm.showRouteDetails ? Color.accentColor : .secondary)
                 }
-                .buttonStyle(SnapAIIconButtonStyle(circular: false))
-                .help(vm.showRouteDetails ? "收起请求详情" : "查看模型、路由、耗时与诊断")
+                .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+                .help(vm.showRouteDetails ? "收起请求详情" : "查看路由、耗时与诊断")
                 .accessibilityLabel(vm.showRouteDetails ? SnapAIL10n.string("Hide request details") : SnapAIL10n.string("View model, route, timing and diagnostics"))
                 .accessibilityIdentifier("SnapAI.Result.RequestDetails")
                 .popover(isPresented: $vm.showRouteDetails, arrowEdge: .bottom) {
                     requestDetails
-                        .frame(width: 360)
-                        .padding(8)
+                        .frame(width: 340)
+                        .padding(12)
                 }
+
+                ResultInlineMetricsLabel(state: vm.completionState)
 
                 if vm.isStreaming {
                     Button { followsOutput.toggle() } label: {
                         Image(systemName: followsOutput ? "arrow.down.to.line.compact" : "arrow.down.to.line")
                             .foregroundStyle(followsOutput ? Color.accentColor : .secondary)
                     }
-                    .buttonStyle(SnapAIIconButtonStyle(circular: false))
+                    .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
                     .help(followsOutput ? "已跟随输出，点击暂停自动滚动" : "继续跟随最新输出")
                     .accessibilityLabel(followsOutput ? "暂停自动滚动" : "继续自动滚动")
                 }
-                Menu {
-                    Button("会话与分支…") { showConversation = true }
-                        .disabled(vm.conversationSession == nil)
-                    Button("恢复已保存会话…") { showConversationLibrary = true }
-                } label: {
-                    Label(vm.conversationSession?.activeCompression != nil ? "会话 · 已压缩" : "会话", systemImage: "bubble.left.and.bubble.right")
-                }
-                .disabled(vm.isGenerating)
-                Spacer(minLength: 0)
-                ResultActionsToolbar(vm: vm, outputState: vm.outputState)
+
+                Spacer(minLength: 4)
+
+                ResultActionsToolbar(vm: vm,
+                                     outputState: vm.outputState,
+                                     onOpenModelCompare: onOpenModelCompare)
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                FollowUpField(text: $vm.followUp,
-                              onSubmit: vm.sendFollowUp,
-                              onHistoryUp: vm.followUpHistoryUp,
-                              onHistoryDown: vm.followUpHistoryDown,
-                              historyAvailable: vm.followUpHistoryCount > 0,
-                              shouldHandleHistoryNavigation: { text, direction in
-                                  vm.shouldHandleFollowUpHistoryNavigation(currentText: text,
-                                                                           direction: direction)
-                              })
-                    .disabled(vm.isGenerating)
-                Button(action: vm.sendFollowUp) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 18, height: 20)
-                }
-                .buttonStyle(SnapAIPrimaryButtonStyle())
-                .keyboardShortcut(.return, modifiers: [.command, .option])
-                .help("发送追问 (↩ 发送，⇧↩ 换行)")
-                .accessibilityLabel(SnapAIL10n.string("Send Follow-up"))
-                .disabled(!canSendFollowUp)
-            }
+            FollowUpField(text: $vm.followUp,
+                          canSend: canSendFollowUp,
+                          onSubmit: vm.sendFollowUp,
+                          onHistoryUp: vm.followUpHistoryUp,
+                          onHistoryDown: vm.followUpHistoryDown,
+                          historyAvailable: vm.followUpHistoryCount > 0,
+                          shouldHandleHistoryNavigation: { text, direction in
+                              vm.shouldHandleFollowUpHistoryNavigation(currentText: text,
+                                                                       direction: direction)
+                          })
+                .disabled(vm.isGenerating)
         }
-        .padding(.horizontal, SnapAIUI.edgePadding)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .snapAIChrome()
     }
 
     private var requestDetails: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(SnapAIL10n.string("Request Details"))
-                    .font(SnapAIUI.Typography.sectionLabel)
+                    .font(SnapAIUI.Typography.sectionTitle)
                 Spacer()
                 Text(vm.routeStatusTitle)
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
+            SnapAIFormDivider(inset: 0)
             Text(routeStatusText.primaryText)
                 .font(SnapAIUI.Typography.metaText)
                 .textSelection(.enabled)
@@ -232,8 +265,6 @@ struct ResultView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .snapAIGlassCard()
     }
 
     private var routeStatusText: ResultRouteStatusText {
@@ -249,18 +280,17 @@ struct ResultView: View {
         !vm.isGenerating && !vm.followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 错误块:主恢复操作用主按钮强调,诊断类操作收纳为单一菜单,降低按钮密度。
     @ViewBuilder
     private func errorBlock(_ err: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(err, systemImage: "exclamationmark.triangle.fill")
-                .font(.callout.weight(.medium))
+                .font(SnapAIUI.Typography.bodyText.weight(.medium))
                 .foregroundStyle(SnapAIUI.StatusColor.error)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let recovery = vm.errorRecoverySuggestionText {
-                Label(recovery, systemImage: "wrench.and.screwdriver")
-                    .font(.caption)
+                Text(recovery)
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -290,18 +320,17 @@ struct ResultView: View {
                     Label("诊断", systemImage: "stethoscope")
                 }
                 .controlSize(.small)
-                .help("复制请求诊断信息以便排查")
+                .help("复制请求诊断信息")
             }
         }
-        .padding(SnapAIUI.compactPadding)
-        .background(SnapAIUI.StatusColor.error.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous))
+        .padding(12)
+        .background(SnapAIUI.StatusColor.error.opacity(0.07),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                .stroke(SnapAIUI.StatusColor.error.opacity(0.18), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(SnapAIUI.StatusColor.error.opacity(0.20), lineWidth: 0.75)
         }
     }
-
 
     @ViewBuilder
     private func errorRetryButton(primary: Bool) -> some View {
@@ -310,13 +339,11 @@ struct ResultView: View {
         let helpText = "\(vm.errorRecoveryRetryDescriptor.title): \(vm.errorRecoveryRetryDescriptor.subtitle)"
         if primary {
             Button { vm.retry() } label: { label }
-                .buttonStyle(SnapAIPrimaryButtonStyle())
-                .controlSize(.regular)
+                .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
                 .help(helpText)
         } else {
             Button { vm.retry() } label: { label }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                 .help(helpText)
         }
     }
@@ -328,17 +355,14 @@ struct ResultView: View {
         let helpText = "\(vm.errorRecoverySettingsDescriptor.title): \(vm.errorRecoverySettingsDescriptor.subtitle)"
         if primary {
             Button { onOpenAISettings() } label: { label }
-                .buttonStyle(SnapAIPrimaryButtonStyle())
-                .controlSize(.regular)
+                .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
                 .help(helpText)
         } else {
             Button { onOpenAISettings() } label: { label }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                 .help(helpText)
         }
     }
-
 
     private var resultCommandState: ResultCommandState {
         ResultCommandState(resultText: vm.outputState.text,

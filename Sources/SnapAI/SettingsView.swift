@@ -4,9 +4,15 @@ import SnapAILogic
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var navigation: SettingsNavigationModel
-    var onChange: () -> Void   // 设置变更后回调(用于重注册快捷键 + 保存)
+    var onChange: () -> Void
     @ObservedObject var pinState: SettingsWindowPinState
     var onPinChange: (Bool) -> Void
+    var onReopenHistory: (HistoryEntry) -> Void = { _ in }
+    var onResumeConversation: ((ConversationSession) -> Void)? = nil
+    var hotKeyFailures: () -> [String] = { [] }
+    var textCaptureStatus: () -> String = { "就绪" }
+    var writeBackStatus: () -> String = { "就绪" }
+    var recentAIRequestStatus: () -> String = { "none" }
 
     @StateObject private var perm = PermissionState()
     @StateObject private var modelLoader = ModelLoader()
@@ -14,13 +20,14 @@ struct SettingsView: View {
     @StateObject private var tester = ConnectionTester()
     @State private var saveFailed = false
     @State private var pendingFullReload = false
+
     private var isPinned: Bool { pinState.isPinned }
     private var iCloudSyncStatusText: String {
         guard settings.iCloudSyncEnabled else { return "" }
         let status = settings.iCloudLastSyncStatus.trimmingCharacters(in: .whitespacesAndNewlines)
         let revision = max(0, settings.iCloudRevision)
-        let base = status.isEmpty ? "状态: 未同步" : "状态: \(status)"
-        return " \(base), revision \(revision)。"
+        let base = status.isEmpty ? "尚未同步" : status
+        return "（\(base)，v\(revision)）"
     }
 
     var body: some View {
@@ -39,13 +46,14 @@ struct SettingsView: View {
         } detail: {
             VStack(spacing: 0) {
                 settingsHeader
+                SnapAIFormDivider(inset: 0)
                 settingsContentSurface
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(SnapAIVisualEffect(material: .underWindowBackground).allowsHitTesting(false).ignoresSafeArea())
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 840, idealWidth: 960, minHeight: 620, idealHeight: 720)
+        .frame(minWidth: 840, idealWidth: 980, minHeight: 600, idealHeight: 680)
         .onDisappear {
             flushDeferredSave()
         }
@@ -57,39 +65,40 @@ struct SettingsView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(SnapAIUI.StatusColor.error)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("设置尚未保存")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("设置未能写入磁盘")
                             .font(.callout.weight(.semibold))
-                        Text("修改仍在当前应用中。请检查磁盘空间或文件权限后重试。")
+                        Text("当前修改在内存中仍有效，请检查磁盘空间或文件权限后重试。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
                     Button("重试保存") { persistSettings(reload: pendingFullReload) }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                 }
-                .padding(14)
-                .frame(maxWidth: 620)
-                .snapAIGlassCard(radius: 14)
-                .padding(20)
+                .padding(12)
+                .frame(maxWidth: 580)
+                .snapAIGlassCard(radius: 10)
+                .padding(16)
             }
         }
     }
 
     private var settingsHeader: some View {
-        HStack(alignment: .center, spacing: SnapAIUI.standardSpacing) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(navigation.selectedSection.title)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(navigation.selectedSection.sidebarSection.title)
                     .font(SnapAIUI.Typography.windowTitle)
-                Text(navigation.selectedSection.subtitle)
+                Text(navigation.selectedSection.sidebarSection.subtitle)
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             pinButton
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
         .snapAIChrome()
     }
@@ -101,36 +110,37 @@ struct SettingsView: View {
             onPinChange(newValue)
         } label: {
             Image(systemName: SettingsWindowPinCommand.statusSystemImage(isPinned: isPinned))
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(isPinned ? Color.accentColor : .secondary)
                 .symbolRenderingMode(.hierarchical)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(SnapAIIconButtonStyle(circular: false))
-        .foregroundStyle(isPinned ? Color.accentColor : .secondary)
+        .buttonStyle(SnapAIIconButtonStyle(size: 28, circular: false))
         .background {
             RoundedRectangle(cornerRadius: SnapAIUI.controlRadius, style: .continuous)
                 .fill(isPinned ? SnapAIUI.Surface.selected : .clear)
         }
-        .help(isPinned ? "已置顶:点击取消置顶" : "未置顶:点击置顶设置窗口")
+        .help(isPinned ? "已置顶窗口（点击取消置顶）" : "置顶主窗口")
         .accessibilityLabel(isPinned ? "设置窗口已置顶" : "设置窗口未置顶")
         .accessibilityValue(SettingsWindowPinCommand.accessibilityValue(isPinned: isPinned))
     }
 
+    @ViewBuilder
     private var settingsContentSurface: some View {
-        selectedSectionContent
-            .frame(maxWidth: 920, maxHeight: .infinity, alignment: .topLeading)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        if navigation.selectedSection.sidebarSection == .history {
+            historyTab
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            selectedSectionContent
+                .frame(maxWidth: 880, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
     }
 
     @ViewBuilder
     private var selectedSectionContent: some View {
-        switch navigation.selectedSection {
-        case .model:
+        switch navigation.selectedSection.sidebarSection {
+        case .model, .provider:
             aiTab
-        case .provider:
-            providerTab
         case .actions:
             actionsTab
         case .history:
@@ -144,20 +154,13 @@ struct SettingsView: View {
 
     private var aiTab: some View {
         ModelSettingsSection(settings: settings,
+                             navigation: navigation,
                              ui: ui,
+                             modelLoader: modelLoader,
+                             tester: tester,
                              onChange: onChange,
                              commit: commit,
                              applyCommit: applyCommit)
-    }
-
-    private var providerTab: some View {
-        ProviderSettingsSection(settings: settings,
-                                ui: ui,
-                                modelLoader: modelLoader,
-                                tester: tester,
-                                onChange: onChange,
-                                commit: commit,
-                                applyCommit: applyCommit)
     }
 
     private var actionsTab: some View {
@@ -168,13 +171,12 @@ struct SettingsView: View {
                               applyCommit: applyCommit)
     }
 
-    // MARK: - 历史
-
     private var historyTab: some View {
-        HistorySettingsSection(settings: settings, commit: commit)
+        HistorySettingsSection(settings: settings,
+                               commit: commit,
+                               onReopen: onReopenHistory,
+                               onResume: onResumeConversation)
     }
-
-    // MARK: - 通用
 
     private var generalTab: some View {
         GeneralSettingsSection(settings: settings,
@@ -185,10 +187,14 @@ struct SettingsView: View {
                                applyCommit: applyCommit)
     }
 
-    // MARK: - 权限
-
     private var permissionTab: some View {
-        PermissionSettingsSection(permissionState: perm)
+        PermissionSettingsSection(settings: settings,
+                                  permissionState: perm,
+                                  navigation: navigation,
+                                  hotKeyFailures: hotKeyFailures,
+                                  textCaptureStatus: textCaptureStatus,
+                                  writeBackStatus: writeBackStatus,
+                                  recentAIRequestStatus: recentAIRequestStatus)
     }
 
     private func commit() {

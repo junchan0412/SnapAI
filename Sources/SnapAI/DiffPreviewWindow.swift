@@ -38,13 +38,13 @@ final class DiffPreviewWindowController {
             NSApp.stopModal()
         }
         window.contentViewController = NSHostingController(rootView: view)
-        window.title = "替换前预览"
+        window.title = "替换前差异确认"
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         window.delegate = delegate
         window.level = .floating
-        window.setContentSize(NSSize(width: 860, height: 600))
-        window.minSize = NSSize(width: 700, height: 500)
+        window.setContentSize(NSSize(width: 840, height: 540))
+        window.minSize = NSSize(width: 680, height: 440)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -80,76 +80,69 @@ private struct DiffPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            SnapAIFormDivider(inset: 0)
             columnHeader
+            SnapAIFormDivider(inset: 0)
             diffList
+            SnapAIFormDivider(inset: 0)
             footer
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: 680, minHeight: 440)
         .background(SnapAIUI.Surface.canvas)
     }
 
     private var header: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("替换前预览")
+            VStack(alignment: .leading, spacing: 3) {
+                Text("确认写回替换")
                     .font(SnapAIUI.Typography.windowTitle)
-                Text(actionName.isEmpty ? "检查变更，确认后写回原来的应用。" : "「\(actionName)」的处理结果，确认后写回。")
+                Text(actionName.isEmpty ? "核对变更后写回原应用，剪贴板内容会自动保护并还原。" : "「\(actionName)」生成结果对比，确认后写回原应用。")
                     .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             summaryPills
         }
-        .padding(24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .snapAIChrome()
     }
 
     private var summaryPills: some View {
         HStack(spacing: 6) {
-            pill("修改 \(summary.changed)", color: SnapAIUI.StatusColor.warning)
-            pill("新增 \(summary.inserted)", color: SnapAIUI.StatusColor.success)
-            pill("删除 \(summary.deleted)", color: SnapAIUI.StatusColor.error)
+            SnapAIStatusPill(title: "修改 \(summary.changed)", systemImage: "pencil", tint: SnapAIUI.StatusColor.warning, filled: summary.changed > 0)
+            SnapAIStatusPill(title: "新增 \(summary.inserted)", systemImage: "plus", tint: SnapAIUI.StatusColor.success, filled: summary.inserted > 0)
+            SnapAIStatusPill(title: "删除 \(summary.deleted)", systemImage: "minus", tint: SnapAIUI.StatusColor.error, filled: summary.deleted > 0)
         }
-    }
-
-    private func pill(_ title: String, color: Color) -> some View {
-        Text(title)
-            .font(SnapAIUI.Typography.sectionLabel)
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var columnHeader: some View {
         HStack(spacing: 0) {
             Text("捕获时原文")
-                .padding(.leading, 20)
+                .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Divider()
-            Text("替换后的文本")
-                .padding(.leading, 20)
+            Text("替换后文本")
+                .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(SnapAIUI.Typography.sectionLabel)
         .foregroundStyle(.secondary)
-        .frame(height: 38)
+        .frame(height: 32)
         .background(SnapAIUI.Surface.quiet)
     }
 
     @ViewBuilder
     private var diffList: some View {
         if !summary.hasChanges {
-            // 无变化时的空状态占位,避免一片空白让用户困惑。
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 Image(systemName: "equal.circle")
-                    .font(.largeTitle)
+                    .font(.system(size: 28, weight: .light))
                     .foregroundStyle(.tertiary)
-                Text("文本没有检测到变化")
+                Text("原文与结果完全一致")
                     .font(SnapAIUI.Typography.sectionTitle)
-                Text("原文与替换结果一致,无需写回。")
-                    .font(SnapAIUI.Typography.bodyText)
+                Text("无需执行写回操作。")
+                    .font(SnapAIUI.Typography.metaText)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -160,8 +153,7 @@ private struct DiffPreviewView: View {
                         diffRow(row)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(12)
             }
         }
     }
@@ -174,7 +166,6 @@ private struct DiffPreviewView: View {
         }
         .background(rowBackground(row.kind))
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        .padding(.vertical, 1)
     }
 
     private enum DiffSide {
@@ -183,26 +174,25 @@ private struct DiffPreviewView: View {
     }
 
     private func diffCell(_ text: String?, kind: DiffRowKind, side: DiffSide) -> some View {
-        // 色盲友好:用 +/− 符号区分增删行,不依赖颜色。
         let symbol = leadingSymbol(kind: kind, side: side)
-        return HStack(alignment: .firstTextBaseline, spacing: 5) {
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(symbol ?? " ")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                 .foregroundStyle(foreground(kind: kind, side: side, hasText: text != nil))
-                .frame(width: 14)
+                .frame(width: 12)
             Text(text?.isEmpty == false ? text! : " ")
-                .font(.system(size: 14, design: .monospaced))
+                .font(.system(size: 13, design: .monospaced))
+                .lineSpacing(2)
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
     }
 
-    /// 行首符号:仅增/删侧显示 +/−,辅助色盲用户识别变更类型。
     private func leadingSymbol(kind: DiffRowKind, side: DiffSide) -> String? {
         switch (kind, side) {
         case (.inserted, .revised): return "+"
@@ -215,78 +205,69 @@ private struct DiffPreviewView: View {
     private func foreground(kind: DiffRowKind, side: DiffSide, hasText: Bool) -> Color {
         guard hasText else { return .secondary.opacity(0.45) }
         switch (kind, side) {
-        case (.deleted, .original):
-            return SnapAIUI.StatusColor.error
-        case (.inserted, .revised):
-            return SnapAIUI.StatusColor.success
-        case (.changed, _):
-            return .primary
-        default:
-            return .primary
+        case (.deleted, .original): return SnapAIUI.StatusColor.error
+        case (.inserted, .revised): return SnapAIUI.StatusColor.success
+        case (.changed, _): return SnapAIUI.StatusColor.warning
+        default: return .primary
         }
     }
 
     private func rowBackground(_ kind: DiffRowKind) -> Color {
         switch kind {
-        case .unchanged:
-            return Color.clear
-        case .inserted:
-            return SnapAIUI.StatusColor.success.opacity(0.08)
-        case .deleted:
-            return SnapAIUI.StatusColor.error.opacity(0.08)
-        case .changed:
-            return SnapAIUI.StatusColor.warning.opacity(0.10)
+        case .unchanged: return Color.clear
+        case .inserted: return SnapAIUI.StatusColor.success.opacity(0.08)
+        case .deleted: return SnapAIUI.StatusColor.error.opacity(0.08)
+        case .changed: return SnapAIUI.StatusColor.warning.opacity(0.09)
         }
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             ResultOperationFeedbackHost(coordinator: operationCoordinator)
-            Text(footerMessage)
-                .font(SnapAIUI.Typography.metaText)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 if isTruncated {
                     Button {
                         exportFullDiff()
                     } label: {
-                        Label("导出完整差异", systemImage: "square.and.arrow.down")
+                        Label("导出完整差异…", systemImage: "square.and.arrow.down")
                     }
-                    .help("预览被截断，导出完整原文与结果以便核对")
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                 }
+
                 Button {
                     copyRevised()
                 } label: {
-                    Label(didCopyRevised ? "已复制" : "复制结果",
+                    Label(didCopyRevised ? "已复制" : "仅复制结果",
                           systemImage: didCopyRevised ? "checkmark" : "doc.on.doc")
                 }
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                 .keyboardShortcut("c", modifiers: [.command])
-                .help("复制替换结果 (⌘C)")
+
+                if isTruncated {
+                    Text("大文本仅预览前 1000 行，写回仍使用完整结果")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer(minLength: 12)
+
                 Button("取消") {
                     onDecision(.cancel)
                 }
+                .buttonStyle(SnapAISecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
-                Button("确认替换") {
+
+                Button("确认替换 (↩)") {
                     onDecision(.replace)
                 }
+                .buttonStyle(SnapAIPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
                 .disabled(!summary.hasChanges)
-                .help(summary.hasChanges ? "写回触发 SnapAI 时的应用 (↩)" : "没有变化，无需替换")
             }
-            .controlSize(.large)
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
         .snapAIChrome()
-    }
-
-    private var footerMessage: String {
-        if isTruncated {
-            return "大型文本仅显示前 1000 行预览。确认后仍会写回完整结果,并恢复当前剪贴板。"
-        }
-        return summary.hasChanges ? "确认后会写回触发 SnapAI 时的应用,并恢复当前剪贴板。" : "文本没有检测到变化。"
     }
 
     private func copyRevised() {

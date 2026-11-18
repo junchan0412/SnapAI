@@ -104,15 +104,18 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private let vm: ResultViewModel
     private let settings: AppSettings
     private let onOpenAISettings: () -> Void
+    private let onOpenModelCompare: (() -> Void)?
     private var isDismissing = false
     private var localMonitor: Any?
     private var globalMonitor: Any?
 
     init(vm: ResultViewModel,
-         onOpenAISettings: @escaping () -> Void = {}) {
+         onOpenAISettings: @escaping () -> Void = {},
+         onOpenModelCompare: (() -> Void)? = nil) {
         self.vm = vm
         self.settings = vm.settings
         self.onOpenAISettings = onOpenAISettings
+        self.onOpenModelCompare = onOpenModelCompare
         super.init()
     }
 
@@ -121,7 +124,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         isDismissing = false
         let rootView = ResultView(vm: vm,
                                   onClose: { [weak self] in self?.hide() },
-                                  onOpenAISettings: onOpenAISettings)
+                                  onOpenAISettings: onOpenAISettings,
+                                  onOpenModelCompare: onOpenModelCompare)
 
         let panel: FloatingPanel
         if let existing = self.panel, let hostingView {
@@ -130,6 +134,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             hostingView.rootView = rootView
         } else {
             let hosting = NSHostingView(rootView: rootView)
+            hosting.safeAreaRegions = []
             let w = max(480, AppSettings.clampedPanelWidth(settings.panelWidth))
             let h = max(480, AppSettings.clampedPanelHeight(settings.panelHeight))
             panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h))

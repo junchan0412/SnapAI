@@ -3,11 +3,16 @@ import AppKit
 import SnapAILogic
 
 struct HistoryWindowView: View {
-    let settings: AppSettings
+    @ObservedObject var settings: AppSettings
     @ObservedObject var model: HistoryWindowModel
     var reopen: (HistoryEntry) -> Void
     var resume: ((ConversationSession) -> Void)? = nil
+    var embeddedInWorkspace: Bool = false
+    var onSettingsCommit: (() -> Void)? = nil
+
     @State private var showConversationLibrary = false
+    @State private var showRetentionSettings = false
+    @State private var showClearHistoryConfirm = false
     @StateObject var operationCoordinator = ResultOperationCoordinator()
     @FocusState private var focusedTagID: String?
     @FocusState private var searchFocused: Bool
@@ -20,12 +25,14 @@ struct HistoryWindowView: View {
         let presentation = model.presentation
         VStack(spacing: 0) {
             historyToolbar(presentation: presentation)
+            SnapAIFormDivider(inset: 0)
+
             if presentation.entries.isEmpty {
                 emptyState(presentation: presentation)
             } else {
                 HSplitView {
                     historyList(presentation: presentation)
-                        .frame(minWidth: 250, idealWidth: 300, maxWidth: 360)
+                        .frame(minWidth: 236, idealWidth: 276, maxWidth: 330)
                     if let entry = selectedEntry(in: presentation) {
                         historyDetail(entry)
                             .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
@@ -33,7 +40,7 @@ struct HistoryWindowView: View {
                 }
             }
         }
-        .background(SnapAIUI.Surface.canvas)
+        .background(embeddedInWorkspace ? Color.clear : SnapAIUI.Surface.canvas)
         .onChange(of: focusedTagID) { _, focusedID in
             commitTagDrafts(except: focusedID)
         }
@@ -57,8 +64,8 @@ struct HistoryWindowView: View {
         }
         .overlay(alignment: .bottom) {
             ResultOperationFeedbackHost(coordinator: operationCoordinator)
-                .frame(maxWidth: 480)
-                .padding(16)
+                .frame(maxWidth: 460)
+                .padding(14)
         }
         .confirmationDialog(
             "删除该历史记录？",
@@ -79,6 +86,18 @@ struct HistoryWindowView: View {
         } message: { _ in
             Text("该记录将被永久删除，此操作不可撤销。")
         }
+        .snapAIConfirmDestructive(
+            isPresented: $showClearHistoryConfirm,
+            title: "清空全部历史记录",
+            message: "将永久删除全部历史记录、已保存会话及其本机图片，此操作不可撤销。"
+        ) {
+            guard settings.clearHistory() else {
+                operationCoordinator.showError("未能清空全部历史或会话，请稍后重试。")
+                return
+            }
+            onSettingsCommit?()
+            operationCoordinator.showSuccess("已清空全部历史记录")
+        }
     }
 
     private func selectedEntry(in presentation: HistoryWindowPresentation) -> HistoryEntry? {
@@ -86,66 +105,116 @@ struct HistoryWindowView: View {
     }
 
     private func historyToolbar(presentation: HistoryWindowPresentation) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("历史记录")
-                    .font(SnapAIUI.Typography.windowTitle)
-                Text("\(presentation.entries.count) 条")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-                if model.isRefreshing {
-                    ProgressView().controlSize(.small)
-                    Text("正在搜索…").font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            if !embeddedInWorkspace {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("历史与会话")
+                        .font(SnapAIUI.Typography.windowTitle)
+                    Text("\(presentation.entries.count) 条")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Spacer()
-                if resume != nil {
-                    Button("恢复会话…") { showConversationLibrary = true }
-                }
-                Menu {
-                    Button("复制筛选结果", systemImage: "doc.on.doc", action: copyFilteredHistory)
-                    Button("导出筛选结果…", systemImage: "square.and.arrow.down") {
-                        exportFilteredHistory()
-                    }
-                    Button("创建上下文包…", systemImage: "text.badge.plus", action: createContextProfileFromFilteredHistory)
-                        .disabled(!presentation.canCreateContextProfile)
-                } label: {
-                    Label("导出与整理", systemImage: "square.and.arrow.up")
-                }
-                .disabled(model.isRefreshing || presentation.entries.isEmpty)
-                .menuStyle(.borderlessButton)
-                .fixedSize()
             }
-            HStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                HStack(spacing: 7) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                     TextField("搜索原文、结果、模型或语义…", text: $model.query)
                         .accessibilityLabel("搜索历史记录")
                         .textFieldStyle(.plain)
                         .font(SnapAIUI.Typography.bodyText)
                         .focused($searchFocused)
                         .onSubmit { model.refreshImmediately() }
-                    if !model.query.isEmpty {
+                    if model.isRefreshing {
+                        ProgressView().controlSize(.mini)
+                    } else if !model.query.isEmpty {
                         Button {
                             model.query = ""
                         } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("清空搜索")
                     }
                 }
-                .padding(10)
-                .snapAIGlassField(radius: 8)
-                Toggle(isOn: $model.favoriteOnly) {
-                    Label("收藏", systemImage: model.favoriteOnly ? "star.fill" : "star")
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6.5)
+                .snapAIGlassField(radius: SnapAIUI.controlRadius)
+
+                Button {
+                    model.favoriteOnly.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: model.favoriteOnly ? "star.fill" : "star")
+                            .foregroundStyle(model.favoriteOnly ? SnapAIUI.StatusColor.warning : .secondary)
+                        Text("收藏")
+                    }
+                    .snapAIChip(active: model.favoriteOnly)
                 }
-                .toggleStyle(.button)
-                Button { showFilters.toggle() } label: {
-                    Label("筛选", systemImage: model.criteria.isDefault ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+                .buttonStyle(.plain)
+
+                Button {
+                    showFilters.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: model.criteria.isDefault ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+                        Text("筛选")
+                    }
+                    .snapAIChip(active: !model.criteria.isDefault)
                 }
+                .buttonStyle(.plain)
                 .popover(isPresented: $showFilters) { filterPopover(presentation: presentation) }
+
                 savedFilterMenu
+
+                if resume != nil {
+                    Button {
+                        showConversationLibrary = true
+                    } label: {
+                        Label("已存会话", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                }
+
+                Menu {
+                    Button("复制筛选结果", systemImage: "doc.on.doc", action: copyFilteredHistory)
+                    Button("导出筛选结果…", systemImage: "square.and.arrow.down") {
+                        exportFilteredHistory()
+                    }
+                    Button("转为上下文包…", systemImage: "text.badge.plus", action: createContextProfileFromFilteredHistory)
+                        .disabled(!presentation.canCreateContextProfile)
+                    Divider()
+                    Button("清空全部历史…", systemImage: "trash", role: .destructive) {
+                        showClearHistoryConfirm = true
+                    }
+                    .disabled(settings.history.isEmpty)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: 26, height: 26)
+                }
+                .disabled(model.isRefreshing)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("整理、导出与清空历史")
+
+                Button {
+                    showRetentionSettings.toggle()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(SnapAIIconButtonStyle(size: 26, circular: false))
+                .help("历史保留策略与使用统计")
+                .accessibilityLabel("历史保留策略")
+                .popover(isPresented: $showRetentionSettings, arrowEdge: .bottom) {
+                    retentionPopover
+                }
             }
+
             if !model.criteria.isDefault {
                 HStack(spacing: 8) {
                     Text(model.criteria.summaryText)
@@ -153,19 +222,103 @@ struct HistoryWindowView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    Button("清除筛选") { model.resetFilters() }
+                    Button("重置筛选") { model.resetFilters() }
                         .buttonStyle(.link)
                         .font(SnapAIUI.Typography.metaText)
                 }
             }
         }
-        .padding(20)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
         .snapAIChrome()
     }
 
+    private var retentionPopover: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("保留策略与动作统计")
+                .font(SnapAIUI.Typography.sectionTitle)
+
+            HStack {
+                Text("最多保留条数")
+                    .font(SnapAIUI.Typography.bodyText)
+                Spacer()
+                Stepper("\(settings.historyLimit) 条", value: $settings.historyLimit, in: 0...500, step: 10)
+                    .font(SnapAIUI.Typography.metaText)
+                    .accessibilityLabel("保留历史记录条数")
+                    .onChange(of: settings.historyLimit) { onSettingsCommit?() }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("存储模式")
+                        .font(SnapAIUI.Typography.bodyText)
+                    Spacer()
+                    Picker("保存内容", selection: $settings.historyContentStorage) {
+                        ForEach(HistoryContentStorage.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(width: 190)
+                    .onChange(of: settings.historyContentStorage) { onSettingsCommit?() }
+                }
+                Text(settings.historyContentStorage.description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !settings.actionUsageCounts.isEmpty {
+                SnapAIFormDivider(inset: 0)
+                HStack {
+                    Text("动作累计触发（共 \(settings.actionUsageCounts.values.reduce(0, +)) 次）")
+                        .font(SnapAIUI.Typography.metaText.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("清零") {
+                        settings.actionUsageCounts = [:]
+                        onSettingsCommit?()
+                    }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11))
+                }
+                let sorted = settings.actionUsageCounts.sorted { $0.value > $1.value }.prefix(6)
+                ForEach(sorted, id: \.key) { name, count in
+                    HStack {
+                        Text(name)
+                            .font(SnapAIUI.Typography.metaText)
+                        Spacer()
+                        Text("\(count) 次")
+                            .font(SnapAIUI.Typography.metaText)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+
+            SnapAIFormDivider(inset: 0)
+            HStack {
+                Text("当前已存 \(settings.history.count) 条记录")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("清空全部…", role: .destructive) {
+                    showRetentionSettings = false
+                    showClearHistoryConfirm = true
+                }
+                .controlSize(.small)
+                .disabled(settings.history.isEmpty)
+            }
+        }
+        .padding(16)
+        .frame(width: 340)
+    }
+
     private func filterPopover(presentation: HistoryWindowPresentation) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("筛选历史记录").font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("按条件筛选").font(SnapAIUI.Typography.sectionTitle)
             Picker("动作", selection: $model.actionFilter) {
                 ForEach(presentation.actionNames, id: \.self) { Text($0).tag($0) }
             }
@@ -175,17 +328,17 @@ struct HistoryWindowView: View {
             Picker("标签", selection: $model.tagFilter) {
                 ForEach(presentation.tagNames, id: \.self) { Text($0).tag($0) }
             }
-            Divider()
+            SnapAIFormDivider(inset: 0)
             HStack {
-                Button("重置筛选") { model.resetFilters() }
+                Button("重置") { model.resetFilters() }
                     .disabled(model.criteria.isDefault)
                 Spacer()
                 Button("完成") { showFilters = false }
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 320)
+        .padding(16)
+        .frame(width: 300)
     }
 
     private var savedFilterMenu: some View {
@@ -209,10 +362,12 @@ struct HistoryWindowView: View {
             }
         } label: {
             Image(systemName: "bookmark")
+                .frame(width: 26, height: 26)
         }
         .menuStyle(.borderlessButton)
-        .frame(width: 28)
-        .help("已保存筛选")
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("已保存的筛选条件")
         .accessibilityLabel("已保存筛选")
     }
 
@@ -222,26 +377,30 @@ struct HistoryWindowView: View {
             set: { selectedEntryID = $0 }
         )) {
             ForEach(presentation.entries) { entry in
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Text(entry.displayActionName).font(.system(size: 13, weight: .semibold))
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        Text(entry.displayActionName)
+                            .font(.system(size: 12, weight: .semibold))
                         Spacer(minLength: 4)
                         if entry.isFavorite {
                             Image(systemName: "star.fill")
+                                .font(.system(size: 10))
                                 .foregroundStyle(SnapAIUI.StatusColor.warning)
                                 .accessibilityLabel("已收藏")
                         }
-                        Text(entry.dateString).font(.system(size: 11)).foregroundStyle(.secondary)
+                        Text(entry.dateString)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
                     }
-                    Text(String((entry.sourceDisplayText ?? entry.outputDisplayText ?? entry.emptyContentPlaceholder).prefix(140)))
-                        .font(SnapAIUI.Typography.bodyText)
+                    Text(String((entry.sourceDisplayText ?? entry.outputDisplayText ?? entry.emptyContentPlaceholder).prefix(120)))
+                        .font(.system(size: 12.5))
                         .lineLimit(2)
                     Text(entry.modelDisplayText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 5)
                 .tag(entry.id)
                 .accessibilityElement(children: .combine)
             }
@@ -253,9 +412,10 @@ struct HistoryWindowView: View {
 
     private func historyDetail(_ entry: HistoryEntry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(entry.displayActionName).font(SnapAIUI.Typography.sectionTitle)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.displayActionName)
+                        .font(.system(size: 15, weight: .semibold))
                     Text("\(entry.modelDisplayText) · \(entry.dateString)")
                         .font(SnapAIUI.Typography.metaText)
                         .foregroundStyle(.secondary)
@@ -270,100 +430,169 @@ struct HistoryWindowView: View {
                     Image(systemName: entry.isFavorite ? "star.fill" : "star")
                         .foregroundStyle(entry.isFavorite ? SnapAIUI.StatusColor.warning : Color.secondary)
                 }
-                .buttonStyle(SnapAIIconButtonStyle())
+                .buttonStyle(SnapAIIconButtonStyle(size: 28, circular: false))
                 .help(entry.isFavorite ? "取消收藏" : "收藏")
                 .accessibilityLabel(entry.isFavorite ? "取消收藏" : "收藏")
+
                 Menu {
-                    Button("复制完整记录", systemImage: "doc.richtext") {
+                    Button("复制完整记录 (Markdown)", systemImage: "doc.richtext") {
                         operationCoordinator.copy(text: entry.markdownExport,
                                                   successMessage: "完整记录已复制",
                                                   emptyMessage: "该记录没有可复制的内容。")
                     }
                     Divider()
                     Button("删除记录…", systemImage: "trash", role: .destructive) { pendingDeleteEntry = entry }
-                } label: { Image(systemName: "ellipsis") }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 28, height: 28)
+                }
                 .menuStyle(.borderlessButton)
-                .frame(width: 28)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .accessibilityLabel("记录操作")
             }
-            .padding(24)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+
+            SnapAIFormDivider(inset: 0)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
                     if let source = entry.sourceDisplayText {
-                        DisclosureGroup("原文", isExpanded: $showSource) {
-                            Text(source)
-                                .font(SnapAIUI.Typography.bodyText)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top, 8)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button {
+                                showSource.toggle()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "quote.opening")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    Text("原文")
+                                        .font(.system(size: 11.5, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    if !showSource {
+                                        Text(source.prefix(90).split(whereSeparator: \.isWhitespace).joined(separator: " "))
+                                            .font(SnapAIUI.Typography.metaText)
+                                            .foregroundStyle(.tertiary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    Image(systemName: showSource ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 9.5, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 8)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            if showSource {
+                                SnapAIFormDivider(inset: 11)
+                                Text(source)
+                                    .font(SnapAIUI.Typography.bodyText)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(11)
+                            }
                         }
-                        .font(.system(size: 13, weight: .medium))
+                        .snapAIGlassCard(radius: 8)
                     }
+
                     if let output = entry.outputDisplayText {
                         MarkdownView(text: output, onCopyCode: { code in
                             operationCoordinator.copy(text: code, successMessage: "代码已复制", emptyMessage: "代码块为空。")
                         })
-                        .font(SnapAIUI.Typography.bodyText)
-                        .lineSpacing(5)
+                        .font(SnapAIUI.Typography.readingText)
+                        .lineSpacing(4.5)
                         .textSelection(.enabled)
                     } else {
                         Label(entry.emptyContentPlaceholder, systemImage: "lock.doc")
+                            .font(SnapAIUI.Typography.bodyText)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
+                .padding(20)
             }
             .snapAIScrollEdge()
             .id(entry.id)
-            VStack(spacing: 14) {
-                HStack(spacing: 8) {
-                    Image(systemName: "tag").foregroundStyle(.secondary)
-                    TextField("添加标签，用逗号分隔", text: tagBinding(for: entry))
+
+            SnapAIFormDivider(inset: 0)
+
+            HStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    TextField("添加标签（逗号分隔）", text: tagBinding(for: entry))
                         .accessibilityLabel("添加标签，用逗号分隔")
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
                         .focused($focusedTagID, equals: entry.id)
                         .onSubmit { commitTagDraft(id: entry.id) }
                 }
-                HStack {
-                    Button("重新提问", systemImage: "arrow.clockwise") { reopen(entry) }
-                        .disabled(!entry.canReopen)
-                        .help(entry.reopenHelpText)
-                    Spacer()
-                    Button("复制结果", systemImage: "doc.on.doc") {
-                        operationCoordinator.copy(text: entry.copyableOutputText ?? "",
-                                                  successMessage: "结果已复制",
-                                                  emptyMessage: "该记录没有可复制的结果。")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(entry.copyableOutputText == nil)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .frame(maxWidth: 240)
+                .snapAIGlassField(radius: 6)
+
+                Spacer()
+
+                Button {
+                    reopen(entry)
+                } label: {
+                    Label("重新提问", systemImage: "arrow.clockwise")
                 }
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                .disabled(!entry.canReopen)
+                .help(entry.reopenHelpText)
+
+                Button {
+                    operationCoordinator.copy(text: entry.copyableOutputText ?? "",
+                                              successMessage: "结果已复制",
+                                              emptyMessage: "该记录没有可复制的结果。")
+                } label: {
+                    Label("复制结果", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
+                .disabled(entry.copyableOutputText == nil)
+                .accessibilityLabel("复制\(entry.displayActionName)的结果")
             }
-            .padding(20)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 11)
             .snapAIChrome()
         }
-        .background(SnapAIUI.Surface.canvas)
     }
 
     private func emptyState(presentation: HistoryWindowPresentation) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             Image(systemName: presentation.totalCount == 0 ? "clock.arrow.circlepath" : "magnifyingglass")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.secondary)
-            Text(model.isRefreshing ? "正在筛选…" : presentation.totalCount == 0 ? "让每次灵感都有迹可循" : "没有匹配的历史记录")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(model.isRefreshing ? "正在筛选…" : presentation.totalCount == 0 ? (settings.historyLimit == 0 ? "历史记录已关闭" : "暂无历史记录") : "没有匹配的历史记录")
                 .font(SnapAIUI.Typography.sectionTitle)
-            Text(presentation.totalCount == 0 ? "完成一次提问后，原文与结果会按你的隐私设置保存在这里。" : "试试其他关键词，或清除筛选条件。")
-                .font(SnapAIUI.Typography.bodyText)
+            Text(presentation.totalCount == 0
+                 ? (settings.historyLimit == 0 ? "开启保留策略后，后续提问会记录在这里。" : "完成一次提问后，原文与结果会按隐私偏好保存在本机。")
+                 : "请尝试其他关键词，或重置筛选条件。")
+                .font(SnapAIUI.Typography.metaText)
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: 340)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
             if !model.criteria.isDefault {
-                Button("清除筛选") { model.resetFilters() }
+                Button("清除当前筛选") { model.resetFilters() }
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                    .padding(.top, 4)
+            } else if settings.historyLimit == 0 {
+                Button("开启历史记录（保留 100 条）") {
+                    settings.historyLimit = 100
+                    onSettingsCommit?()
+                }
+                .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
+                .padding(.top, 4)
             }
         }
-        .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -389,7 +618,7 @@ struct HistoryWindowView: View {
     private func saveCurrentFilter() {
         let alert = NSAlert()
         alert.messageText = "保存历史筛选"
-        alert.informativeText = "为当前筛选组合命名,之后可从历史窗口快速套用。"
+        alert.informativeText = "为当前筛选组合命名，之后可从书签菜单快速套用。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "取消")

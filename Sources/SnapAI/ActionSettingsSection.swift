@@ -11,10 +11,11 @@ struct ActionSettingsSection: View {
     let commit: () -> Void
     let applyCommit: (SettingsCommitPolicy) -> Void
 
-    private let labelWidth: CGFloat = 76
+    private let labelWidth: CGFloat = 68
     @State private var pendingRestoreHotKeys = false
     @State private var dropTargetActionID: String?
     @State private var pendingDeleteAction: AIAction?
+    @State private var showSystemPrompt = false
     @StateObject private var actionLibraryNotice = SnapAITransientState<ResultOperationFeedback>()
 
     private func flashNotice(_ message: String, isError: Bool = false) {
@@ -24,20 +25,10 @@ struct ActionSettingsSection: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
-                    actionToolbar
+                LazyVStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
                     hotKeyNotice
-                    quickPanelHotKeyCard
-                    systemPromptSection
-                    ForEach(settings.actions) { action in
-                        actionCard(action)
-                            .id(action.id)
-                            .overlay {
-                                RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                                    .stroke(Color.accentColor.opacity(dropTargetActionID == action.id ? 0.8 : 0), lineWidth: 2)
-                                    .allowsHitTesting(false)
-                            }
-                    }
+                    globalQuickInputAndPromptGroup
+                    actionsGroup
                 }
                 .padding(SnapAIUI.edgePadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -50,7 +41,7 @@ struct ActionSettingsSection: View {
         .snapAIConfirmDestructive(
             isPresented: $pendingRestoreHotKeys,
             title: "恢复默认快捷键",
-            message: "将覆盖所有动作的当前快捷键,此操作不可撤销。"
+            message: "将重置所有内置动作与快捷提问面板的快捷键，此操作不可撤销。"
         ) {
             settings.restoreDefaultHotKeys()
             ui.hotKeyError = nil
@@ -67,7 +58,7 @@ struct ActionSettingsSection: View {
             Button("删除", role: .destructive) { deleteAction(action.id) }
             Button("取消", role: .cancel) {}
         } message: { _ in
-            Text("该动作及其快捷键将被移除,此操作不可撤销。")
+            Text("该动作及其快捷键将被移除，此操作不可撤销。")
         }
         .overlay(alignment: .bottom) {
             if let notice = actionLibraryNotice.value {
@@ -85,51 +76,133 @@ struct ActionSettingsSection: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: actionLibraryNotice.value)
     }
 
-    private var actionToolbar: some View {
-        HStack(spacing: 12) {
-            Text("\(settings.enabledActions.count) 个已启用，共 \(settings.actions.count) 个动作")
-                .font(SnapAIUI.Typography.metaText)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Menu {
-                Button("导入动作库…", systemImage: "square.and.arrow.down", action: importActionLibrary)
-                Button("导出动作库…", systemImage: "square.and.arrow.up", action: exportActionLibrary)
-                Divider()
-                Button("恢复默认快捷键…", systemImage: "keyboard.badge.ellipsis", action: restoreDefaultHotKeys)
-            } label: {
-                Label("管理", systemImage: "ellipsis.circle")
+    // MARK: - 全局唤起与系统指令组
+
+    private var globalQuickInputAndPromptGroup: some View {
+        SnapAISectionGroup("全局唤起与指令基调") {
+            EmptyView()
+        } content: {
+            SnapAISettingRow(
+                title: "快捷提问浮窗",
+                subtitle: "随时唤起悬浮输入框直接提问、粘贴图片或截图，无需先选中文字。",
+                icon: "sparkles",
+                iconTint: .accentColor
+            ) {
+                HotKeyRecorder(combo: Binding(
+                    get: { settings.quickPanelHotKey },
+                    set: { newVal in
+                        if let conflict = hotKeyConflictDetail(for: newVal,
+                                                               excludingActionID: nil,
+                                                               includeQuickPanel: false) {
+                            ui.hotKeyError = "快捷提问面板与「\(conflict.title)」冲突，未保存"
+                            ui.hotKeyConflictDestination = conflict.target
+                            return
+                        }
+                        ui.hotKeyConflictDestination = nil
+                        ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
+                        settings.quickPanelHotKey = newVal
+                        commit()
+                    }
+                ))
+                .frame(width: 136, height: 28)
+                .help(HotKeyRecorderText.instructions)
+                .accessibilityLabel("快捷提问的全局快捷键")
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            addActionMenu
-                .fixedSize()
+
+            SnapAIFormDivider()
+
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    showSystemPrompt.toggle()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.indigo)
+                            .frame(width: 24, height: 24)
+                            .background(Color.indigo.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("全局系统提示词 (System Prompt)")
+                                .font(SnapAIUI.Typography.bodyText.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Text("对所有动作生效，设定统一的语气风格与回答规范。")
+                                .font(SnapAIUI.Typography.metaText)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: showSystemPrompt ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showSystemPrompt {
+                    promptEditor(text: systemPromptBinding, height: 100)
+                        .accessibilityLabel("全局 System Prompt")
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                }
+            }
         }
-        .controlSize(.regular)
     }
 
-    private var systemPromptSection: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("System Prompt 对所有动作生效，用于设定共同的语气与回答方式。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-                promptEditor(text: systemPromptBinding, height: 120)
-                    .accessibilityLabel("全局 System Prompt")
+    // MARK: - 选区动作列表
+
+    private var actionsGroup: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text("选区与快捷动作")
+                            .font(SnapAIUI.Typography.sectionTitle)
+                        SnapAIStatusPill(title: "已启用 \(settings.enabledActions.count)/\(settings.actions.count)",
+                                         systemImage: "checkmark.circle",
+                                         tint: .secondary)
+                    }
+                    Text("拖动左侧手柄调整菜单与面板中的排列顺序")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Menu {
+                    Button("导入动作库…", systemImage: "square.and.arrow.down", action: importActionLibrary)
+                    Button("导出动作库…", systemImage: "square.and.arrow.up", action: exportActionLibrary)
+                    Divider()
+                    Button("恢复默认快捷键…", systemImage: "keyboard.badge.ellipsis", action: restoreDefaultHotKeys)
+                } label: {
+                    Label("管理", systemImage: "ellipsis.circle")
+                }
+                .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                .fixedSize()
+
+                addActionMenu
             }
-            .padding(.top, 12)
-        } label: {
-            Text("全局提示词")
-                .font(SnapAIUI.Typography.sectionTitle)
+            .padding(.horizontal, 2)
+
+            VStack(spacing: 9) {
+                ForEach(settings.actions) { action in
+                    actionCard(action)
+                        .id(action.id)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                                .stroke(Color.accentColor.opacity(dropTargetActionID == action.id ? 0.8 : 0), lineWidth: 2)
+                                .allowsHitTesting(false)
+                        }
+                }
+            }
         }
-        .padding(16)
-        .snapAIGlassCard()
     }
 
     private var addActionMenu: some View {
         Menu {
-            Button("空白动作") {
+            Button("新建空白动作") {
                 addAction(AIAction(name: "新动作", icon: "wand.and.stars",
-                                   prompt: "请处理下面的文字:\n\n{{text}}"))
+                                   prompt: "请处理下面的文字：\n\n{{text}}"))
             }
             Divider()
             ForEach(ActionTemplateLibrary.builtIns) { template in
@@ -140,110 +213,114 @@ struct ActionSettingsSection: View {
         } label: {
             Label("添加动作", systemImage: "plus")
         }
+        .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
+        .fixedSize()
     }
 
     @ViewBuilder
     private var hotKeyNotice: some View {
         if let hotKeyError = ui.hotKeyError {
             HStack(spacing: 8) {
-                Label(hotKeyError, systemImage: "exclamationmark.triangle.fill")
-                    .font(SnapAIUI.Typography.metaText)
+                Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(SnapAIUI.StatusColor.warning)
+                Text(hotKeyError)
+                    .font(SnapAIUI.Typography.metaText)
+                Spacer()
                 if let destination = ui.hotKeyConflictDestination {
-                    Button("查看冲突项") {
+                    Button("定位冲突项") {
                         showHotKeyConflictTarget(destination)
                     }
                     .buttonStyle(.link)
                     .font(SnapAIUI.Typography.metaText)
                 }
             }
-        }
-    }
-
-    private var quickPanelHotKeyCard: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("快捷提问")
-                    .font(SnapAIUI.Typography.sectionTitle)
-                Text("直接打开输入面板，无需先选中文字。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SnapAIUI.StatusColor.warning.opacity(0.09),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(SnapAIUI.StatusColor.warning.opacity(0.22), lineWidth: 0.75)
             }
-            Spacer(minLength: 12)
-                HotKeyRecorder(combo: Binding(
-                    get: { settings.quickPanelHotKey },
-                    set: { newVal in
-                        if let conflict = hotKeyConflictDetail(for: newVal,
-                                                               excludingActionID: nil,
-                                                               includeQuickPanel: false) {
-                            ui.hotKeyError = "快捷提问面板与「\(conflict.title)」冲突,未保存"
-                            ui.hotKeyConflictDestination = conflict.target
-                            return
-                        }
-                        ui.hotKeyConflictDestination = nil
-                        ui.hotKeyError = HotKeyConflictDetector.systemWarning(for: newVal)
-                        settings.quickPanelHotKey = newVal
-                        commit()
-                    }
-                ))
-                    .frame(width: 138, height: 34)
-                    .help(HotKeyRecorderText.instructions)
-                    .accessibilityLabel("快捷提问的全局快捷键")
         }
-        .padding(16)
-        .snapAIGlassCard()
     }
 
     @ViewBuilder
     private func actionCard(_ action: AIAction) -> some View {
         let isExpanded = ui.expandedActionID == action.id
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 16) {
+            HStack(spacing: 10) {
                 SettingsDragHandle(name: action.name, id: action.id, contentType: .snapAISettingsAction)
                 Button {
                     ui.expandedActionID = isExpanded ? nil : action.id
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 11) {
                         Image(systemName: action.icon.isEmpty ? "wand.and.stars" : action.icon)
-                            .font(.system(size: 17, weight: .medium))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(action.isEnabled ? Color.accentColor : .secondary)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(action.name)
-                                .font(SnapAIUI.Typography.sectionTitle)
-                                .foregroundStyle(action.isEnabled ? .primary : .secondary)
-                                .lineLimit(1)
+                            .frame(width: 26, height: 26)
+                            .background((action.isEnabled ? Color.accentColor : Color.secondary).opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 6.5, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(action.name)
+                                    .font(SnapAIUI.Typography.bodyText.weight(.semibold))
+                                    .foregroundStyle(action.isEnabled ? .primary : .secondary)
+                                    .lineLimit(1)
+                                if !action.group.isEmpty {
+                                    Text(action.group)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 5.5)
+                                        .padding(.vertical, 1)
+                                        .background(SnapAIUI.Surface.control, in: Capsule())
+                                }
+                                if action.replaceByDefault {
+                                    Text("默认写回")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(Color.accentColor)
+                                        .padding(.horizontal, 5.5)
+                                        .padding(.vertical, 1)
+                                        .background(Color.accentColor.opacity(0.11), in: Capsule())
+                                }
+                            }
                             if !isExpanded {
-                                Text(String(action.prompt.prefix(100)).replacingOccurrences(of: "\n", with: " "))
-                                    .font(SnapAIUI.Typography.metaText)
+                                Text(String(action.prompt.prefix(96)).replacingOccurrences(of: "\n", with: " "))
+                                    .font(.system(size: 11))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                             }
                         }
+
                         Spacer(minLength: 4)
+
                         if let hotKey = action.hotKey {
                             SnapAIKeycap(text: hotKey.displayString)
                         }
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isExpanded ? "收起动作 \(action.name)" : "编辑动作 \(action.name)")
+
                 Toggle("启用\(action.name)", isOn: bindingForAction(action.id, \.isEnabled))
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
             if isExpanded {
-                actionEditor(action).padding(.top, 16)
+                SnapAIFormDivider(inset: 14)
+                actionEditor(action)
+                    .padding(14)
             }
         }
-        .padding(16)
         .snapAIGlassCard()
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -255,70 +332,85 @@ struct ActionSettingsSection: View {
 
     @ViewBuilder
     private func actionEditor(_ action: AIAction) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            editorRow("名称") {
-                TextField("动作名称", text: bindingForAction(action.id, \.name, policy: .deferredSave), onCommit: commit)
-                    .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                editorRow("名称") {
+                    TextField("动作名称", text: bindingForAction(action.id, \.name, policy: .deferredSave), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
+                }
+                editorRow("分组") {
+                    TextField("可选菜单分组", text: bindingForAction(action.id, \.group, policy: .deferredSave), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
+                }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("动作提示词")
-                    .font(SnapAIUI.Typography.sectionTitle)
-                promptEditor(text: bindingForAction(action.id, \.prompt, policy: .deferredSave), height: 120)
-                    .accessibilityLabel("\(action.name)的 Prompt")
-                Text("使用 {{text}} 引用选中文字，{{lang}} 引用目标语言。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-            }
+
             actionHotKeyEditor(action)
-            Toggle("翻译类动作(显示语言切换)", isOn: bindingForAction(action.id, \.isTranslation))
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("提示词模板 (Prompt)")
+                        .font(SnapAIUI.Typography.metaText.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("可用变量：{{text}} 选区文本 · {{lang}} 目标语言")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                promptEditor(text: bindingForAction(action.id, \.prompt, policy: .deferredSave), height: 108)
+                    .accessibilityLabel("\(action.name)的 Prompt")
+            }
+
+            SnapAIFormDivider(inset: 0)
+
+            HStack(spacing: 20) {
+                Toggle("完成后进入差异替换确认", isOn: bindingForAction(action.id, \.replaceByDefault))
+                Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
+                Toggle("显示翻译语言选择", isOn: bindingForAction(action.id, \.isTranslation))
+            }
+            .font(SnapAIUI.Typography.metaText)
+
             if action.isTranslation {
-                editorRow("目标语言") {
+                editorRow("默认语种") {
                     Picker("", selection: bindingForAction(action.id, \.targetLanguage)) {
                         ForEach(TargetLanguage.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    .labelsHidden().frame(width: 200, alignment: .leading)
+                    .labelsHidden()
+                    .frame(width: 180, alignment: .leading)
                 }
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Toggle("完成后进入替换确认", isOn: bindingForAction(action.id, \.replaceByDefault))
-                Text("先展示差异预览，确认后才写回原应用。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: 5) {
-                Toggle("保存到历史记录", isOn: bindingForAction(action.id, \.saveHistory))
-                Text("关闭后，此动作的结果不会进入历史记录。")
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-            }
+
             DisclosureGroup {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
                     editorRow("图标") {
-                        TextField("SF Symbol 名，如 wand.and.stars", text: bindingForAction(action.id, \.icon, policy: .deferredSave), onCommit: commit)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    editorRow("分组") {
-                        TextField("分组名，留空则不分组", text: bindingForAction(action.id, \.group, policy: .deferredSave), onCommit: commit)
+                        TextField("SF Symbol 名称，例如 wand.and.stars", text: bindingForAction(action.id, \.icon, policy: .deferredSave), onCommit: commit)
                             .textFieldStyle(.roundedBorder)
                     }
                     actionProviderEditor(action)
-                    Toggle("启用 Thinking / 推理模式", isOn: bindingForAction(action.id, \.thinkingMode))
-                    if action.thinkingMode { thinkingBudgetEditor(action) }
+                    HStack(spacing: 12) {
+                        Toggle("启用推理模式 (Thinking)", isOn: bindingForAction(action.id, \.thinkingMode))
+                            .font(SnapAIUI.Typography.metaText)
+                        if action.thinkingMode {
+                            thinkingBudgetEditor(action)
+                        }
+                    }
                 }
-                .padding(.top, 12)
+                .padding(.top, 10)
             } label: {
-                Text("更多选项 · 图标、分组、模型与推理")
+                Text("高级选项（指定专属模型、图标与推理预算）")
                     .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(.secondary)
             }
-            deleteActionRow(action).padding(.top, 8)
+
+            SnapAIFormDivider(inset: 0)
+            deleteActionRow(action)
         }
         .font(SnapAIUI.Typography.bodyText)
     }
 
     private func actionHotKeyEditor(_ action: AIAction) -> some View {
         editorRow("快捷键") {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
                     HotKeyRecorder(combo: Binding(
                         get: { action.hotKey ?? HotKeyCombo(keyCode: 0, modifiers: 0) },
                         set: { newVal in
@@ -327,7 +419,7 @@ struct ActionSettingsSection: View {
                                let conflict = hotKeyConflictDetail(for: newVal,
                                                                   excludingActionID: action.id,
                                                                   includeQuickPanel: true) {
-                                ui.hotKeyError = "动作「\(action.name)」与「\(conflict.title)」冲突,未保存"
+                                ui.hotKeyError = "动作「\(action.name)」与「\(conflict.title)」冲突，未保存"
                                 ui.hotKeyConflictDestination = conflict.target
                                 return
                             }
@@ -337,19 +429,22 @@ struct ActionSettingsSection: View {
                             commit()
                         }
                     ))
-                    .frame(width: 138, height: 32)
+                    .frame(width: 136, height: 28)
+
                     if action.hotKey != nil {
                         Button("清除") {
                             guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
                             settings.actions[idx].hotKey = nil
                             commit()
-                        }.controlSize(.small)
+                        }
+                        .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                     }
+
+                    Text("点击录制，Delete 清除，Esc 取消")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
                 }
-                Text(HotKeyRecorderText.instructions)
-                    .font(SnapAIUI.Typography.metaText)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
                 if let conflict = hotkeyConflictDetail(for: action) {
                     HStack(spacing: 8) {
                         Label("与「\(conflict.title)」冲突", systemImage: "exclamationmark.triangle.fill")
@@ -367,8 +462,8 @@ struct ActionSettingsSection: View {
     }
 
     private func actionProviderEditor(_ action: AIAction) -> some View {
-        editorRow("供应商") {
-            HStack(spacing: 6) {
+        editorRow("指定模型") {
+            HStack(spacing: 8) {
                 Picker("", selection: Binding(
                     get: { action.providerID ?? "" },
                     set: { newVal in
@@ -378,12 +473,14 @@ struct ActionSettingsSection: View {
                         commit()
                     }
                 )) {
-                    Text("使用全局").tag("")
+                    Text("跟随全局默认").tag("")
                     ForEach(settings.providers.filter { $0.isEnabled }) { p in
                         Text(p.name).tag(p.id)
                     }
                 }
-                .labelsHidden().frame(maxWidth: .infinity)
+                .labelsHidden()
+                .frame(maxWidth: 200)
+
                 if let pid = action.providerID,
                    let p = settings.providers.first(where: { $0.id == pid }) {
                     let models = p.models.map { $0.name }
@@ -395,30 +492,35 @@ struct ActionSettingsSection: View {
                             commit()
                         }
                     )) {
-                        Text("供应商默认").tag("")
+                        Text("供应商默认模型").tag("")
                         ForEach(models, id: \.self) { Text($0).tag($0) }
                     }
-                    .labelsHidden().frame(maxWidth: .infinity)
+                    .labelsHidden()
+                    .frame(maxWidth: 220)
                 }
             }
         }
     }
 
     private func thinkingBudgetEditor(_ action: AIAction) -> some View {
-        editorRow("思考预算") {
-            HStack {
-                TextField("tokens", value: Binding<Int>(
-                    get: { action.thinkingBudget },
-                    set: { newValue in
-                        guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
-                        settings.actions[idx].thinkingBudget = AIAction.sanitizedThinkingBudget(newValue)
-                        commit()
-                    }
-                ), formatter: NumberFormatter())
-                    .textFieldStyle(.roundedBorder).frame(width: 80)
-                Text("tokens(Anthropic 专用,建议 4000–16000)")
-                    .font(SnapAIUI.Typography.metaText).foregroundStyle(.secondary)
-            }
+        HStack(spacing: 6) {
+            Text("预算")
+                .font(SnapAIUI.Typography.metaText)
+                .foregroundStyle(.secondary)
+            TextField("tokens", value: Binding<Int>(
+                get: { action.thinkingBudget },
+                set: { newValue in
+                    guard let idx = settings.actions.firstIndex(where: { $0.id == action.id }) else { return }
+                    settings.actions[idx].thinkingBudget = AIAction.sanitizedThinkingBudget(newValue)
+                    commit()
+                }
+            ), formatter: NumberFormatter())
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .frame(width: 76)
+            Text("tokens")
+                .font(SnapAIUI.Typography.metaText)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -427,7 +529,12 @@ struct ActionSettingsSection: View {
             Spacer()
             Button(role: .destructive) {
                 pendingDeleteAction = action
-            } label: { Label("删除动作", systemImage: "trash") }
+            } label: {
+                Label("删除动作", systemImage: "trash")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(settings.actions.count <= 1 ? Color.secondary : SnapAIUI.StatusColor.error)
+            }
+            .buttonStyle(.plain)
             .disabled(settings.actions.count <= 1)
         }
     }
@@ -451,7 +558,6 @@ struct ActionSettingsSection: View {
     private func bindingForAction<V>(_ id: String,
                                      _ keyPath: WritableKeyPath<AIAction, V>,
                                      policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
-        // keypath 读写在 SettingsPageBinding(Logic),有单测覆盖;这里只做包装与 commit。
         Binding(
             get: { SettingsPageBinding.actionValue(settings, actionID: id, keyPath: keyPath) },
             set: { newValue in
@@ -545,18 +651,17 @@ struct ActionSettingsSection: View {
             ui.expandedActionID = id
         case .quickPanel:
             ui.expandedActionID = nil
-            ui.hotKeyError = "冲突项在上方「快捷提问面板」"
+            ui.hotKeyError = "冲突项在上方「快捷提问浮窗」"
             ui.hotKeyConflictDestination = nil
         }
     }
 
     private func editorRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Text(title)
                 .font(SnapAIUI.Typography.metaText)
                 .frame(width: labelWidth, alignment: .trailing)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
             content().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -567,13 +672,8 @@ struct ActionSettingsSection: View {
             .lineSpacing(3)
             .scrollContentBackground(.hidden)
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
+            .padding(.vertical, 6)
             .frame(height: height)
-            .background(SnapAIUI.Surface.field)
-            .clipShape(RoundedRectangle(cornerRadius: SnapAIUI.controlRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: SnapAIUI.controlRadius)
-                    .stroke(SnapAIUI.Surface.divider, lineWidth: 1)
-            )
+            .snapAIGlassField(radius: SnapAIUI.controlRadius)
     }
 }

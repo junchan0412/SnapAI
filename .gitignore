@@ -1,9 +1,9 @@
 .DS_Store
-Sources/.DS_Store
+**/.DS_Store
 SnapAI.app/
 dist/
 .build/
 *.xcuserstate
 bug*.png
-.claude/audits/
+.claude/
 audit-report-*.html

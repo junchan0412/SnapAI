@@ -8,6 +8,85 @@ package enum APIProtocol: String, Codable, CaseIterable, Identifiable {
     package var id: String { rawValue }
 }
 
+/// 应用图标主题风格
+public enum AppIconStyle: String, Codable, CaseIterable, Identifiable {
+    case aurora
+    case obsidian
+    case emerald
+    case sunset
+
+    public var id: String { rawValue }
+
+    package var title: String {
+        switch self {
+        case .aurora: return "极光棱镜"
+        case .obsidian: return "曜石钛金"
+        case .emerald: return "翡翠灵境"
+        case .sunset: return "暮光珊瑚"
+        }
+    }
+
+    package var subtitle: String {
+        switch self {
+        case .aurora: return "靛蓝电光紫"
+        case .obsidian: return "深空钛金属"
+        case .emerald: return "森野青翡翠"
+        case .sunset: return "琥珀暖珊瑚"
+        }
+    }
+
+    package var resourcePrefix: String {
+        switch self {
+        case .aurora: return "AppIcon-Aurora"
+        case .obsidian: return "AppIcon-Obsidian"
+        case .emerald: return "AppIcon-Emerald"
+        case .sunset: return "AppIcon-Sunset"
+        }
+    }
+
+    package var keywords: String {
+        switch self {
+        case .aurora: return "icon theme style aurora default blue purple 图标 主题 极光 棱镜 默认 蓝紫"
+        case .obsidian: return "icon theme style obsidian titanium dark black 图标 主题 曜石 钛金 暗黑 极简"
+        case .emerald: return "icon theme style emerald green teal 图标 主题 翡翠 灵境 青绿"
+        case .sunset: return "icon theme style sunset coral orange warm 图标 主题 暮光 珊瑚 琥珀 暖色"
+        }
+    }
+
+    package func resourceName(isDark: Bool) -> String {
+        "\(resourcePrefix)-\(isDark ? "Dark" : "Light")"
+    }
+}
+
+/// 应用图标外观模式
+public enum AppIconAppearance: String, Codable, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    package var title: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+
+    package func resolvesToDark(systemIsDark: Bool) -> Bool {
+        switch self {
+        case .system: return systemIsDark
+        case .light: return false
+        case .dark: return true
+        }
+    }
+
+    package func resourceName(for style: AppIconStyle, systemIsDark: Bool) -> String {
+        style.resourceName(isDark: resolvesToDark(systemIsDark: systemIsDark))
+    }
+}
+
 /// 打字机动画速度
 public enum TypewriterSpeed: String, Codable, CaseIterable, Identifiable {
     case off = "关闭"

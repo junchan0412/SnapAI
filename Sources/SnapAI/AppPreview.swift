@@ -31,7 +31,7 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         let arguments = ProcessInfo.processInfo.arguments
         let dark = arguments.contains("dark")
         NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        NSApp.applicationIconImage = NSImage(named: dark ? "AppIconDark" : "AppIconLight")
+        applyPreviewIcon(defaultIsDark: dark)
         let surface = arguments.drop(while: { $0 != "--preview" }).dropFirst().first ?? "settings"
         settings.providers = [AIProvider(id: "preview-provider", name: "OpenAI", baseURL: "http://127.0.0.1:9/v1",
                                          apiKey: "preview-only", models: [AIModelEntry(name: "gpt-4.1")])]
@@ -52,27 +52,26 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
         settings.actionUsageCounts = ["提问": 42, "翻译": 26, "润色": 18, "总结": 12]
         if surface == "empty-history" { settings.history = [] }
         if surface == "empty-settings" { settings.providers = [] }
-        windows = WindowCoordinator(settings: settings, onSettingsChange: {}, onTryQuickInput: { [weak self] in self?.showQuickInput() })
+        windows = WindowCoordinator(
+            settings: settings,
+            onSettingsChange: { [weak self] in self?.applyPreviewIcon(defaultIsDark: dark) },
+            onTryQuickInput: { [weak self] in self?.showQuickInput() }
+        )
+        windows?.onReopenHistoryEntry = { [weak self] _ in self?.showResult() }
         switch surface {
         case "result": showResult()
         case "result-stream": showResult(streaming: true)
         case "result-long-10000", "result-long-40000", "result-long-100000":
             showResult(characterCount: Int(surface.split(separator: "-").last ?? "10000"))
         case "quick": showQuickInput()
-        case "history", "empty-history": showHistory()
+        case "history", "empty-history", "history-settings": windows?.showSettings(section: .history)
         case "commands": showCommands()
         case "welcome": windows?.showOnboarding()
         case "actions": windows?.showSettings(section: .actions)
         case "provider": windows?.showSettings(section: .provider)
         case "model": windows?.showSettings(section: .model)
-        case "history-settings": windows?.showSettings(section: .history)
         case "general": windows?.showSettings(section: .general)
-        case "permission": windows?.showSettings(section: .permission)
-        case "health":
-            health = PermissionHealthController(settings: settings, hotKeyFailures: { [] },
-                                                textCaptureStatus: { "就绪" }, writeBackStatus: { "就绪" },
-                                                recentAIRequestStatus: { "none" })
-            health?.show()
+        case "permission", "health": windows?.showSettings(section: .permission)
         case "diff":
             _ = DiffPreviewWindowController.present(original: "我们想让这个功能用起来更简单一点。", revised: "我们希望让这个功能更易于使用。", actionName: "润色")
         default: windows?.openSettings()
@@ -82,11 +81,9 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
             switch surface {
             case "result", "result-stream", "result-long-10000", "result-long-40000", "result-long-100000":
                 size = NSSize(width: 480, height: 480)
-            case "quick": size = NSSize(width: 480, height: 300)
-            case "commands": size = NSSize(width: 520, height: 360)
-            case "history", "empty-history": size = NSSize(width: 800, height: 540)
-            case "health": size = NSSize(width: 620, height: 520)
-            default: size = NSSize(width: 840, height: 620)
+            case "quick": size = NSSize(width: 500, height: 148)
+            case "commands": size = NSSize(width: 500, height: 340)
+            default: size = NSSize(width: 840, height: 600)
             }
             window.setContentSize(size)
         }
@@ -95,6 +92,14 @@ final class AppPreviewDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         UserDefaults.standard.removePersistentDomain(forName: defaultsSuite)
         try? FileManager.default.removeItem(at: previewDirectory)
+    }
+
+    private func applyPreviewIcon(defaultIsDark: Bool) {
+        NSApp.applicationIconImage = SnapAIAppIconResolver.image(
+            style: settings.appIconStyle,
+            appearance: settings.appIconAppearance,
+            systemIsDark: defaultIsDark
+        )
     }
 
     private func installPreviewMenu() {

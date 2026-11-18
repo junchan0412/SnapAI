@@ -120,8 +120,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applyAppIcon() {
-        let name = isDarkAppearance ? "AppIconDark" : "AppIconLight"
-        NSApp.applicationIconImage = NSImage(named: name)
+        NSApp.applicationIconImage = SnapAIAppIconResolver.image(
+            style: settings.appIconStyle,
+            appearance: settings.appIconAppearance,
+            systemIsDark: isDarkAppearance
+        )
     }
 
     var isDarkAppearance: Bool {
@@ -161,6 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func reloadAfterSettingsChange() {
+        applyAppIcon()
         registerHotKeys()
         quickInputModel.actionID = settings.enabledActions.first(where: { $0.id == quickInputModel.actionID })?.id
             ?? settings.enabledActions.first?.id ?? ""

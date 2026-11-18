@@ -20,8 +20,8 @@ BIN_DIR=$(swift build "${BUILD_ARGS[@]}" --show-bin-path)
 mkdir -p "$PREVIEW_APP/Contents/MacOS" "$PREVIEW_APP/Contents/Resources" "$PREVIEW_APP/Contents/Frameworks"
 cp "$BIN_DIR/SnapAI" "$PREVIEW_APP/Contents/MacOS/SnapAI"
 cp Resources/Info.plist "$PREVIEW_APP/Contents/Info.plist"
-for asset in AppIconLight.icns AppIconDark.icns AppIconLight.png AppIconDark.png; do
-  cp "Resources/$asset" "$PREVIEW_APP/Contents/Resources/"
+for asset in Resources/AppIcon*.icns Resources/AppIcon*.png; do
+  cp "$asset" "$PREVIEW_APP/Contents/Resources/"
 done
 for localization in Sources/SnapAI/Resources/*.lproj; do
   /usr/bin/ditto "$localization" "$PREVIEW_APP/Contents/Resources/$(basename "$localization")"

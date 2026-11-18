@@ -11,57 +11,58 @@ struct SettingsWorkspaceSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 11) {
-                SnapAIAppIcon(size: 40)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10) {
+                SnapAIAppIcon(settings: settings, size: 34)
+                VStack(alignment: .leading, spacing: 1.5) {
                     Text("SnapAI")
-                        .font(.system(size: 18, weight: .semibold))
-                    Text("你的随身 AI 工作台")
+                        .font(.system(size: 15.5, weight: .semibold))
+                    Text("跨应用 AI 效率助手")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 18)
+            .padding(.top, 20)
+            .padding(.bottom, 14)
 
             List(selection: Binding<SettingsSection?>(
-                get: { selection },
+                get: { selection.sidebarSection },
                 set: { if let section = $0 { selection = section } }
             )) {
-                Section("拖动以调整顺序") {
-                    ForEach(orderedSections) { section in
-                        sidebarRow(section)
-                    }
-                    .onMove { indices, destination in
-                        var sections = orderedSections
-                        sections.move(fromOffsets: indices, toOffset: destination)
-                        settings.sidebarOrder = sections.map(\.rawValue)
-                        commit()
-                    }
+                Section("核心配置") {
+                    sidebarRow(.model)
+                    sidebarRow(.actions)
+                }
+                Section("记录与系统") {
+                    sidebarRow(.history)
+                    sidebarRow(.general)
+                    sidebarRow(.permission)
                 }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
             .snapAIChrome()
 
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Label(modelName.isEmpty ? "等待配置模型" : "当前模型",
-                          systemImage: modelName.isEmpty ? "circle.dashed" : "circle.inset.filled")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text(modelName.isEmpty ? "添加一个模型，即可开始" : modelName)
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if let providerName, !modelName.isEmpty {
-                        Text(providerName)
-                            .font(.system(size: 11))
+            VStack(alignment: .leading, spacing: 10) {
+                SnapAIFormDivider(inset: 0)
+
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(modelName.isEmpty ? Color.orange : SnapAIUI.StatusColor.success)
+                        .frame(width: 6.5, height: 6.5)
+                    VStack(alignment: .leading, spacing: 1.5) {
+                        Text(modelName.isEmpty ? "尚未配置模型" : modelName)
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(modelName.isEmpty ? "在「模型与服务」中添加" : (providerName ?? "就绪"))
+                            .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+                    Spacer(minLength: 0)
                 }
+
                 HStack(spacing: 6) {
                     Text("快捷提问")
                         .font(.system(size: 11))
@@ -70,21 +71,15 @@ struct SettingsWorkspaceSidebar: View {
                     SnapAIKeycap(text: shortcut)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
         .snapAISidebarGlass()
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 250)
-    }
-
-    private var orderedSections: [SettingsSection] {
-        var seen = Set<SettingsSection>()
-        return (settings.sidebarOrder.compactMap(SettingsSection.init(rawValue:)) + SettingsSection.allCases)
-            .filter { seen.insert($0).inserted }
+        .navigationSplitViewColumnWidth(min: 196, ideal: 212, max: 236)
     }
 
     private func sidebarRow(_ section: SettingsSection) -> some View {
-        SettingsSidebarRow(section: section, isSelected: selection == section)
+        SettingsSidebarRow(section: section, isSelected: selection.sidebarSection == section)
             .tag(section)
     }
 }

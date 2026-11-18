@@ -10,8 +10,9 @@ struct ProviderSettingsSection: View {
     let onChange: () -> Void
     let commit: () -> Void
     let applyCommit: (SettingsCommitPolicy) -> Void
+    var embedded: Bool = false
 
-    private let labelWidth: CGFloat = 76
+    private let labelWidth: CGFloat = 68
     @State private var pendingDeleteProvider: AIProvider?
     @State private var iconProvider: AIProvider?
     @State private var showIconLibrary = false
@@ -24,28 +25,17 @@ struct ProviderSettingsSection: View {
     @State private var editingModel: ModelSelection?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SnapAIUI.looseSpacing) {
-                providerSummaryCard
-                HStack {
-                    Text("供应商").font(.headline)
-                    Spacer()
-                    Button("图标库", systemImage: "square.grid.2x2") { showIconLibrary = true }
-                    addProviderMenu
+        Group {
+            if embedded {
+                providerContent
+            } else {
+                ScrollView {
+                    providerContent
+                        .padding(SnapAIUI.edgePadding)
                 }
-                ForEach(settings.providers) { provider in
-                    providerCard(provider)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                                .stroke(Color.accentColor.opacity(dropTargetProviderID == provider.id ? 0.8 : 0), lineWidth: 2)
-                                .allowsHitTesting(false)
-                        }
-                }
+                .snapAIScrollEdge()
             }
-            .padding(SnapAIUI.edgePadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .snapAIScrollEdge()
         .sheet(isPresented: $showIconLibrary) {
             ProviderIconPicker(provider: nil, settings: settings, commit: commit)
         }
@@ -74,28 +64,77 @@ struct ProviderSettingsSection: View {
             Button("删除", role: .destructive) { deleteProvider(provider.id) }
             Button("取消", role: .cancel) {}
         } message: { _ in
-            Text("将同时清除该供应商保存在本地加密存储中的 API Key,此操作不可撤销。")
+            Text("将同时清除该供应商保存在本机加密存储中的 API Key，此操作不可撤销。")
         }
     }
 
-    private var providerSummaryCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("供应商总览").font(SnapAIUI.Typography.sectionTitle)
-                Spacer()
-                SnapAIStatusPill(title: providerSummaryText,
-                                 systemImage: providerSummaryIcon,
-                                 tint: allProvidersReady ? .green : SnapAIUI.StatusColor.warning,
-                                 filled: allProvidersReady)
+    private var providerContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            providerSummaryCard
+
+            if settings.providers.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "network")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(.tertiary)
+                    Text("尚未配置任何 AI 供应商")
+                        .font(SnapAIUI.Typography.sectionTitle)
+                    Text("点击右上角「添加供应商」，选择 OpenAI、Anthropic、DeepSeek 或本地 Ollama。")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+                .snapAIGlassCard()
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(settings.providers) { provider in
+                        providerCard(provider)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
+                                    .stroke(Color.accentColor.opacity(dropTargetProviderID == provider.id ? 0.8 : 0), lineWidth: 2)
+                                    .allowsHitTesting(false)
+                            }
+                    }
+                }
             }
-            Text(providerSummaryDetail)
-                .font(SnapAIUI.Typography.metaText)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(SnapAIUI.compactPadding)
-        .snapAIGlassCard()
+    }
+
+    private var providerSummaryCard: some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("AI 供应商")
+                        .font(SnapAIUI.Typography.sectionTitle)
+                    SnapAIStatusPill(title: providerSummaryText,
+                                     systemImage: providerSummaryIcon,
+                                     tint: allProvidersReady ? SnapAIUI.StatusColor.success : SnapAIUI.StatusColor.warning,
+                                     filled: allProvidersReady)
+                }
+                if let warning = providerSummaryWarning {
+                    Text(warning)
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(SnapAIUI.StatusColor.warning)
+                        .lineLimit(1)
+                } else {
+                    Text("拖动左侧手柄可调整优先顺序，点击卡片展开编辑 Key 与模型列表")
+                        .font(SnapAIUI.Typography.metaText)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 8)
+            Button {
+                showIconLibrary = true
+            } label: {
+                Label("图标库", systemImage: "square.grid.2x2")
+            }
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+
+            addProviderMenu
+        }
+        .padding(.horizontal, 2)
     }
 
     private var allProvidersReady: Bool {
@@ -104,23 +143,20 @@ struct ProviderSettingsSection: View {
 
     private var providerSummaryText: String {
         let ready = settings.providers.filter(AIRequestRouter.isProviderRequestReady).count
-        return "\(ready)/\(settings.providers.count) 可请求"
+        return "\(ready)/\(settings.providers.count) 就绪"
     }
 
     private var providerSummaryIcon: String {
         allProvidersReady ? "checkmark.circle.fill" : "exclamationmark.circle"
     }
 
-    private var providerSummaryDetail: String {
-        if settings.providers.isEmpty {
-            return "还没有供应商。点右上角「添加」选择预设,填写 API Key 后获取模型。"
-        }
-        let bad = settings.providers.filter { !AIRequestRouter.isProviderRequestReady($0) }
-        if bad.isEmpty {
-            return "全部供应商就绪。展开卡片可测试连接、拉取模型或调整参数。"
-        }
-        let first = bad.prefix(2).map { "\($0.name.isEmpty ? "未命名供应商" : $0.name): \(AIRequestRouter.providerReadiness($0).displayText)" }.joined(separator: "；")
-        return "待处理: \(first)。展开对应卡片按提示修复。"
+    private var providerSummaryWarning: String? {
+        let bad = settings.providers.filter { $0.isEnabled && !AIRequestRouter.isProviderRequestReady($0) }
+        guard !bad.isEmpty else { return nil }
+        let items = bad.prefix(2).map {
+            "\($0.name.isEmpty ? "未命名" : $0.name)：\(AIRequestRouter.providerReadiness($0).displayText)"
+        }.joined(separator: "；")
+        return "待完善：\(items)"
     }
 
     private var addProviderMenu: some View {
@@ -138,63 +174,82 @@ struct ProviderSettingsSection: View {
                 }
             }
         } label: {
-            Label("添加", systemImage: "plus")
+            Label("添加供应商", systemImage: "plus")
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(SnapAIPrimaryButtonStyle(compact: true))
         .fixedSize()
     }
 
     private func providerCard(_ provider: AIProvider) -> some View {
         let isExpanded = ui.expandedProviderID == provider.id
+        let readiness = AIRequestRouter.providerReadiness(provider)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 SettingsDragHandle(name: provider.name, id: provider.id, contentType: .snapAISettingsProvider)
                 Button {
                     ui.expandedProviderID = isExpanded ? nil : provider.id
                 } label: {
-                    HStack(spacing: 12) {
-                        ProviderIconView(provider: provider, size: 30, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(provider.name.isEmpty ? "未命名供应商" : provider.name)
-                                .font(SnapAIUI.Typography.sectionTitle)
-                                .foregroundStyle(provider.isEnabled ? Color.primary : Color.secondary)
-                                .lineLimit(1)
-                            Text("\(provider.enabledModelNames.count) 个启用模型 · \(provider.apiProtocol.rawValue)")
-                                .font(SnapAIUI.Typography.metaText)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                    HStack(spacing: 11) {
+                        ProviderIconView(provider: provider, size: 28, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(provider.name.isEmpty ? "未命名供应商" : provider.name)
+                                    .font(SnapAIUI.Typography.bodyText.weight(.semibold))
+                                    .foregroundStyle(provider.isEnabled ? Color.primary : Color.secondary)
+                                    .lineLimit(1)
+                                if provider.id == settings.activeProviderID {
+                                    Text("当前默认")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(Color.accentColor)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 1.5)
+                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                }
+                            }
+                            HStack(spacing: 5) {
+                                Text("\(provider.enabledModelNames.count) 个启用模型")
+                                Text("·")
+                                Text(provider.apiProtocol.rawValue)
+                                if provider.isEnabled && !readiness.isReady {
+                                    Text("·")
+                                    Text(readiness.displayText)
+                                        .foregroundStyle(SnapAIUI.StatusColor.warning)
+                                }
+                            }
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         }
                         Spacer(minLength: 0)
-                        if provider.id == settings.activeProviderID {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.tint)
-                                .accessibilityLabel("当前供应商")
-                        }
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(isExpanded ? "收起" : "展开")供应商 \(provider.name)")
+
                 Toggle("启用", isOn: bindingForProvider(provider.id, \.isEnabled))
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .accessibilityLabel("启用供应商 \(provider.name)")
-
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+
             if isExpanded {
-                providerEditor(provider).padding(.top, 16)
+                SnapAIFormDivider(inset: 14)
+                providerEditor(provider)
+                    .padding(14)
             }
         }
-        .padding(16)
         .snapAIGlassCard()
         .overlay {
             if provider.id == settings.activeProviderID {
                 RoundedRectangle(cornerRadius: SnapAIUI.cardRadius, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.34), lineWidth: 1)
+                    .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }
@@ -208,37 +263,25 @@ struct ProviderSettingsSection: View {
 
     @ViewBuilder
     private func providerEditor(_ provider: AIProvider) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            editorRow("图标") {
-                HStack(spacing: 12) {
-                    ProviderIconView(provider: provider, size: 36, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
-                    Button("选择图标…") { iconProvider = provider }
-                    Text(provider.customIcon == nil ? "自动从网站获取" : "自定义图标")
-                        .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                editorRow("名称") {
+                    HStack(spacing: 8) {
+                        TextField("供应商名称", text: bindingForProvider(provider.id, \.name, policy: .deferredSave), onCommit: commit)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            iconProvider = provider
+                        } label: {
+                            HStack(spacing: 5) {
+                                ProviderIconView(provider: provider, size: 16, allowsWebsiteRequest: !settings.prefersLocalModelRoutes)
+                                Text("图标…")
+                            }
+                        }
+                        .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                    }
                 }
             }
-            connectionGroup(provider)
-            providerModelLoaderRow(provider)
-            editorRow("") {
-                modelList(provider)
-            }
-            addModelRow(provider)
-            DisclosureGroup("高级参数") {
-                providerParams(provider)
-            }
-            .font(.caption)
-            providerFooterRow(provider)
-        }
-    }
 
-    /// 连接分组:名称 / 协议 / 端点 / Key。Anthropic 原生协议额外给出
-    /// 端点与鉴权头的即时提示,避免把 OpenAI 兼容端点填给 Anthropic 协议。
-    private func connectionGroup(_ provider: AIProvider) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            editorRow("名称") {
-                TextField("供应商名称", text: bindingForProvider(provider.id, \.name, policy: .deferredSave), onCommit: commit)
-                    .textFieldStyle(.roundedBorder)
-            }
             editorRow("协议") {
                 Picker("", selection: bindingForProvider(provider.id, \.apiProtocol)) {
                     ForEach(APIProtocol.allCases) { Text($0.rawValue).tag($0) }
@@ -247,114 +290,136 @@ struct ProviderSettingsSection: View {
                 .frame(width: 180, alignment: .leading)
                 .onChange(of: provider.apiProtocol) { commit() }
             }
-            editorRow("端点") {
-                VStack(alignment: .leading, spacing: 4) {
-                    TextField(provider.apiProtocol == .anthropic ? "https://api.anthropic.com/v1" : "api.openai.com 或 localhost:11434",
+
+            if !provider.isAppleOnDevice {
+                editorRow("端点") {
+                    TextField(provider.apiProtocol == .anthropic ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1 或 http://localhost:11434/v1",
                               text: bindingForProvider(provider.id, \.baseURL, policy: .deferredSave), onCommit: commit)
                         .textFieldStyle(.roundedBorder)
-                    if provider.apiProtocol == .anthropic {
-                        Text("Anthropic 原生协议固定使用 https://api.anthropic.com/v1,Key 通过 x-api-key 发送(前后空格会自动忽略)。")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                }
+
+                editorRow("API Key") {
+                    SecureField(provider.apiProtocol == .anthropic ? "sk-ant-…" : "sk-…（本地服务可填任意非空占位符）",
+                                text: bindingForProvider(provider.id, \.apiKey, policy: .deferredSave), onCommit: commit)
+                        .textFieldStyle(.roundedBorder)
                 }
             }
-            editorRow("API Key") {
-                SecureField(provider.apiProtocol == .anthropic ? "sk-ant-…" : "API Key",
-                            text: bindingForProvider(provider.id, \.apiKey, policy: .deferredSave), onCommit: commit)
-                    .textFieldStyle(.roundedBorder)
-            }
+
             readinessHint(provider)
+
+            SnapAIFormDivider(inset: 0)
+
+            providerModelSection(provider)
+
+            DisclosureGroup("高级连接参数") {
+                providerParams(provider)
+                    .padding(.top, 8)
+            }
+            .font(SnapAIUI.Typography.metaText)
+
+            SnapAIFormDivider(inset: 0)
+
+            providerFooterRow(provider)
         }
     }
 
-    /// 就绪状态一行:直接复用请求层的 providerReadiness,与真实请求能力一致。
     @ViewBuilder
     private func readinessHint(_ provider: AIProvider) -> some View {
         let readiness = AIRequestRouter.providerReadiness(provider)
-        editorRow("状态") {
-            HStack(spacing: 6) {
-                Image(systemName: readiness.isReady ? "checkmark.circle.fill" : "exclamationmark.circle")
-                    .foregroundStyle(readiness.isReady ? .green : SnapAIUI.StatusColor.warning)
-                Text(readiness.isReady ? "就绪,可测试连接或获取模型" : "\(readiness.displayText): \(AIRequestRouter.providerRecoverySuggestion(provider))")
-                    .font(.caption)
-                    .foregroundStyle(readiness.isReady ? .secondary : SnapAIUI.StatusColor.warning)
-                    .fixedSize(horizontal: false, vertical: true)
+        if !readiness.isReady {
+            editorRow("状态") {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(SnapAIUI.StatusColor.warning)
+                    Text("\(readiness.displayText)：\(AIRequestRouter.providerRecoverySuggestion(provider))")
+                        .font(.caption)
+                        .foregroundStyle(SnapAIUI.StatusColor.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
 
-    private func providerModelLoaderRow(_ provider: AIProvider) -> some View {
-        editorRow("模型") {
+    private func providerModelSection(_ provider: AIProvider) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
+                Text("可用模型")
+                    .font(SnapAIUI.Typography.metaText.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 if let err = modelLoader.errors[provider.id] {
                     Text(err)
                         .font(.caption2)
                         .foregroundStyle(SnapAIUI.StatusColor.error)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else if provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("请先填写 API Key 后再获取模型")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .lineLimit(1)
                 }
-                Button {
-                    modelLoader.load(providerID: provider.id, settings: settings, onChange: onChange)
-                } label: {
-                    if modelLoader.isLoading(provider.id) {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("获取模型", systemImage: "arrow.clockwise")
+                Spacer()
+                if !provider.isAppleOnDevice {
+                    Button {
+                        modelLoader.load(providerID: provider.id, settings: settings, onChange: onChange)
+                    } label: {
+                        if modelLoader.isLoading(provider.id) {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Label("从接口拉取", systemImage: "arrow.clockwise")
+                        }
                     }
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+                    .disabled(modelLoader.isLoading(provider.id) || provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .controlSize(.small)
-                .help(provider.apiProtocol == .anthropic ? "获取模型列表(Anthropic 官方 /v1/models)" : "获取模型列表")
-                .disabled(modelLoader.isLoading(provider.id) || provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-        }
-    }
 
-    private func addModelRow(_ provider: AIProvider) -> some View {
-        editorRow("添加") {
-            HStack(spacing: 6) {
-                TextField("手动添加模型名,回车确认", text: $ui.newModelName, onCommit: {
-                    addModel(to: provider.id)
-                })
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1)
-                Button { addModel(to: provider.id) } label: { Image(systemName: "plus") }
-                    .frame(width: 30, height: 26)
-                    .help("添加模型")
+            modelList(provider)
+
+            if !provider.isAppleOnDevice {
+                HStack(spacing: 6) {
+                    TextField("手动输入模型 ID（回车添加）", text: $ui.newModelName, onCommit: {
+                        addModel(to: provider.id)
+                    })
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+                    .lineLimit(1)
+
+                    Button {
+                        addModel(to: provider.id)
+                    } label: {
+                        Label("添加", systemImage: "plus")
+                    }
+                    .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
                     .accessibilityLabel("为供应商 \(provider.name) 添加模型")
                     .disabled(ui.newModelName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
     }
 
     private func providerFooterRow(_ provider: AIProvider) -> some View {
-        HStack {
+        HStack(spacing: 10) {
             Button {
                 tester.test(providerID: provider.id, settings: settings)
             } label: {
                 if tester.isTesting(provider.id) {
-                    ProgressView().controlSize(.small)
+                    ProgressView().controlSize(.mini)
                 } else {
                     Label("测试连接", systemImage: "bolt.horizontal")
                 }
             }
-            .disabled(tester.isTesting(provider.id) || provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .buttonStyle(SnapAISecondaryButtonStyle(compact: true))
+            .disabled(tester.isTesting(provider.id) || (!provider.isAppleOnDevice && provider.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+
             testResultLabel(provider.id)
+
             Spacer()
+
             Button(role: .destructive) {
                 pendingDeleteProvider = provider
             } label: {
-                Label("删除此供应商", systemImage: "trash")
+                Label("删除供应商", systemImage: "trash")
+                    .font(SnapAIUI.Typography.metaText)
+                    .foregroundStyle(settings.providers.count <= 1 ? Color.secondary : SnapAIUI.StatusColor.error)
             }
+            .buttonStyle(.plain)
             .disabled(settings.providers.count <= 1)
-            .help("删除该供应商(需确认,会同时清除 API Key)")
+            .help("删除该供应商及其本机加密保存的 API Key")
         }
     }
 
@@ -363,12 +428,15 @@ struct ProviderSettingsSection: View {
         if let result = tester.results[id] {
             switch result {
             case .success:
-                Label("连接成功", systemImage: "checkmark.circle.fill")
-                    .font(.caption).foregroundStyle(.green)
+                Label("连接正常", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(SnapAIUI.StatusColor.success)
             case .failure(let err):
                 Label(SensitiveTextSanitizer.sanitizedMessage(err.localizedDescription), systemImage: "xmark.circle.fill")
-                    .font(.caption).foregroundStyle(.red)
-                    .lineLimit(1).truncationMode(.middle)
+                    .font(.caption)
+                    .foregroundStyle(SnapAIUI.StatusColor.error)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
     }
@@ -397,8 +465,8 @@ struct ProviderSettingsSection: View {
                 commit()
             }
         )
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle("覆盖 Temperature", isOn: Binding(
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("单独覆盖该供应商的 Temperature", isOn: Binding(
                 get: { hasTemp },
                 set: { on in
                     guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
@@ -409,25 +477,55 @@ struct ProviderSettingsSection: View {
                 }
             ))
             .font(.caption)
+
             if hasTemp {
                 HStack {
                     Slider(value: tempBinding, in: 0...1, step: 0.05)
-                    Text(String(format: "%.2f", provider.temperature ?? 0)).font(.caption).monospacedDigit()
+                    Text(String(format: "%.2f", provider.temperature ?? 0))
+                        .font(.caption)
+                        .monospacedDigit()
                 }
             }
-            HStack {
-                Text("Max tokens").font(.caption).foregroundStyle(.secondary)
-                TextField("默认 2048", text: maxTokBinding)
-                    .textFieldStyle(.roundedBorder).frame(width: 90)
-                Text(provider.apiProtocol == .anthropic ? "(Anthropic 固定使用 max_tokens)" : "(留空用默认)")
-                    .font(.caption2).foregroundStyle(.secondary)
+
+            HStack(spacing: 16) {
+                HStack(spacing: 6) {
+                    Text("最大输出 Tokens")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("默认 2048", text: maxTokBinding)
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.small)
+                        .frame(width: 84)
+                }
+
+                HStack(spacing: 6) {
+                    Text("超时（秒）")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("默认 60", text: Binding(
+                        get: { provider.requestTimeout.map { "\($0)" } ?? "" },
+                        set: { str in
+                            guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
+                            let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
+                            settings.providers[idx].requestTimeout = trimmed.isEmpty
+                                ? nil
+                                : AppSettings.sanitizedImportedRequestTimeout(Double(trimmed))
+                            commit()
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.small)
+                    .frame(width: 72)
+                }
             }
+
             if provider.apiProtocol == .openAI {
-                Toggle("请求 token 用量", isOn: bindingForProvider(provider.id, \.streamUsageEnabled))
+                Toggle("流式请求返回实际 Token 用量（stream_options）", isOn: bindingForProvider(provider.id, \.streamUsageEnabled))
                     .font(.caption)
-                    .help("通过 stream_options 请求实际 token 用量。严格校验请求字段的 OpenAI 兼容端点若拒绝此参数，可关闭。")
-                HStack {
-                    Text("输出参数").font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text("长度字段名")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Picker("", selection: bindingForProvider(provider.id, \.outputTokenParameterMode)) {
                         ForEach(OutputTokenParameterMode.allCases) { mode in
                             Text(mode.displayName).tag(mode)
@@ -436,31 +534,8 @@ struct ProviderSettingsSection: View {
                     .labelsHidden()
                     .pickerStyle(.segmented)
                     .controlSize(.small)
-                    .frame(width: 260)
-                    Text("OpenAI 兼容服务不一致时可切换。")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    .frame(width: 240)
                 }
-            }
-            HStack {
-                Text("超时(秒)").font(.caption).foregroundStyle(.secondary)
-                TextField("默认 60", text: Binding(
-                    get: { provider.requestTimeout.map { "\($0)" } ?? "" },
-                    set: { str in
-                        guard let idx = settings.providers.firstIndex(where: { $0.id == provider.id }) else { return }
-                        let trimmed = str.trimmingCharacters(in: .whitespacesAndNewlines)
-                        settings.providers[idx].requestTimeout = trimmed.isEmpty
-                            ? nil
-                            : AppSettings.sanitizedImportedRequestTimeout(Double(trimmed))
-                        commit()
-                    }
-                ))
-                .textFieldStyle(.roundedBorder).frame(width: 70)
-                Text("秒").font(.caption2).foregroundStyle(.secondary)
-                Text("流式空闲超过此时长会断开，长思考/慢回复请设大。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -468,14 +543,14 @@ struct ProviderSettingsSection: View {
     @ViewBuilder
     private func modelList(_ provider: AIProvider) -> some View {
         if provider.models.isEmpty {
-            Text("暂无模型。点「获取模型」自动拉取,或在下方手动添加。")
+            Text("暂无模型，点击右上角「从接口拉取」或在下方手动添加。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 4)
         } else {
             modelRows(provider)
-                .frame(maxHeight: provider.models.count > 6 ? 168 : nil)
-                .snapAIGlassCard(radius: 8)
+                .frame(maxHeight: provider.models.count > 6 ? 176 : nil)
+                .snapAIGlassField(radius: 7)
         }
     }
 
@@ -485,56 +560,71 @@ struct ProviderSettingsSection: View {
                 ForEach(provider.models) { entry in
                     modelRow(provider, entry)
                     if entry.id != provider.models.last?.id {
-                        Divider()
+                        SnapAIFormDivider(inset: 8)
                     }
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 10)
             .padding(.vertical, 4)
         }
     }
 
     private func modelRow(_ provider: AIProvider, _ entry: AIModelEntry) -> some View {
-        HStack(spacing: 8) {
+        let isCurrentDefault = provider.id == settings.activeProvider?.id && entry.name == settings.model
+        return HStack(spacing: 8) {
             Toggle("", isOn: bindingForModel(provider.id, entry.name, \.enabled))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+
             Text(entry.name)
+                .font(.system(size: 12.5, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .foregroundStyle(entry.enabled ? .primary : .secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if provider.id == settings.activeProvider?.id && entry.name == settings.model {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
+
+            if isCurrentDefault {
+                Text("当前默认")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(SnapAIUI.StatusColor.success)
+            } else if entry.enabled && provider.isEnabled {
+                Button("设为默认") {
+                    settings.activate(providerID: provider.id, model: entry.name, recordManualPreference: true)
+                    onChange()
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 11))
             }
+
             Button {
                 editingModel = ModelSelection(providerID: provider.id, entry: entry)
             } label: {
                 Image(systemName: entry.metadata.hasCapabilityOverrides ? "slider.horizontal.3" : "info.circle")
+                    .foregroundStyle(entry.metadata.hasCapabilityOverrides ? Color.accentColor : .secondary)
             }
             .buttonStyle(.plain)
-            .help("查看与编辑模型能力、价格和来源")
+            .help("能力覆盖与单价设置")
             .accessibilityLabel("编辑模型 \(entry.name) 的能力与价格")
-            Button {
-                removeModel(provider.id, entry.name)
-            } label: {
-                Image(systemName: "xmark.circle")
-                    .foregroundStyle(.secondary)
+
+            if !provider.isAppleOnDevice {
+                Button {
+                    removeModel(provider.id, entry.name)
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("移除模型")
+                .accessibilityLabel("从供应商 \(provider.name) 移除模型 \(entry.name)")
             }
-            .buttonStyle(.plain)
-            .help("移除模型")
-            .accessibilityLabel("从供应商 \(provider.name) 移除模型 \(entry.name)")
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 
     private func bindingForProvider<V>(_ id: String,
                                        _ keyPath: WritableKeyPath<AIProvider, V>,
                                        policy: SettingsCommitPolicy = .fullReload) -> Binding<V> {
-        // keypath 读写在 SettingsPageBinding(Logic),有单测覆盖;这里只做包装与 commit。
         Binding(
             get: { SettingsPageBinding.providerValue(settings, providerID: id, keyPath: keyPath) },
             set: { newValue in
@@ -593,11 +683,11 @@ struct ProviderSettingsSection: View {
     }
 
     private func editorRow<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             Text(title)
+                .font(SnapAIUI.Typography.metaText)
                 .frame(width: labelWidth, alignment: .trailing)
                 .foregroundStyle(.secondary)
-                .padding(.top, 4)
             content().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
